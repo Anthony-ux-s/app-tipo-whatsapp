@@ -1,0 +1,23 @@
+{
+  "name": "parla",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Parla — mensajería para equipos con cifrado de extremo a extremo",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "build:packages": "npm run build -w @parla/types -w @parla/crypto",
+    "build": "npm run build:packages && npm run build -w @parla/api && npm run build -w @parla/web",
+    "db:setup": "npm run db:setup -w @parla/api",
+    "dev": "node scripts/dev.mjs",
+    "test": "npm run build:packages && npm run test -w @parla/crypto -w @parla/api -w @parla/web",
+    "test:e2e": "npm run test:e2e -w @parla/web",
+    "typecheck": "npm run build:packages && npm run typecheck -w @parla/api -w @parla/web"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}
