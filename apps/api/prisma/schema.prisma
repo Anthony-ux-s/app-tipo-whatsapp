@@ -1,0 +1,153 @@
+// Esquema de Parla. En desarrollo usa SQLite embebida; para producción
+// `npm run db:postgres-schema` genera la variante PostgreSQL de este mismo archivo.
+// Los valores de tipo enum se guardan como texto y están tipados en @parla/types.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  username     String?   @unique
+  phone        String?   @unique
+  displayName  String
+  about        String    @default("")
+  avatarColor  String
+  passwordHash String
+  /// Clave pública ECDH (JWK serializado).
+  publicKey    String
+  /// Clave privada cifrada con la contraseña (JSON EncryptedKeyBackup).
+  keyBackup    String
+  /// Preferencias del usuario (JSON UserPreferences).
+  preferences  String
+  lastSeenAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  memberships  WorkspaceMember[]
+  participants ConversationParticipant[]
+  messages     Message[]
+  receipts     MessageReceipt[]
+}
+
+model Workspace {
+  id                String   @id @default(cuid())
+  name              String
+  description       String   @default("")
+  color             String
+  inviteCode        String   @unique
+  allowMemberGroups Boolean  @default(true)
+  creatorId         String
+  createdAt         DateTime @default(now())
+
+  members       WorkspaceMember[]
+  conversations Conversation[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  /// WorkspaceRole: admin | member
+  role        String
+  joinedAt    DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model Conversation {
+  id          String   @id @default(cuid())
+  workspaceId String
+  /// ConversationKind: direct | group
+  kind        String
+  title       String   @default("")
+  description String   @default("")
+  avatarColor String
+  /// Evita chats individuales duplicados: "<workspace>:<usuarioA>:<usuarioB>" ordenado.
+  directKey   String?  @unique
+  createdById String
+  createdAt   DateTime @default(now())
+  /// Última actividad: ordena la lista de chats.
+  updatedAt   DateTime @default(now())
+
+  workspace    Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  participants ConversationParticipant[]
+  messages     Message[]
+  files        StoredFile[]
+
+  @@index([workspaceId, updatedAt])
+}
+
+model ConversationParticipant {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  /// Clave de la conversación envuelta para este usuario (base64).
+  wrappedKey     String
+  keyIv          String
+  wrappedById    String
+  joinedAt       DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  /// MessageKind: text | image | audio | video | system
+  kind           String
+  ciphertext     String?
+  iv             String?
+  /// JSON MediaAttachment (metadatos; el archivo va cifrado en el almacenamiento).
+  media          String?
+  systemText     String?
+  /// Id generado por el cliente: hace idempotente el reenvío.
+  clientId       String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User             @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  receipts     MessageReceipt[]
+
+  @@unique([senderId, clientId])
+  @@index([conversationId, createdAt])
+}
+
+/// Un recibo por destinatario: guarda cuándo se entregó y cuándo se leyó.
+model MessageReceipt {
+  messageId      String
+  userId         String
+  conversationId String
+  deliveredAt    DateTime?
+  readAt         DateTime?
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([userId, readAt])
+  @@index([userId, deliveredAt])
+}
+
+model StoredFile {
+  id             String   @id @default(cuid())
+  conversationId String
+  uploaderId     String
+  size           Int
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
