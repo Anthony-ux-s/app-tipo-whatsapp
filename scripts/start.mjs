@@ -61,7 +61,7 @@ console.log(`
 `);
 
 let stopping = false;
-const stop = () => {
+const stop = (exitCode = 0) => {
   if (stopping) return;
   stopping = true;
   for (const child of children) {
@@ -69,8 +69,15 @@ const stop = () => {
     if (isWindows) spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
     else child.kill('SIGTERM');
   }
-  process.exit(0);
+  process.exit(exitCode);
 };
-process.on('SIGINT', stop);
-process.on('SIGTERM', stop);
-for (const child of children) child.on('exit', (code) => code && !stopping && stop());
+process.on('SIGINT', () => stop(0));
+process.on('SIGTERM', () => stop(0));
+// Si un servidor se cae, se detiene el otro y el comando termina con error.
+for (const child of children) {
+  child.on('exit', (code) => {
+    if (stopping) return;
+    console.error(`\n✖ Un servidor se detuvo (código ${code}). Revisa el mensaje de arriba.`);
+    stop(code || 1);
+  });
+}
