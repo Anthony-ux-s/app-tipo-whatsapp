@@ -1,0 +1,148 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Tokens de Parla. La marca usa solo teal, emerald y cyan (guía web); los neutros salen de la
+ * investigación (#F0F2F5 de fondo, #111B21 de texto). Cada superficie cambia en modo oscuro.
+ */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand: #0f766e;
+  --color-brand-strong: #115e59;
+  --color-accent: #10b981;
+  --color-glow: #06b6d4;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-chat: var(--chat);
+  --color-bubble-in: var(--bubble-in);
+  --color-bubble-out: var(--bubble-out);
+  --color-tick-read: var(--tick-read);
+
+  --radius-card: 8px;
+  --radius-bubble: 16px;
+  --shadow-float: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-pop: 0 12px 32px -8px rgba(17, 27, 33, 0.25), 0 2px 6px rgba(17, 27, 33, 0.08);
+
+  --animate-fade-in: fade-in 200ms ease-in-out both;
+  --animate-rise: rise 200ms ease-in-out both;
+  --animate-pop: pop 200ms ease-in-out both;
+  --animate-slide-in: slide-in 220ms ease-in-out both;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-typing: typing 1.2s ease-in-out infinite;
+}
+
+:root {
+  --canvas: #f0f2f5;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --surface-3: #eef1f3;
+  --line: #e4e9ec;
+  --ink: #111b21;
+  --ink-soft: #54656f;
+  --ink-faint: #8696a0;
+  --chat: #eef5f3;
+  --bubble-in: #ffffff;
+  --bubble-out: #d1fae5;
+  --tick-read: #0891b2;
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: #0b141a;
+  --surface: #111b21;
+  --surface-2: #17242b;
+  --surface-3: #202c33;
+  --line: #24343d;
+  --ink: #e9edef;
+  --ink-soft: #aebac1;
+  --ink-faint: #7b8d97;
+  --chat: #0b141a;
+  --bubble-in: #202c33;
+  --bubble-out: #065f46;
+  --tick-read: #22d3ee;
+  color-scheme: dark;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+@keyframes typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display;
+  }
+  ::selection {
+    background: rgba(16, 185, 129, 0.25);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-glow);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Fondo del área de chat: textura sutil de burbujas en tono teal. */
+  .chat-wallpaper {
+    background-color: var(--chat);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%230f766e' stroke-opacity='0.07' stroke-width='1.5'%3E%3Cpath d='M18 20h18a6 6 0 0 1 6 6v8a6 6 0 0 1-6 6h-8l-6 5v-5h-4a6 6 0 0 1-6-6v-8a6 6 0 0 1 6-6z'/%3E%3Ccircle cx='88' cy='34' r='9'/%3E%3Cpath d='M70 86l6 6 12-12'/%3E%3Cpath d='M20 92h14M27 85v14'/%3E%3C/g%3E%3C/svg%3E");
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 50%, var(--surface-3) 75%);
+    background-size: 200% 100%;
+    @apply animate-shimmer rounded-md;
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

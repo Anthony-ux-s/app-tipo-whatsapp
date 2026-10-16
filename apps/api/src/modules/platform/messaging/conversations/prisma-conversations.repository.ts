@@ -19,7 +19,10 @@ const conversationInclude = (workspaceId: string) =>
   ({
     participants: {
       orderBy: { joinedAt: 'asc' },
-      include: { user: { include: { memberships: { where: { workspaceId }, select: { role: true } } } } },
+      include: {
+        user: { include: { memberships: { where: { workspaceId }, select: { role: true } } } },
+        wrappedBy: { select: { publicKey: true } },
+      },
     },
     messages: { orderBy: { createdAt: 'desc' }, take: 1, include: messageInclude },
   }) satisfies Prisma.ConversationInclude;
@@ -59,6 +62,7 @@ function toConversationRecord(row: ConversationRow, unreadCount: number): Conver
       wrappedKey: p.wrappedKey,
       keyIv: p.keyIv,
       wrappedById: p.wrappedById,
+      wrapperPublicKey: p.wrappedBy.publicKey,
     })),
     lastMessage: row.messages[0] ? toMessageRecord(row.messages[0]) : null,
     unreadCount,

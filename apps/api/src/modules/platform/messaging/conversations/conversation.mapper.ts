@@ -49,7 +49,13 @@ export function toConversationSummary(
       role: p.role,
     })),
     myKey: mine
-      ? { userId: viewerId, wrappedKey: mine.wrappedKey, iv: mine.keyIv, wrappedById: mine.wrappedById }
+      ? {
+          userId: viewerId,
+          wrappedKey: mine.wrappedKey,
+          iv: mine.keyIv,
+          wrappedById: mine.wrappedById,
+          wrapperPublicKey: mine.wrapperPublicKey,
+        }
       : null,
     lastMessage: conversation.lastMessage ? toMessage(conversation.lastMessage, viewerId) : null,
     unreadCount: conversation.unreadCount,

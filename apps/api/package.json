@@ -12,8 +12,8 @@
     "prisma:generate": "prisma generate",
     "db:push": "prisma db push --skip-generate",
     "db:seed": "tsx prisma/seed/seed.ts",
-    "db:setup": "prisma generate && prisma db push --skip-generate --accept-data-loss && tsx prisma/seed/seed.ts",
-    "db:reset": "prisma db push --force-reset --skip-generate && tsx prisma/seed/seed.ts --force",
+    "db:setup": "prisma generate && prisma db push --skip-generate && tsx prisma/seed/seed.ts",
+    "db:reset": "node prisma/reset.mjs",
     "db:postgres-schema": "node prisma/make-postgres-schema.mjs"
   },
   "dependencies": {

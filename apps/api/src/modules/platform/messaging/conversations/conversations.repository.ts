@@ -8,6 +8,7 @@ export interface ParticipantRecord {
   wrappedKey: string;
   keyIv: string;
   wrappedById: string;
+  wrapperPublicKey: string;
 }
 
 export interface MessageRecord {

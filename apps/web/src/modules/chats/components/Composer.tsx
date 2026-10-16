@@ -1,0 +1,102 @@
+import { Mic, Paperclip, SendHorizontal, Smile, Square, Trash2 } from 'lucide-react';
+import { IconButton } from '@shared/ui/Button';
+import { Spinner } from '@shared/ui/Spinner';
+import { formatDuration } from '@shared/utils/date';
+import { ACCEPTED_MEDIA } from '../const/chats.const';
+import { useComposer } from '../hooks/use-composer.hook';
+import { AttachmentPreviewModal } from './AttachmentPreviewModal';
+
+/** Barra inferior fija de escritura con adjuntos y notas de voz. */
+export function Composer({ conversationId }: { conversationId: string }) {
+  const composer = useComposer(conversationId);
+  const recording = composer.recorder.state === 'recording';
+
+  return (
+    <div className="safe-bottom relative shrink-0 bg-surface-2 px-2 py-2 md:px-4 md:py-3">
+      {composer.emojiOpen && (
+        <div className="absolute bottom-full left-2 mb-2 grid w-[288px] animate-rise grid-cols-8 gap-1 rounded-2xl border border-line bg-surface p-2 shadow-pop md:left-4">
+          {composer.emojis.map((emoji) => (
+            <button key={emoji} type="button" onClick={() => composer.addEmoji(emoji)} className="flex size-8 items-center justify-center rounded-lg text-xl hover:bg-surface-3" aria-label={`Emoji ${emoji}`}>
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {recording || composer.recorder.state === 'sending' ? (
+        <div className="flex h-12 animate-fade-in items-center gap-2">
+          <IconButton label="Descartar nota de voz" onClick={composer.recorder.cancel} disabled={!recording}>
+            <Trash2 className="size-5" />
+          </IconButton>
+          <div className="flex flex-1 items-center gap-3 rounded-full bg-surface px-4 py-2.5 shadow-float">
+            <span className="relative flex size-3">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex size-3 rounded-full bg-emerald-500" />
+            </span>
+            <span className="font-mono text-sm text-ink tabular-nums">{formatDuration(composer.recorder.elapsed)}</span>
+            <span className="truncate text-sm text-ink-soft">{recording ? 'Grabando nota de voz…' : 'Cifrando y enviando…'}</span>
+          </div>
+          <button
+            type="button"
+            onClick={composer.recorder.stop}
+            disabled={!recording}
+            aria-label="Enviar nota de voz"
+            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand text-white shadow-float transition-transform duration-200 active:scale-95"
+          >
+            {recording ? <Square className="size-4" fill="currentColor" /> : <Spinner className="size-5" />}
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-end gap-1 md:gap-2">
+          <IconButton label="Emojis" active={composer.emojiOpen} onClick={composer.toggleEmoji} className="mb-1 hidden sm:inline-flex">
+            <Smile className="size-6" />
+          </IconButton>
+          <IconButton label="Adjuntar foto o video" onClick={composer.pickFile} className="mb-1">
+            <Paperclip className="size-[22px]" />
+          </IconButton>
+          <input ref={composer.fileInput} type="file" accept={ACCEPTED_MEDIA} className="hidden" onChange={composer.onFileChange} data-testid="file-input" />
+          <div className="flex min-h-12 flex-1 items-center rounded-3xl bg-surface px-4 py-2 shadow-float">
+            <textarea
+              ref={composer.textArea}
+              rows={1}
+              value={composer.text}
+              onChange={composer.onTextChange}
+              onKeyDown={composer.onKeyDown}
+              placeholder="Escribe un mensaje"
+              aria-label="Escribe un mensaje"
+              className="max-h-36 w-full resize-none bg-transparent text-[15px] leading-6 text-ink placeholder:text-ink-faint outline-none"
+            />
+          </div>
+          {composer.canSend ? (
+            <button
+              type="button"
+              onClick={composer.send}
+              aria-label="Enviar mensaje"
+              className="flex size-12 shrink-0 animate-pop items-center justify-center rounded-full bg-brand text-white shadow-float transition-all duration-200 hover:bg-brand-strong active:scale-95"
+            >
+              <SendHorizontal className="size-5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={composer.recorder.start}
+              aria-label="Grabar nota de voz"
+              className="flex size-12 shrink-0 animate-pop items-center justify-center rounded-full bg-brand text-white shadow-float transition-all duration-200 hover:bg-brand-strong active:scale-95"
+            >
+              <Mic className="size-5" />
+            </button>
+          )}
+        </div>
+      )}
+
+      <AttachmentPreviewModal
+        attachment={composer.attachment}
+        caption={composer.caption}
+        sending={composer.sendingAttachment}
+        onCaptionChange={composer.onCaptionChange}
+        onClose={composer.closeAttachment}
+        onSend={composer.sendAttachment}
+      />
+    </div>
+  );
+}

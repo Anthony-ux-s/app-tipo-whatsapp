@@ -1,0 +1,75 @@
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import { fileURLToPath, URL } from 'node:url';
+import { VitePWA } from 'vite-plugin-pwa';
+import { defineConfig } from 'vitest/config';
+
+const API_URL = process.env.PARLA_API_URL ?? 'http://localhost:4100';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'icons/*.png'],
+      manifest: {
+        name: 'Parla — mensajería para equipos',
+        short_name: 'Parla',
+        description: 'Chat para equipos de trabajo con cifrado de extremo a extremo.',
+        lang: 'es',
+        start_url: '/',
+        display: 'standalone',
+        background_color: '#f0f2f5',
+        theme_color: '#0f766e',
+        icons: [
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api/, /^\/socket\.io/],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.origin.includes('fonts.g'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'google-fonts', expiration: { maxEntries: 20 } },
+          },
+        ],
+      },
+    }),
+  ],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),
+      '@parla/crypto': fileURLToPath(new URL('../../packages/crypto/src/index.ts', import.meta.url)),
+    },
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom/client', 'react-router', 'zustand', 'lucide-react', 'socket.io-client'],
+  },
+  server: {
+    port: 3100,
+    strictPort: true,
+    warmup: { clientFiles: ['./src/main.tsx', './src/app/router.tsx'] },
+    proxy: {
+      '/api': { target: API_URL, changeOrigin: true },
+      '/socket.io': { target: API_URL, ws: true, changeOrigin: true },
+    },
+  },
+  preview: {
+    port: 3100,
+    strictPort: true,
+    proxy: {
+      '/api': { target: API_URL, changeOrigin: true },
+      '/socket.io': { target: API_URL, ws: true, changeOrigin: true },
+    },
+  },
+  test: {
+    include: ['src/**/*.test.ts'],
+    environment: 'node',
+  },
+});

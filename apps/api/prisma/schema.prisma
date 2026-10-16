@@ -30,6 +30,7 @@ model User {
 
   memberships  WorkspaceMember[]
   participants ConversationParticipant[]
+  wrappedKeys  ConversationParticipant[] @relation("WrappedBy")
   messages     Message[]
   receipts     MessageReceipt[]
 }
@@ -98,6 +99,7 @@ model ConversationParticipant {
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wrappedBy    User         @relation("WrappedBy", fields: [wrappedById], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
   @@index([userId])

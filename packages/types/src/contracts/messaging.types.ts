@@ -54,8 +54,8 @@ export interface ConversationSummary {
   description: string;
   avatarColor: string;
   participants: ConversationParticipant[];
-  /** La clave de la conversación envuelta para quien consulta. */
-  myKey: WrappedKey | null;
+  /** La clave de la conversación envuelta para quien consulta, con la clave pública de quien la envolvió. */
+  myKey: (WrappedKey & { wrapperPublicKey: string }) | null;
   lastMessage: Message | null;
   unreadCount: number;
   createdById: string;
