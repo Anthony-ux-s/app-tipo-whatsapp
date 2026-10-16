@@ -1,0 +1,16 @@
+{
+  "name": "@parla/crypto",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cifrado de extremo a extremo de Parla (WebCrypto: ECDH P-256 + HKDF + AES-GCM)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
