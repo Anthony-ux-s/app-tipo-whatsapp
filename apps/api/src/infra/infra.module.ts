@@ -6,6 +6,9 @@ import { JwtTokenService } from './identity/jwt-token-service.adapter';
 import { PASSWORD_HASHER } from './identity/password-hasher.port';
 import { TOKEN_SERVICE } from './identity/token-service.port';
 import { PrismaService } from './prisma/prisma.service';
+import { MercadoPagoPaymentGateway } from './payments/mercadopago-payment-gateway.adapter';
+import { PAYMENT_GATEWAY } from './payments/payment-gateway.port';
+import { SandboxPaymentGateway } from './payments/sandbox-payment-gateway.adapter';
 import { PUSH_SENDER } from './push/push-sender.port';
 import { WebPushSender } from './push/web-push-sender.adapter';
 import { PresenceRegistry } from './realtime/presence.registry';
@@ -31,6 +34,8 @@ const env = loadEnv();
     { provide: FILE_STORAGE, useClass: LocalDiskFileStorage },
     { provide: REALTIME_PUBLISHER, useClass: SocketIoRealtimePublisher },
     { provide: PUSH_SENDER, useClass: WebPushSender },
+    // Pasarela de pago según PAYMENT_PROVIDER: sandbox (por defecto, no cobra) o mercadopago.
+    { provide: PAYMENT_GATEWAY, useClass: env.paymentProvider === 'mercadopago' ? MercadoPagoPaymentGateway : SandboxPaymentGateway },
   ],
   exports: [
     APP_ENV,
@@ -42,6 +47,7 @@ const env = loadEnv();
     FILE_STORAGE,
     REALTIME_PUBLISHER,
     PUSH_SENDER,
+    PAYMENT_GATEWAY,
   ],
 })
 export class InfraModule {}

@@ -7,6 +7,12 @@ export interface RealtimePublisher {
     event: E,
     ...payload: Parameters<ServerToClientEvents[E]>
   ): void;
+  /** A conexiones concretas (p. ej. el dispositivo con el que alguien está en una llamada). */
+  toSockets<E extends keyof ServerToClientEvents>(
+    socketIds: readonly string[],
+    event: E,
+    ...payload: Parameters<ServerToClientEvents[E]>
+  ): void;
 }
 
 export const REALTIME_PUBLISHER = Symbol('REALTIME_PUBLISHER');

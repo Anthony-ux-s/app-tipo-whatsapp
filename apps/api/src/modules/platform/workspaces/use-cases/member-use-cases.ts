@@ -6,6 +6,7 @@ import type {
   WorkspaceSummary,
 } from '@parla/types';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
+import { assertCanAddMember, effectivePlan } from '../../../../kernel/billing-plans';
 import { generateInviteCode } from '../../../../kernel/invite-code';
 import { isAvatarColor } from '../../../../kernel/palette';
 import { PresenceRegistry } from '../../../../infra/realtime/presence.registry';
@@ -90,6 +91,7 @@ export class JoinByInviteUseCase {
     if ((await this.workspaces.roleOf(ws.id, userId)) !== null) {
       throw new ConflictError('Ya eres miembro de este espacio');
     }
+    assertCanAddMember(effectivePlan(ws.plan, ws.planExpiresAt), ws.memberCount);
     await this.workspaces.addMember(ws.id, userId, 'member');
     const members = await this.workspaces.listMembers(ws.id);
     this.realtime.toUsers(

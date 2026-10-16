@@ -30,7 +30,7 @@ export function useWorkspaceLayout() {
     ? 'team'
     : pathname.endsWith('/ajustes')
       ? 'settings'
-      : pathname.endsWith('/tareas')
+      : pathname.endsWith('/tareas') || pathname.endsWith('/plan')
         ? 'tasks'
         : conversationId
           ? 'conversation'

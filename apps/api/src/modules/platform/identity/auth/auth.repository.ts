@@ -10,6 +10,8 @@ export interface NewUser {
   publicKey: string;
   keyBackup: EncryptedKeyBackup;
   preferences: UserPreferences;
+  termsVersion: string;
+  termsAcceptedAt: Date;
 }
 
 export interface ProfileChanges {
@@ -26,6 +28,18 @@ export interface AuthRepository {
   create(user: NewUser): Promise<UserRecord>;
   update(id: string, changes: ProfileChanges): Promise<UserRecord>;
   touchLastSeen(id: string, at: Date): Promise<void>;
+  /** Borra los datos personales y deja la cuenta inutilizable (ver DeleteAccountUseCase). */
+  anonymize(id: string, at: Date): Promise<void>;
+  /** Datos de la cuenta para la exportación (derecho de acceso). */
+  exportData(id: string): Promise<AccountData>;
+}
+
+export interface AccountData {
+  workspaces: { name: string; role: string; joinedAt: Date }[];
+  conversations: { title: string; kind: string; joinedAt: Date }[];
+  messagesSent: number;
+  tasksCreated: number;
+  tasksAssigned: number;
 }
 
 export const AUTH_REPOSITORY = Symbol('AUTH_REPOSITORY');

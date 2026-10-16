@@ -7,6 +7,7 @@ import { Field, TextAreaField } from '@shared/ui/Field';
 import { Toggle } from '@shared/ui/Toggle';
 import { THEME_OPTIONS } from '../const/settings.const';
 import { useNotificationSettings } from '../hooks/use-notification-settings.hook';
+import { AccountDataCard } from './AccountDataCard';
 import { useSettings } from '../hooks/use-settings.hook';
 
 const THEME_ICONS = { light: <Sun className="size-4" />, dark: <Moon className="size-4" />, system: <Monitor className="size-4" /> };
@@ -116,6 +117,8 @@ export function SettingsView() {
             Tratamos tus datos según la Ley 1581 de 2012 (Colombia), la LGPD (Brasil) y normas equivalentes. Puedes pedir su eliminación en cualquier momento.
           </p>
         </Card>
+
+        <AccountDataCard />
 
         <section className="mb-6 rounded-2xl bg-surface p-4 shadow-float md:p-6">
           {s.confirmLogout ? (

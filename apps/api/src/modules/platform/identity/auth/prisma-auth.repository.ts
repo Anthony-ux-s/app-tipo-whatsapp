@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../infra/prisma/prisma.service';
 import { toUserRecord } from '../../../../infra/prisma/user-row';
 import type { UserRecord } from '../user.record';
-import type { AuthRepository, NewUser, ProfileChanges } from './auth.repository';
+import { DELETED_ACCOUNT } from '../../../../kernel/legal';
+import type { AccountData, AuthRepository, NewUser, ProfileChanges } from './auth.repository';
 
 @Injectable()
 export class PrismaAuthRepository implements AuthRepository {
@@ -45,5 +46,65 @@ export class PrismaAuthRepository implements AuthRepository {
 
   async touchLastSeen(id: string, at: Date): Promise<void> {
     await this.prisma.user.updateMany({ where: { id }, data: { lastSeenAt: at } });
+  }
+
+  /**
+   * Se borran nombre, usuario, teléfono, contraseña y respaldo de claves; la persona sale de todos sus
+   * espacios y chats. La clave pública se conserva: los demás la necesitan para seguir descifrando las
+   * claves de conversación que esta persona envolvió para ellos.
+   */
+  async anonymize(id: string, at: Date): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.pushSubscription.deleteMany({ where: { userId: id } }),
+      this.prisma.messageReceipt.deleteMany({ where: { userId: id } }),
+      this.prisma.messageMention.deleteMany({ where: { userId: id } }),
+      this.prisma.conversationParticipant.deleteMany({ where: { userId: id } }),
+      this.prisma.workspaceMember.deleteMany({ where: { userId: id } }),
+      this.prisma.task.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } }),
+      this.prisma.user.update({
+        where: { id },
+        data: {
+          ...DELETED_ACCOUNT,
+          username: null,
+          phone: null,
+          passwordHash: '!',
+          keyBackup: JSON.stringify({ ciphertext: '', iv: '', salt: '', iterations: 0 }),
+          preferences: '{}',
+          lastSeenAt: null,
+          deletedAt: at,
+        },
+      }),
+    ]);
+  }
+
+  async exportData(id: string): Promise<AccountData> {
+    const [memberships, participants, messagesSent, tasksCreated, tasksAssigned] = await Promise.all([
+      this.prisma.workspaceMember.findMany({ where: { userId: id }, include: { workspace: { select: { name: true } } } }),
+      this.prisma.conversationParticipant.findMany({
+        where: { userId: id },
+        include: {
+          conversation: {
+            select: { kind: true, title: true, participants: { select: { user: { select: { id: true, displayName: true } } } } },
+          },
+        },
+      }),
+      this.prisma.message.count({ where: { senderId: id, kind: { not: 'system' } } }),
+      this.prisma.task.count({ where: { createdById: id } }),
+      this.prisma.task.count({ where: { assigneeId: id } }),
+    ]);
+    return {
+      workspaces: memberships.map((m) => ({ name: m.workspace.name, role: m.role, joinedAt: m.joinedAt })),
+      conversations: participants.map((p) => ({
+        kind: p.conversation.kind,
+        title:
+          p.conversation.kind === 'direct'
+            ? (p.conversation.participants.find((x) => x.user.id !== id)?.user.displayName ?? 'Chat')
+            : p.conversation.title,
+        joinedAt: p.joinedAt,
+      })),
+      messagesSent,
+      tasksCreated,
+      tasksAssigned,
+    };
   }
 }

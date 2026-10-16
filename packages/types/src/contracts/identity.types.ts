@@ -52,6 +52,8 @@ export interface RegisterRequest {
   password: string;
   publicKey: string;
   keyBackup: EncryptedKeyBackup;
+  /** Aceptación explícita de términos y política de privacidad (Ley 1581 / LGPD). */
+  acceptTerms: boolean;
 }
 
 export interface LoginRequest {
@@ -70,4 +72,21 @@ export interface UpdateProfileRequest {
   about?: string;
   avatarColor?: string;
   preferences?: Partial<UserPreferences>;
+}
+
+export interface DeleteAccountRequest {
+  password: string;
+}
+
+/** Copia de los datos personales de la cuenta (derecho de acceso y portabilidad). */
+export interface AccountExport {
+  exportedAt: string;
+  profile: Omit<UserProfile, 'presence'>;
+  preferences: UserPreferences;
+  termsVersion: string | null;
+  termsAcceptedAt: string | null;
+  workspaces: { name: string; role: string; joinedAt: string }[];
+  conversations: { title: string; kind: string; joinedAt: string }[];
+  activity: { messagesSent: number; tasksCreated: number; tasksAssigned: number };
+  note: string;
 }

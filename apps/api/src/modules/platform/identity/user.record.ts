@@ -14,6 +14,9 @@ export interface UserRecord {
   preferences: UserPreferences;
   lastSeenAt: Date | null;
   createdAt: Date;
+  termsVersion: string | null;
+  termsAcceptedAt: Date | null;
+  deletedAt: Date | null;
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {

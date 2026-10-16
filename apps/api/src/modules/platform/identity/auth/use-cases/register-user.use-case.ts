@@ -8,6 +8,7 @@ import {
   normalizePhone,
   normalizeUsername,
 } from '../../../../../kernel/identifier';
+import { assertTermsAccepted, TERMS_VERSION } from '../../../../../kernel/legal';
 import { pickAvatarColor } from '../../../../../kernel/palette';
 import { PASSWORD_HASHER, type PasswordHasher } from '../../../../../infra/identity/password-hasher.port';
 import { TOKEN_SERVICE, type TokenService } from '../../../../../infra/identity/token-service.port';
@@ -37,6 +38,7 @@ export class RegisterUserUseCase {
     }
     if (displayName.length < 2) throw new ValidationError('Escribe tu nombre');
     assertPasswordStrength(input.password);
+    assertTermsAccepted(input.acceptTerms);
 
     if (phone && (await this.users.findByPhone(phone))) {
       throw new ConflictError('Ese teléfono ya tiene una cuenta');
@@ -54,6 +56,8 @@ export class RegisterUserUseCase {
       publicKey: input.publicKey,
       keyBackup: input.keyBackup,
       preferences: DEFAULT_PREFERENCES,
+      termsVersion: TERMS_VERSION,
+      termsAcceptedAt: new Date(),
     });
 
     return { token: await this.tokens.issue(user.id), user: toSessionUser(user, 'online') };

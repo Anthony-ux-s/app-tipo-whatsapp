@@ -4,7 +4,7 @@ import { fakeHasher, fakeTokens, InMemoryAuthRepository } from '../../../../../t
 import { LoginUseCase } from './login.use-case';
 import { RegisterUserUseCase } from './register-user.use-case';
 
-const keys = { publicKey: '{"kty":"EC"}', keyBackup: { ciphertext: 'c', iv: 'i', salt: 's', iterations: 1000 } };
+const keys = { publicKey: '{"kty":"EC"}', keyBackup: { ciphertext: 'c', iv: 'i', salt: 's', iterations: 1000 }, acceptTerms: true };
 
 describe('registro e inicio de sesión', () => {
   let users: InMemoryAuthRepository;

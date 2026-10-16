@@ -4,7 +4,7 @@ export const PASSWORD = 'Parla2026!';
 
 /** Abre un navegador aparte (otra persona) y guarda los errores de consola para revisarlos al final. */
 export async function openSession(browser: Browser, identifier: string, viewport = { width: 1366, height: 860 }) {
-  const context = await browser.newContext({ viewport });
+  const context = await browser.newContext({ viewport, permissions: ['microphone', 'camera'] });
   const page = await context.newPage();
   const consoleErrors: string[] = [];
   page.on('console', (msg) => msg.type() === 'error' && consoleErrors.push(msg.text()));

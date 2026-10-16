@@ -12,12 +12,14 @@ import type {
   NewMessage,
   ReceiptChange,
 } from '../modules/platform/messaging/conversations/conversations.repository';
-import type { MembershipRecord, WorkspaceRecord, WorkspacesRepository } from '../modules/platform/workspaces/workspaces.repository';
+import type { MembershipRecord, WorkspaceChanges, WorkspaceRecord, WorkspacesRepository } from '../modules/platform/workspaces/workspaces.repository';
 import type { TaskRecord } from '../modules/platform/collaboration/tasks/task.record';
 import type { NewTask, TaskChanges, TasksRepository } from '../modules/platform/collaboration/tasks/tasks.repository';
 import type { PushResult, PushSender, PushTarget } from '../infra/push/push-sender.port';
 import type { PushSubscriptionsRepository, StoredSubscription } from '../modules/platform/messaging/push/push-subscriptions.repository';
 import type { PushPayload, TaskScope } from '@parla/types';
+import type { NewPayment, PaymentRow, PaymentsRepository } from '../modules/platform/billing/payments.repository';
+import type { CheckoutInput, PaymentGateway, ProviderPayment } from '../infra/payments/payment-gateway.port';
 
 let seq = 0;
 const nextId = (prefix: string) => `${prefix}${++seq}`;
@@ -36,6 +38,9 @@ export function makeUser(overrides: Partial<UserRecord> = {}): UserRecord {
     preferences: { theme: 'system', enterToSend: true, notificationSound: true },
     lastSeenAt: null,
     createdAt: new Date(),
+    termsVersion: null,
+    termsAcceptedAt: null,
+    deletedAt: null,
     ...overrides,
   };
 }
@@ -65,6 +70,13 @@ export class InMemoryAuthRepository implements AuthRepository {
     const user = await this.findById(id);
     if (user) user.lastSeenAt = at;
   }
+  async anonymize(id: string, at: Date) {
+    const user = (await this.findById(id))!;
+    Object.assign(user, { username: null, phone: null, displayName: 'Cuenta eliminada', about: '', passwordHash: '', deletedAt: at });
+  }
+  async exportData() {
+    return { workspaces: [], conversations: [], messagesSent: 0, tasksCreated: 0, tasksAssigned: 0 };
+  }
 }
 
 export const fakeHasher: PasswordHasher = {
@@ -84,6 +96,9 @@ export class RecordingRealtime implements RealtimePublisher {
   toUsers<E extends keyof ServerToClientEvents>(userIds: readonly string[], event: E, ...payload: Parameters<ServerToClientEvents[E]>) {
     this.emitted.push({ userIds, event, payload: payload[0] });
   }
+  toSockets<E extends keyof ServerToClientEvents>(socketIds: readonly string[], event: E, ...payload: Parameters<ServerToClientEvents[E]>) {
+    this.emitted.push({ userIds: socketIds.map((s) => `socket:${s}`), event, payload: payload[0] });
+  }
   events(event: keyof ServerToClientEvents) {
     return this.emitted.filter((e) => e.event === event);
   }
@@ -99,14 +114,19 @@ export class InMemoryWorkspacesRepository implements WorkspacesRepository {
   async listForUser(userId: string) {
     return this.members
       .filter((m) => m.user.id === userId)
-      .map((m) => ({ ...this.workspaces.find((w) => w.id === m.workspaceId)!, role: m.role }));
+      .map((m) => ({
+        ...this.workspaces.find((w) => w.id === m.workspaceId)!,
+        memberCount: this.members.filter((x) => x.workspaceId === m.workspaceId).length,
+        role: m.role,
+      }));
   }
   async findById(id: string) {
     const ws = this.workspaces.find((w) => w.id === id);
     return ws ? { ...ws, memberCount: this.members.filter((m) => m.workspaceId === id).length } : null;
   }
   async findByInviteCode(code: string) {
-    return this.workspaces.find((w) => w.inviteCode === code) ?? null;
+    const ws = this.workspaces.find((w) => w.inviteCode === code);
+    return ws ? { ...ws, memberCount: this.members.filter((m) => m.workspaceId === ws.id).length } : null;
   }
   async roleOf(workspaceId: string, userId: string) {
     return this.members.find((m) => m.workspaceId === workspaceId && m.user.id === userId)?.role ?? null;
@@ -122,7 +142,9 @@ export class InMemoryWorkspacesRepository implements WorkspacesRepository {
   async create(): Promise<WorkspaceRecord> {
     throw new Error('no usado en estas pruebas');
   }
-  async update(id: string) {
+  async update(id: string, changes: WorkspaceChanges) {
+    const ws = this.workspaces.find((w) => w.id === id)!;
+    Object.assign(ws, Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)));
     return (await this.findById(id))!;
   }
   async addMember(workspaceId: string, userId: string, role: WorkspaceRole) {
@@ -133,6 +155,10 @@ export class InMemoryWorkspacesRepository implements WorkspacesRepository {
   }
   async removeMember(workspaceId: string, userId: string) {
     this.members = this.members.filter((m) => !(m.workspaceId === workspaceId && m.user.id === userId));
+  }
+  async delete(workspaceId: string) {
+    this.workspaces = this.workspaces.filter((w) => w.id !== workspaceId);
+    this.members = this.members.filter((m) => m.workspaceId !== workspaceId);
   }
   async listContactIds() {
     return [];
@@ -304,5 +330,44 @@ export class RecordingPushSender implements PushSender {
     if (this.gone.has(target.endpoint)) return 'gone';
     this.sent.push({ target, payload });
     return 'sent';
+  }
+}
+
+export class InMemoryPaymentsRepository implements PaymentsRepository {
+  rows: PaymentRow[] = [];
+  async create(input: NewPayment) {
+    const row: PaymentRow = { ...input, id: nextId('p'), status: 'pending', providerRef: null, checkoutUrl: null, createdAt: new Date(), paidAt: null };
+    this.rows.push(row);
+    return row;
+  }
+  async attachCheckout(id: string, checkoutUrl: string, providerRef: string | null) {
+    Object.assign(this.rows.find((r) => r.id === id)!, { checkoutUrl, providerRef });
+  }
+  async findById(id: string) {
+    const row = this.rows.find((r) => r.id === id);
+    return row ? { ...row } : null;
+  }
+  async settle(id: string, status: 'approved' | 'rejected', providerRef: string, at: Date) {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row || row.status !== 'pending') return false;
+    Object.assign(row, { status, providerRef, paidAt: status === 'approved' ? at : null });
+    return true;
+  }
+  async listForWorkspace(workspaceId: string) {
+    return this.rows.filter((r) => r.workspaceId === workspaceId);
+  }
+}
+
+/** Pasarela doble: registra los checkouts y devuelve el pago que la prueba le indique. */
+export class FakePaymentGateway implements PaymentGateway {
+  checkouts: CheckoutInput[] = [];
+  nextWebhook: ProviderPayment | null = null;
+  constructor(readonly provider: 'sandbox' | 'mercadopago' = 'sandbox') {}
+  async createCheckout(input: CheckoutInput) {
+    this.checkouts.push(input);
+    return { checkoutUrl: `https://pago.example/${input.paymentId}`, providerRef: `ref-${input.paymentId}` };
+  }
+  async resolveWebhook() {
+    return this.nextWebhook;
   }
 }

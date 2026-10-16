@@ -23,6 +23,7 @@ interface SessionState {
   register: (input: RegisterInput) => Promise<void>;
   logout: () => void;
   updateProfile: (changes: UpdateProfileRequest) => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
 }
 
 const LAST_USER_KEY = 'parla.user';
@@ -91,11 +92,17 @@ export const useSessionStore = create<SessionState>((set, get) => {
         password: input.password,
         publicKey: pair.publicKeyJwk,
         keyBackup,
+        acceptTerms: true,
       });
       await startSession(response, input.password);
     },
 
     logout,
+
+    deleteAccount: async (password) => {
+      await http.delete('/auth/me', { password });
+      logout();
+    },
 
     updateProfile: async (changes) => {
       const user = await http.patch<SessionUser>('/auth/me', changes);

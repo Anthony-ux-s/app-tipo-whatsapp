@@ -16,5 +16,8 @@ export function toUserRecord(row: User): UserRecord {
     preferences: { ...DEFAULT_PREFERENCES, ...JSON.parse(row.preferences) },
     lastSeenAt: row.lastSeenAt,
     createdAt: row.createdAt,
+    termsVersion: row.termsVersion,
+    termsAcceptedAt: row.termsAcceptedAt,
+    deletedAt: row.deletedAt,
   };
 }

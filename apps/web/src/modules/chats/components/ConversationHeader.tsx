@@ -1,5 +1,5 @@
-import type { ConversationSummary } from '@parla/types';
-import { ArrowLeft, Info, ListChecks, Lock } from 'lucide-react';
+import type { CallKind, ConversationSummary } from '@parla/types';
+import { ArrowLeft, Info, ListChecks, Lock, Phone, Video } from 'lucide-react';
 import { Avatar } from '@shared/ui/Avatar';
 import { IconButton } from '@shared/ui/Button';
 
@@ -9,12 +9,14 @@ interface ConversationHeaderProps {
   typing: string | null;
   online: boolean;
   tasksOpen: boolean;
+  callBusy: boolean;
+  onCall: (kind: CallKind) => void;
   onBack: () => void;
   onOpenInfo: () => void;
   onOpenTasks: () => void;
 }
 
-export function ConversationHeader({ conversation, subtitle, typing, online, tasksOpen, onBack, onOpenInfo, onOpenTasks }: ConversationHeaderProps) {
+export function ConversationHeader({ conversation, subtitle, typing, online, tasksOpen, callBusy, onCall, onBack, onOpenInfo, onOpenTasks }: ConversationHeaderProps) {
   return (
     <header className="z-10 flex h-16 shrink-0 items-center gap-1 border-b border-line bg-surface px-1.5 shadow-float md:gap-3 md:px-4">
       <IconButton label="Volver a los chats" onClick={onBack} className="md:hidden">
@@ -34,6 +36,12 @@ export function ConversationHeader({ conversation, subtitle, typing, online, tas
       <span className="hidden items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-800 xl:flex dark:bg-teal-950/60 dark:text-teal-200">
         <Lock className="size-3" /> Cifrado E2E
       </span>
+      <IconButton label="Videollamada" onClick={() => onCall('video')} disabled={callBusy}>
+        <Video className="size-5" />
+      </IconButton>
+      <IconButton label="Llamada de voz" onClick={() => onCall('audio')} disabled={callBusy}>
+        <Phone className="size-5" />
+      </IconButton>
       <span className="relative">
         <IconButton label="Tareas del chat" active={tasksOpen} onClick={onOpenTasks}>
           <ListChecks className="size-5" />
@@ -47,7 +55,7 @@ export function ConversationHeader({ conversation, subtitle, typing, online, tas
           </span>
         )}
       </span>
-      <IconButton label="Información del chat" onClick={onOpenInfo}>
+      <IconButton label="Información del chat" onClick={onOpenInfo} className="hidden sm:inline-flex">
         <Info className="size-5" />
       </IconButton>
     </header>

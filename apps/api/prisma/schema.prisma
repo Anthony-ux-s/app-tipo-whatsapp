@@ -27,6 +27,11 @@ model User {
   preferences  String
   lastSeenAt   DateTime?
   createdAt    DateTime  @default(now())
+  /// Aceptación de términos y política de privacidad (versión y fecha).
+  termsVersion    String?
+  termsAcceptedAt DateTime?
+  /// Cuenta eliminada: se anonimiza (sin nombre, usuario ni teléfono) y no puede volver a entrar.
+  deletedAt       DateTime?
 
   memberships  WorkspaceMember[]
   participants ConversationParticipant[]
@@ -44,6 +49,10 @@ model Workspace {
   color             String
   inviteCode        String   @unique
   allowMemberGroups Boolean  @default(true)
+  /// PlanId: free | team | business. Vale hasta planExpiresAt; después rige el plan gratuito.
+  plan              String    @default("free")
+  planExpiresAt     DateTime?
+  payments          Payment[]
   creatorId         String
   createdAt         DateTime @default(now())
 
@@ -217,4 +226,29 @@ model StoredFile {
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+/// Pago de un plan (un mes prepagado). Sirve de historial y de comprobante.
+model Payment {
+  id          String    @id @default(cuid())
+  workspaceId String
+  /// Quién inició el pago (administrador del espacio).
+  createdById String
+  /// PlanId pagado: team | business
+  plan        String
+  /// Importe en la unidad de la moneda (COP sin decimales).
+  amount      Int
+  currency    String
+  /// PaymentStatus: pending | approved | rejected
+  status      String    @default("pending")
+  /// PaymentProvider: sandbox | mercadopago
+  provider    String
+  providerRef String?
+  checkoutUrl String?
+  createdAt   DateTime  @default(now())
+  paidAt      DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
 }

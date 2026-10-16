@@ -1,8 +1,10 @@
 import type { PresenceStatus, WorkspaceDetail, WorkspaceRole, WorkspaceSummary } from '@parla/types';
+import { effectivePlan, planById } from '../../../kernel/billing-plans';
 import { toPublicUser } from '../identity/user.mapper';
 import type { MembershipRecord, WorkspaceRecord } from './workspaces.repository';
 
 export function toWorkspaceSummary(ws: WorkspaceRecord, role: WorkspaceRole): WorkspaceSummary {
+  const plan = effectivePlan(ws.plan, ws.planExpiresAt);
   return {
     id: ws.id,
     name: ws.name,
@@ -11,6 +13,9 @@ export function toWorkspaceSummary(ws: WorkspaceRecord, role: WorkspaceRole): Wo
     role,
     memberCount: ws.memberCount,
     createdAt: ws.createdAt.toISOString(),
+    plan,
+    planExpiresAt: plan === 'free' ? null : (ws.planExpiresAt?.toISOString() ?? null),
+    maxMembers: planById(plan).maxMembers,
   };
 }
 

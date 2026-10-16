@@ -10,7 +10,7 @@ export class GetSessionUseCase {
 
   async execute(userId: string): Promise<SessionUser> {
     const user = await this.users.findById(userId);
-    if (!user) throw new UnauthorizedError('Tu cuenta ya no existe');
+    if (!user || user.deletedAt) throw new UnauthorizedError('Tu cuenta ya no existe');
     return toSessionUser(user, 'online');
   }
 }

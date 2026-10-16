@@ -1,3 +1,4 @@
+import type { PlanId } from './billing.types';
 import type { WorkspaceRole } from './enums.types';
 import type { PublicUser } from './identity.types';
 
@@ -9,6 +10,11 @@ export interface WorkspaceSummary {
   role: WorkspaceRole;
   memberCount: number;
   createdAt: string;
+  /** Plan que rige hoy. */
+  plan: PlanId;
+  planExpiresAt: string | null;
+  /** Límite de miembros del plan (null = ilimitado). */
+  maxMembers: number | null;
 }
 
 export interface WorkspaceMember {

@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router';
 import { ErrorState, FullScreenLoader } from '@shared/ui/States';
+import { CallOverlay } from '../../calls/components/CallOverlay';
 import { CreateWorkspaceModal } from '../../workspaces/components/CreateWorkspaceModal';
 import { useAppShell } from '../hooks/use-app-shell.hook';
 import { ConnectionBanner } from './ConnectionBanner';
@@ -32,6 +33,7 @@ export function AppShellView() {
         </div>
       </div>
       <CreateWorkspaceModal open={shell.createOpen} onClose={shell.closeCreate} />
+      <CallOverlay />
     </div>
   );
 }

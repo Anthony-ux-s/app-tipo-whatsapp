@@ -1,4 +1,4 @@
-import type { WorkspaceRole } from '@parla/types';
+import type { PlanId, WorkspaceRole } from '@parla/types';
 import type { UserRecord } from '../identity/user.record';
 
 export interface WorkspaceRecord {
@@ -11,6 +11,8 @@ export interface WorkspaceRecord {
   creatorId: string;
   createdAt: Date;
   memberCount: number;
+  plan: PlanId;
+  planExpiresAt: Date | null;
 }
 
 export interface MembershipRecord {
@@ -33,6 +35,8 @@ export interface WorkspaceChanges {
   description?: string;
   allowMemberGroups?: boolean;
   inviteCode?: string;
+  plan?: PlanId;
+  planExpiresAt?: Date | null;
 }
 
 export interface WorkspacesRepository {
@@ -49,6 +53,8 @@ export interface WorkspacesRepository {
   changeRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void>;
   /** Saca al miembro del espacio y de todas sus conversaciones dentro de él. */
   removeMember(workspaceId: string, userId: string): Promise<void>;
+  /** Borra el espacio con todos sus chats (solo cuando ya no le queda nadie). */
+  delete(workspaceId: string): Promise<void>;
   /** Usuarios que comparten algún espacio con este (para avisos de presencia). */
   listContactIds(userId: string): Promise<string[]>;
 }

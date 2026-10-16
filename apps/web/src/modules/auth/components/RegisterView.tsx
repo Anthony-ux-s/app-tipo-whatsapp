@@ -96,8 +96,15 @@ export function RegisterView() {
             className="mt-0.5 size-4 shrink-0 accent-teal-700"
           />
           <span>
-            Autorizo el tratamiento de mis datos personales según la política de privacidad (Ley 1581 de 2012 y
-            normas equivalentes) y acepto los términos del servicio.
+            Autorizo el tratamiento de mis datos personales según la{' '}
+            <Link to="/legal/privacidad" target="_blank" className="font-semibold text-brand underline dark:text-teal-300">
+              política de privacidad
+            </Link>{' '}
+            (Ley 1581 de 2012 y normas equivalentes) y acepto los{' '}
+            <Link to="/legal/terminos" target="_blank" className="font-semibold text-brand underline dark:text-teal-300">
+              términos del servicio
+            </Link>
+            .
           </span>
         </label>
 

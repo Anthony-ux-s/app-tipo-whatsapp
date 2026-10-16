@@ -22,6 +22,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { TERMS_VERSION } from '../../src/kernel/legal';
 import { PACKAGING_SVG, ROUTE_SVG, WIREFRAME_SVG, voiceNoteWav } from './seed-media';
 
 const envFile = resolve(process.cwd(), '.env');
@@ -267,6 +268,8 @@ async function main(): Promise<void> {
         publicKey: pair.publicKeyJwk,
         keyBackup: JSON.stringify(await encryptPrivateKey(pair.privateKeyJwk, DEMO_PASSWORD)),
         preferences: JSON.stringify({ theme: 'system', enterToSend: true, notificationSound: true }),
+        termsVersion: TERMS_VERSION,
+        termsAcceptedAt: new Date(Date.now() - 30 * 24 * 3600_000),
         lastSeenAt: new Date(Date.now() - Math.floor(Math.random() * 90) * 60_000),
         createdAt: new Date(Date.now() - 30 * 24 * 3600_000),
       },
@@ -287,6 +290,9 @@ async function main(): Promise<void> {
       description: 'Tostadores de café de especialidad · equipo de operaciones',
       color: 'teal',
       inviteCode: 'andino2026',
+      // Plan Equipo pagado (vence en 20 días) para mostrar la facturación con historial.
+      plan: 'team',
+      planExpiresAt: new Date(Date.now() + 20 * 24 * 3600_000),
       creatorId: person('laura').id,
       createdAt: new Date(Date.now() - 30 * 24 * 3600_000),
       members: {
@@ -317,6 +323,29 @@ async function main(): Promise<void> {
     },
   });
   const workspaceIds = { andino: andino.id, faro: faro.id };
+
+  console.log('Creando historial de pagos (modo de prueba)…');
+  for (const [daysAgo, status] of [
+    [40, 'approved'],
+    [10, 'approved'],
+    [11, 'rejected'],
+  ] as const) {
+    const createdAt = new Date(Date.now() - daysAgo * 24 * 3600_000);
+    await prisma.payment.create({
+      data: {
+        workspaceId: andino.id,
+        createdById: person('laura').id,
+        plan: 'team',
+        amount: 49_900,
+        currency: 'COP',
+        status,
+        provider: 'sandbox',
+        providerRef: `sandbox-seed-${daysAgo}`,
+        createdAt,
+        paidAt: status === 'approved' ? new Date(createdAt.getTime() + 60_000) : null,
+      },
+    });
+  }
 
   console.log('Cifrando conversaciones y mensajes…');
   for (const conv of CONVERSATIONS) {

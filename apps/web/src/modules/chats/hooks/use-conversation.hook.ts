@@ -1,6 +1,8 @@
 import type { Task } from '@parla/types';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
+import type { CallKind } from '@parla/types';
+import { useCallStore } from '@shared/stores/call.store';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
@@ -36,6 +38,7 @@ export function useConversation() {
   const typing = useChatStore((s) => s.typing[conversationId]);
   const { setActive, loadMessages, loadOlder, markRead, fetchConversation, retry, setReplyDraft, updateTask } =
     useChatStore.getState();
+  const callBusy = useCallStore((s) => s.phase !== 'idle');
   const [panel, setPanel] = useState<SidePanel>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
@@ -175,6 +178,10 @@ export function useConversation() {
     showJump,
     scrollRef,
     onScroll,
+    callBusy,
+    startCall: (kind: CallKind) => {
+      if (conversation) void useCallStore.getState().startCall(conversation, kind, user.id);
+    },
     openInfo: () => setPanel({ type: 'info' }),
     openTasks: () => setPanel({ type: 'tasks', prefill: null }),
     closePanel: () => setPanel(null),

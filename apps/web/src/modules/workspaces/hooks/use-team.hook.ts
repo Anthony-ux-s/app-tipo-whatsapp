@@ -7,6 +7,7 @@ import { toast } from '@shared/stores/toast.store';
 import { useWorkspaceStore } from '@shared/stores/workspace.store';
 import { errorMessage } from '@shared/utils/http';
 import { matchesSearch } from '@shared/utils/text';
+import { PLAN_NAMES } from '../const/workspaces.const';
 import { inviteLink } from '../utils/invite-link.utils';
 
 /** Equipo del espacio: directorio para todos; roles, invitaciones y ajustes para administradores. */
@@ -38,6 +39,7 @@ export function useTeam() {
   );
   const onlineCount = (detail?.members ?? []).filter((m) => m.user.presence === 'online').length;
   const link = detail?.inviteCode ? inviteLink(detail.inviteCode) : null;
+  const summary = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
 
   const run = async (key: string, action: () => Promise<void>, success?: string) => {
     setPending(key);
@@ -58,6 +60,8 @@ export function useTeam() {
     members,
     onlineCount,
     link,
+    planName: PLAN_NAMES[summary?.plan ?? 'free'],
+    maxMembers: summary?.maxMembers ?? null,
     search,
     error,
     pending,

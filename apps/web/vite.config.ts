@@ -5,6 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 
 const API_URL = process.env.PARLA_API_URL ?? 'http://localhost:4100';
+const WEB_PORT = Number(process.env.PARLA_WEB_PORT ?? 3100);
 
 export default defineConfig({
   plugins: [
@@ -47,7 +48,7 @@ export default defineConfig({
     include: ['react', 'react-dom/client', 'react-router', 'zustand', 'lucide-react', 'socket.io-client'],
   },
   server: {
-    port: 3100,
+    port: WEB_PORT,
     strictPort: true,
     warmup: { clientFiles: ['./src/main.tsx', './src/app/router.tsx'] },
     proxy: {
@@ -56,7 +57,7 @@ export default defineConfig({
     },
   },
   preview: {
-    port: 3100,
+    port: WEB_PORT,
     strictPort: true,
     proxy: {
       '/api': { target: API_URL, changeOrigin: true },

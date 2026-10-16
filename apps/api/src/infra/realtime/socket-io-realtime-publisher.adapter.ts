@@ -17,4 +17,14 @@ export class SocketIoRealtimePublisher implements RealtimePublisher {
     const rooms = [...new Set(userIds)].map(userRoom);
     (server.to(rooms).emit as (ev: string, ...args: unknown[]) => boolean)(event, ...payload);
   }
+
+  toSockets<E extends keyof ServerToClientEvents>(
+    socketIds: readonly string[],
+    event: E,
+    ...payload: Parameters<ServerToClientEvents[E]>
+  ): void {
+    const server = this.holder.server;
+    if (!server || socketIds.length === 0) return;
+    (server.to([...new Set(socketIds)]).emit as (ev: string, ...args: unknown[]) => boolean)(event, ...payload);
+  }
 }

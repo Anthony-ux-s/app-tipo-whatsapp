@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { WorkspaceRole } from '@parla/types';
+import type { PlanId, WorkspaceRole } from '@parla/types';
 import type { Workspace } from '@prisma/client';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
 import { toUserRecord } from '../../../infra/prisma/user-row';
@@ -26,6 +26,8 @@ function toRecord(row: WorkspaceRow): WorkspaceRecord {
     creatorId: row.creatorId,
     createdAt: row.createdAt,
     memberCount: row._count.members,
+    plan: row.plan as PlanId,
+    planExpiresAt: row.planExpiresAt,
   };
 }
 
@@ -107,6 +109,10 @@ export class PrismaWorkspacesRepository implements WorkspacesRepository {
       this.prisma.conversationParticipant.deleteMany({ where: { userId, conversation: { workspaceId } } }),
       this.prisma.workspaceMember.delete({ where: { workspaceId_userId: { workspaceId, userId } } }),
     ]);
+  }
+
+  async delete(workspaceId: string): Promise<void> {
+    await this.prisma.workspace.deleteMany({ where: { id: workspaceId } });
   }
 
   async listContactIds(userId: string): Promise<string[]> {

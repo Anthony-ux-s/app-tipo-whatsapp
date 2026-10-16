@@ -27,6 +27,8 @@ describe('administración del espacio de trabajo', () => {
       creatorId: admin.id,
       createdAt: new Date(),
       memberCount: 2,
+      plan: 'free',
+      planExpiresAt: null,
     });
     repo.add(admin, 'w1', 'admin');
     repo.add(member, 'w1', 'member');

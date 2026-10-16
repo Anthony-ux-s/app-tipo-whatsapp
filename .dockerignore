@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/dev-dist
+**/*.db
+**/*.db-journal
+apps/api/storage
+apps/api/verify-storage
+apps/api/.secrets
+apps/api/.env
+.verify
+**/test-results
+**/playwright-report
+.git

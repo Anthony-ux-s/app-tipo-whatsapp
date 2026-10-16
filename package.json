@@ -16,7 +16,8 @@
     "db:reset": "npm run db:reset -w @parla/api",
     "test": "npm run build:packages && npm run test -w @parla/crypto -w @parla/api -w @parla/web",
     "test:e2e": "npm run test:e2e -w @parla/web",
-    "typecheck": "npm run build:packages && npm run typecheck -w @parla/api -w @parla/web"
+    "typecheck": "npm run build:packages && npm run typecheck -w @parla/api -w @parla/web",
+    "start:prod": "node scripts/start-prod.mjs"
   },
   "engines": {
     "node": ">=20.19"

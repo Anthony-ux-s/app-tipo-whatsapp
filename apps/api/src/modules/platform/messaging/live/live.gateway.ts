@@ -17,6 +17,7 @@ import { SocketServerHolder, userRoom, type ParlaServer } from '../../../../infr
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { WORKSPACES_REPOSITORY, type WorkspacesRepository } from '../../workspaces/workspaces.repository';
 import { CONVERSATIONS_REPOSITORY, type ConversationsRepository } from '../conversations/conversations.repository';
+import { CallCoordinator } from '../calls/use-cases/call-coordinator';
 import { MarkDeliveredUseCase } from '../conversations/use-cases/receipts.use-case';
 
 type ParlaSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, { userId: string }>;
@@ -30,6 +31,7 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly holder: SocketServerHolder,
     private readonly presence: PresenceRegistry,
     private readonly markDelivered: MarkDeliveredUseCase,
+    private readonly calls: CallCoordinator,
     @Inject(TOKEN_SERVICE) private readonly tokens: TokenService,
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
@@ -44,7 +46,8 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   async handleConnection(socket: ParlaSocket): Promise<void> {
     const token = typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : '';
     const userId = token ? await this.tokens.verify(token) : null;
-    if (!userId || !(await this.users.findById(userId))) {
+    const account = userId ? await this.users.findById(userId) : null;
+    if (!userId || !account || account.deletedAt) {
       socket.disconnect(true);
       return;
     }
@@ -56,6 +59,8 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   async handleDisconnect(socket: ParlaSocket): Promise<void> {
+    // Si estaba en una llamada con esta conexión, sale de ella.
+    this.calls.socketClosed(socket.id);
     const userId = socket.data.userId;
     if (!userId || !this.presence.disconnect(userId)) return;
     const now = new Date();

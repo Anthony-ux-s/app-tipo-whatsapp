@@ -1,4 +1,5 @@
-import { Copy, MessageCircle, Pencil, RefreshCw, Search, Share2, ShieldCheck, UserMinus } from 'lucide-react';
+import { Link } from 'react-router';
+import { Copy, Crown, MessageCircle, Pencil, RefreshCw, Search, Share2, ShieldCheck, UserMinus } from 'lucide-react';
 import { Avatar } from '@shared/ui/Avatar';
 import { Button, IconButton } from '@shared/ui/Button';
 import { Field } from '@shared/ui/Field';
@@ -37,8 +38,17 @@ export function TeamView() {
               <h1 className="text-xl font-extrabold text-ink md:text-2xl">{detail.name}</h1>
               <p className="text-sm text-ink-soft">{detail.description || 'Sin descripción'}</p>
               <p className="mt-1 text-xs text-ink-faint">
-                {detail.memberCount} miembros · {team.onlineCount} en línea · Tu rol: {ROLE_LABELS[detail.role]}
+                {detail.memberCount}
+                {team.maxMembers ? ` de ${team.maxMembers}` : ''} miembros · {team.onlineCount} en línea · Tu rol: {ROLE_LABELS[detail.role]}
               </p>
+              <Link
+                to={`/app/w/${detail.id}/plan`}
+                data-testid="plan-badge"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-teal-600 to-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-float hover:brightness-110"
+              >
+                <Crown className="size-3.5" /> Plan {team.planName}
+                {team.isAdmin ? ' · Ver planes' : ''}
+              </Link>
             </div>
           )}
           {team.isAdmin && !team.editing && (

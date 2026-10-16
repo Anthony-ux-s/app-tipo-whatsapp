@@ -110,3 +110,17 @@ navegador, nunca en el servidor.
   precache de la app y manejo de `push` y `notificationclick`.
 - **Límite de intentos**: el inicio de sesión se limita por IP **y** por cuenta (10/min), para frenar la
   fuerza bruta sin bloquear a todo un equipo que comparte IP.
+
+## Fase 4: llamadas, planes, legal y producción
+
+| Pieza | Elección | Por qué |
+| --- | --- | --- |
+| Llamadas de voz y video | **WebRTC** nativo del navegador, señalización por el mismo **Socket.IO** | Gratis y sin servidores de medios: el audio y el video van P2P, cifrados con DTLS-SRTP, coherente con el cifrado E2E. |
+| Llamadas grupales | **Malla P2P** (cada persona envía a todas) con tope por plan (4 / 8) | Sin SFU que mantener; funciona bien hasta ~8 personas. Para más, un SFU libre (LiveKit/mediasoup) en una fase futura. |
+| STUN / TURN | STUN públicos de Google (gratuitos) y TURN opcional por variables | No requiere credenciales para empezar; TURN propio (coturn) solo si alguna red lo exige. |
+| Planes | Por espacio de trabajo, **prepago mensual sin cobros automáticos** (Gratis / Equipo / Empresa) | Coincide con el modelo freemium de la investigación; prepago evita gestionar suscripciones y cobros fallidos. |
+| Pasarela | **MercadoPago Checkout Pro** detrás del puerto `PaymentGateway`; **sandbox** por defecto | Enfoque latinoamericano (respuesta a la pregunta 3); el sandbox permite probar todo sin credenciales. Stripe sería otro adaptador. |
+| Plan vigente | Se guarda en el espacio (`plan`, `planExpiresAt`) y se calcula el efectivo al leer | El motor de espacios aplica el límite sin depender del de pagos (evita dependencias circulares). |
+| Eliminación de cuenta | **Anonimizar** en vez de borrar la fila | Los demás necesitan la clave pública de quien envolvió la clave de la conversación para seguir leyendo sus chats. |
+| Producción | **Un solo proceso**: la API sirve la PWA compilada; **Docker + PostgreSQL** con docker-compose | Menos piezas que operar; mismo origen para cookies, CSP y WebSockets. Render/Fly/Railway o un VPS sirven igual. |
+| Seguridad web | **helmet** con CSP estricta (el script de tema salió del HTML para no necesitar `unsafe-inline`) | Mitiga XSS, que es el riesgo principal para claves guardadas en el navegador. |

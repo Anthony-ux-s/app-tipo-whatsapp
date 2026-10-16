@@ -1,42 +1,88 @@
+import type { CallIceConfig, PaymentProvider } from '@parla/types';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 export interface AppEnv {
+  production: boolean;
   port: number;
   webOrigin: string[];
+  /** URL pública de la web (para enlaces de pago y de invitación). */
+  publicWebUrl: string;
+  /** URL pública de la API (para el webhook de pagos); vacía en desarrollo. */
+  publicApiUrl: string | null;
   jwtSecret: string;
   jwtExpiresIn: string;
   storageDir: string;
+  /** Si la API también sirve la web compilada (un solo proceso en producción). */
+  webDist: string | null;
   /** Claves VAPID para Web Push; si faltan, el adaptador las genera y las guarda. */
   vapid: { publicKey: string; privateKey: string } | null;
   vapidSubject: string;
+  paymentProvider: PaymentProvider;
+  mercadoPago: { accessToken: string | null; webhookSecret: string | null; useSandboxUrl: boolean };
+  /** Servidores STUN/TURN para las llamadas WebRTC. */
+  ice: CallIceConfig;
 }
+
+export const DEV_JWT_SECRET = 'parla-dev-secret-cambiar-en-produccion';
 
 /** Carga apps/api/.env (si existe) y valida las variables que la API necesita. */
 export function loadEnv(): AppEnv {
   const envFile = resolve(process.cwd(), '.env');
   if (existsSync(envFile)) process.loadEnvFile(envFile);
+  const env = process.env;
+  const production = env.NODE_ENV === 'production';
 
   const required = ['DATABASE_URL', 'JWT_SECRET'] as const;
-  const missing = required.filter((key) => !process.env[key]);
+  const missing = required.filter((key) => !env[key]);
   if (missing.length) {
     throw new Error(`Faltan variables de entorno: ${missing.join(', ')} (copia .env.example a .env)`);
   }
+  if (production && (env.JWT_SECRET === DEV_JWT_SECRET || env.JWT_SECRET!.length < 32)) {
+    throw new Error('En producción JWT_SECRET debe ser un secreto propio de al menos 32 caracteres');
+  }
 
-  const port = Number(process.env.PORT ?? 4100);
+  const port = Number(env.PORT ?? 4100);
   if (!Number.isInteger(port) || port <= 0) throw new Error('PORT debe ser un número de puerto válido');
 
+  const webOrigin = (env.WEB_ORIGIN ?? 'http://localhost:3100').split(',').map((o) => o.trim());
+  const paymentProvider: PaymentProvider = env.PAYMENT_PROVIDER === 'mercadopago' ? 'mercadopago' : 'sandbox';
+  if (paymentProvider === 'mercadopago' && !env.MERCADOPAGO_ACCESS_TOKEN) {
+    throw new Error('PAYMENT_PROVIDER=mercadopago necesita MERCADOPAGO_ACCESS_TOKEN');
+  }
+
+  const webDistPath = env.WEB_DIST ? resolve(process.cwd(), env.WEB_DIST) : null;
+  const stun = (env.STUN_URLS ?? 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302')
+    .split(',')
+    .map((u) => u.trim())
+    .filter(Boolean);
+  const iceServers: CallIceConfig['iceServers'] = stun.length ? [{ urls: stun }] : [];
+  if (env.TURN_URL) {
+    iceServers.push({ urls: env.TURN_URL, username: env.TURN_USERNAME, credential: env.TURN_CREDENTIAL });
+  }
+
   return {
+    production,
     port,
-    webOrigin: (process.env.WEB_ORIGIN ?? 'http://localhost:3100').split(',').map((o) => o.trim()),
-    jwtSecret: process.env.JWT_SECRET!,
-    jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
-    storageDir: resolve(process.cwd(), process.env.STORAGE_DIR ?? './storage'),
+    webOrigin,
+    publicWebUrl: (env.PUBLIC_WEB_URL ?? webOrigin[0]).replace(/\/$/, ''),
+    publicApiUrl: env.PUBLIC_API_URL ? env.PUBLIC_API_URL.replace(/\/$/, '') : null,
+    jwtSecret: env.JWT_SECRET!,
+    jwtExpiresIn: env.JWT_EXPIRES_IN ?? '7d',
+    storageDir: resolve(process.cwd(), env.STORAGE_DIR ?? './storage'),
+    webDist: webDistPath && existsSync(resolve(webDistPath, 'index.html')) ? webDistPath : null,
     vapid:
-      process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
-        ? { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY }
+      env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
+        ? { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY }
         : null,
-    vapidSubject: process.env.VAPID_SUBJECT ?? 'mailto:soporte@parla.app',
+    vapidSubject: env.VAPID_SUBJECT ?? 'mailto:soporte@parla.app',
+    paymentProvider,
+    mercadoPago: {
+      accessToken: env.MERCADOPAGO_ACCESS_TOKEN ?? null,
+      webhookSecret: env.MERCADOPAGO_WEBHOOK_SECRET ?? null,
+      useSandboxUrl: env.MERCADOPAGO_SANDBOX === 'true',
+    },
+    ice: { iceServers },
   };
 }
 

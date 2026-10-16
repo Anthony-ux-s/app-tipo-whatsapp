@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useCallStore } from '@shared/stores/call.store';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { useWorkspaceStore } from '@shared/stores/workspace.store';
@@ -56,6 +57,14 @@ export function useRealtime(userId: string | undefined) {
     });
     socket.on('message:replies', (payload) => useChatStore.getState().applyReplies(payload));
     socket.on('task:upsert', (task) => void useChatStore.getState().applyTask(task));
+    // Llamadas: la señalización llega por el mismo socket.
+    const calls = () => useCallStore.getState();
+    socket.on('call:incoming', ({ call }) => void calls().onIncoming(call, userId));
+    socket.on('call:participant-joined', ({ callId }) => calls().onParticipantJoined(callId));
+    socket.on('call:participant-left', ({ callId, userId: who }) => calls().onParticipantLeft(callId, who));
+    socket.on('call:signal', ({ callId, from, data }) => void calls().onSignal(callId, from, data));
+    socket.on('call:ended', ({ callId, reason }) => calls().onEnded(callId, reason));
+    socket.on('call:answered-elsewhere', ({ callId }) => calls().onAnsweredElsewhere(callId));
     socket.on('message:status', (update) => useChatStore.getState().applyStatus(update));
     socket.on('conversation:upsert', (conversation) => useChatStore.getState().upsertConversation(conversation));
     socket.on('typing', (payload) => useChatStore.getState().applyTyping(payload));
@@ -85,6 +94,7 @@ export function useRealtime(userId: string | undefined) {
       socket.io.off('reconnect_attempt', onReconnecting);
       pendingTeardown = window.setTimeout(() => {
         pendingTeardown = null;
+        if (useCallStore.getState().phase !== 'idle') useCallStore.getState().hangUp();
         disconnectSocket();
         useChatStore.getState().reset();
         useWorkspaceStore.getState().reset();

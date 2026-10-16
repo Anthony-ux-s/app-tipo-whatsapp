@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Patch, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import type { AuthResponse, SessionUser } from '@parla/types';
+import type { AccountExport, AuthResponse, SessionUser } from '@parla/types';
 import { CurrentUser, type AuthUser } from '../../../../http/current-user.decorator';
 import { Public } from '../../../../http/public.decorator';
-import { LoginDto, RegisterDto, UpdateProfileDto } from './dto/auth.dto';
+import { DeleteAccountDto, LoginDto, RegisterDto, UpdateProfileDto } from './dto/auth.dto';
+import { DeleteAccountUseCase, ExportAccountUseCase } from './use-cases/account-data.use-case';
 import { GetSessionUseCase } from './use-cases/get-session.use-case';
 import { LoginUseCase } from './use-cases/login.use-case';
 import { RegisterUserUseCase } from './use-cases/register-user.use-case';
@@ -16,6 +17,8 @@ export class AuthController {
     private readonly login: LoginUseCase,
     private readonly getSession: GetSessionUseCase,
     private readonly updateProfile: UpdateProfileUseCase,
+    private readonly exportAccount: ExportAccountUseCase,
+    private readonly deleteAccount: DeleteAccountUseCase,
   ) {}
 
   @Public()
@@ -36,6 +39,20 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: AuthUser): Promise<SessionUser> {
     return this.getSession.execute(user.userId);
+  }
+
+  /** Descarga de los datos personales (derecho de acceso y portabilidad). */
+  @Get('me/export')
+  export(@CurrentUser() user: AuthUser): Promise<AccountExport> {
+    return this.exportAccount.execute(user.userId);
+  }
+
+  /** Eliminación de la cuenta (derecho de supresión). */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(204)
+  @Delete('me')
+  remove(@CurrentUser() user: AuthUser, @Body() body: DeleteAccountDto): Promise<void> {
+    return this.deleteAccount.execute(user.userId, body.password);
   }
 
   @Patch('me')

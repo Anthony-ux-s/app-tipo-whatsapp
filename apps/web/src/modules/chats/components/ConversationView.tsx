@@ -31,6 +31,8 @@ export function ConversationView() {
           typing={chat.typing}
           online={chat.online}
           tasksOpen={panel?.type === 'tasks'}
+          callBusy={chat.callBusy}
+          onCall={chat.startCall}
           onBack={chat.back}
           onOpenInfo={chat.openInfo}
           onOpenTasks={chat.openTasks}

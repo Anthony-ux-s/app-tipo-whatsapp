@@ -11,3 +11,9 @@ apps/api/prisma/schema.postgres.prisma
 test-results/
 playwright-report/
 .DS_Store
+
+# Entorno de verificación local
+.verify/
+apps/api/verify-storage/
+apps/api/.secrets/
+.env.production

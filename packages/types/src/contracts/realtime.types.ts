@@ -1,4 +1,5 @@
 import type { DeliveryStatus, PresenceStatus } from './enums.types';
+import type { CallAck, CallEndReason, CallInfo, CallStartRequest, SignalData } from './calls.types';
 import type { ConversationSummary, Message, Task } from './messaging.types';
 
 /** Eventos que el servidor emite por el socket. */
@@ -11,11 +12,23 @@ export interface ServerToClientEvents {
   'workspace:changed': (payload: { workspaceId: string }) => void;
   typing: (payload: TypingPayload) => void;
   presence: (payload: PresencePayload) => void;
+  'call:incoming': (payload: { call: CallInfo }) => void;
+  'call:participant-joined': (payload: { callId: string; userId: string }) => void;
+  'call:participant-left': (payload: { callId: string; userId: string }) => void;
+  'call:declined': (payload: { callId: string; userId: string }) => void;
+  'call:answered-elsewhere': (payload: { callId: string }) => void;
+  'call:ended': (payload: { callId: string; reason: CallEndReason }) => void;
+  'call:signal': (payload: { callId: string; from: string; data: SignalData }) => void;
 }
 
 /** Eventos que el cliente emite por el socket. */
 export interface ClientToServerEvents {
   typing: (payload: { conversationId: string; isTyping: boolean }) => void;
+  'call:start': (payload: CallStartRequest, ack: (result: CallAck) => void) => void;
+  'call:join': (payload: { callId: string }, ack: (result: CallAck) => void) => void;
+  'call:decline': (payload: { callId: string }) => void;
+  'call:leave': (payload: { callId: string }) => void;
+  'call:signal': (payload: { callId: string; to: string; data: SignalData }) => void;
 }
 
 export interface MessageStatusUpdate {

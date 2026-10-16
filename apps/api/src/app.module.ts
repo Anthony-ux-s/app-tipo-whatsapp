@@ -5,7 +5,10 @@ import { AccountThrottlerGuard } from './http/account-throttler.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './http/jwt-auth.guard';
 import { InfraModule } from './infra/infra.module';
+import { AdminBillingModule } from './modules/admin/billing/admin-billing.module';
 import { WorkspaceAdminModule } from './modules/admin/workspace-admin/workspace-admin.module';
+import { BillingModule } from './modules/platform/billing/billing.module';
+import { CallsModule } from './modules/members/calls/calls.module';
 import { ChatsModule } from './modules/members/chats/chats.module';
 import { InvitesModule } from './modules/members/invites/invites.module';
 import { PushModule } from './modules/members/push/push.module';
@@ -26,7 +29,10 @@ import { HealthController } from './health.controller';
     TasksModule,
     PushModule,
     WorkspaceAdminModule,
+    AdminBillingModule,
+    BillingModule,
     LiveModule,
+    CallsModule,
   ],
   controllers: [HealthController],
   providers: [

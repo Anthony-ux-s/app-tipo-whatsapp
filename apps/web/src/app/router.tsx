@@ -11,11 +11,16 @@ import { JoinInviteView } from '../modules/workspaces/components/JoinInviteView'
 import { OnboardingView } from '../modules/workspaces/components/OnboardingView';
 import { TeamView } from '../modules/workspaces/components/TeamView';
 import { MyTasksView } from '../modules/tasks/components/MyTasksView';
+import { PlanView } from '../modules/billing/components/PlanView';
+import { SandboxCheckoutView } from '../modules/billing/components/SandboxCheckoutView';
+import { LegalView } from '../modules/legal/components/LegalView';
 import { NotFoundView } from './NotFoundView';
 import { GuestOnly, RequireAuth } from './route-guards';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/app" replace /> },
+  { path: '/legal/terminos', element: <LegalView slug="terminos" /> },
+  { path: '/legal/privacidad', element: <LegalView slug="privacidad" /> },
   {
     element: <GuestOnly />,
     children: [
@@ -27,6 +32,7 @@ export const router = createBrowserRouter([
     element: <RequireAuth />,
     children: [
       { path: '/invitacion/:code', element: <JoinInviteView /> },
+      { path: '/pago/:paymentId', element: <SandboxCheckoutView /> },
       {
         path: '/app',
         element: <AppShellView />,
@@ -41,6 +47,7 @@ export const router = createBrowserRouter([
               { path: 'c/:conversationId', element: <ConversationView /> },
               { path: 'equipo', element: <TeamView /> },
               { path: 'tareas', element: <MyTasksView /> },
+              { path: 'plan', element: <PlanView /> },
               { path: 'ajustes', element: <SettingsView /> },
             ],
           },

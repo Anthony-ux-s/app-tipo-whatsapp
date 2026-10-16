@@ -1,4 +1,6 @@
-import type { WorkspaceRole } from '@parla/types';
+import type { PlanId, WorkspaceRole } from '@parla/types';
+
+export const PLAN_NAMES: Record<PlanId, string> = { free: 'Gratis', team: 'Equipo', business: 'Empresa' };
 
 export const ROLE_LABELS: Record<WorkspaceRole, string> = {
   admin: 'Administrador',

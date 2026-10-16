@@ -71,7 +71,7 @@ export function MessageBubble({
         data-testid="message"
         data-status={message.status}
         data-kind={message.kind}
-        className={`relative max-w-[85%] animate-rise rounded-[var(--radius-bubble)] shadow-float md:max-w-[65%] ${tail} ${outgoing ? 'bg-bubble-out' : 'bg-bubble-in'} ${isMedia ? 'p-1' : 'px-3 pt-1.5 pb-1.5'} ${mentionsMe ? 'ring-2 ring-cyan-400/70' : ''}`}
+        className={`relative max-w-[85%] animate-rise rounded-[var(--radius-bubble)] shadow-float md:max-w-[65%] ${tail} ${outgoing ? 'bg-bubble-out' : 'bg-bubble-in'} ${isMedia ? 'p-1' : `pt-1.5 pb-1.5 pl-3 ${canAct ? 'pr-9 md:pr-3' : 'pr-3'}`} ${mentionsMe ? 'ring-2 ring-cyan-400/70' : ''}`}
       >
         {canAct && (
           <button

@@ -1,4 +1,5 @@
 import { ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router';
 import type { ReactNode } from 'react';
 import { Logo } from '@shared/ui/Logo';
 import { WelcomeIllustration } from '@shared/ui/illustrations';
@@ -32,7 +33,11 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
             ))}
           </ul>
         </div>
-        <p className="relative text-xs text-teal-100/60">© 2026 Parla · Hecho en Latinoamérica</p>
+        <p className="relative text-xs text-teal-100/60">
+          © 2026 Parla · Hecho en Latinoamérica ·{' '}
+          <Link to="/legal/terminos" className="underline hover:text-white">Términos</Link> ·{' '}
+          <Link to="/legal/privacidad" className="underline hover:text-white">Privacidad</Link>
+        </p>
       </aside>
 
       <main className="flex flex-1 flex-col items-center justify-center bg-canvas px-4 py-8 sm:px-8 md:py-12">
@@ -45,6 +50,10 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
             <p className="mt-1.5 text-sm text-ink-soft md:text-[15px]">{subtitle}</p>
             <div className="mt-6">{children}</div>
           </div>
+          <p className="mt-4 text-center text-xs text-ink-faint">
+            <Link to="/legal/terminos" className="hover:underline">Términos</Link> ·{' '}
+            <Link to="/legal/privacidad" className="hover:underline">Privacidad</Link>
+          </p>
         </div>
       </main>
     </div>

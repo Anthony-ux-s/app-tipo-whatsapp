@@ -1,4 +1,4 @@
-import type { EncryptedKeyBackup, LoginRequest, RegisterRequest, ThemePreference, UpdateProfileRequest, UserPreferences } from '@parla/types';
+import type { DeleteAccountRequest, EncryptedKeyBackup, LoginRequest, RegisterRequest, ThemePreference, UpdateProfileRequest, UserPreferences } from '@parla/types';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -26,6 +26,11 @@ export class RegisterDto implements RegisterRequest {
   @IsString() @MaxLength(128) password: string;
   @IsString() @IsNotEmpty() @MaxLength(1000) publicKey: string;
   @ValidateNested() @Type(() => KeyBackupDto) keyBackup: KeyBackupDto;
+  @IsBoolean() acceptTerms: boolean;
+}
+
+export class DeleteAccountDto implements DeleteAccountRequest {
+  @IsString() @IsNotEmpty({ message: 'Escribe tu contraseña para confirmar' }) @MaxLength(128) password: string;
 }
 
 export class LoginDto implements LoginRequest {
