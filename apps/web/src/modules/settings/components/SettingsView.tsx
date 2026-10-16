@@ -1,4 +1,4 @@
-import { KeyRound, LogOut, Monitor, Moon, Palette, ShieldCheck, Sun, UserRound } from 'lucide-react';
+import { Bell, KeyRound, LogOut, Monitor, Moon, Palette, ShieldCheck, Sun, UserRound } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { AVATAR_COLOR_LABELS, AVATAR_GRADIENTS } from '@shared/const/avatar.const';
 import { Avatar } from '@shared/ui/Avatar';
@@ -6,6 +6,7 @@ import { Button } from '@shared/ui/Button';
 import { Field, TextAreaField } from '@shared/ui/Field';
 import { Toggle } from '@shared/ui/Toggle';
 import { THEME_OPTIONS } from '../const/settings.const';
+import { useNotificationSettings } from '../hooks/use-notification-settings.hook';
 import { useSettings } from '../hooks/use-settings.hook';
 
 const THEME_ICONS = { light: <Sun className="size-4" />, dark: <Moon className="size-4" />, system: <Monitor className="size-4" /> };
@@ -24,6 +25,7 @@ function Card({ icon, title, children }: { icon: ReactNode; title: string; child
 
 export function SettingsView() {
   const s = useSettings();
+  const notifications = useNotificationSettings();
   return (
     <div className="flex-1 overflow-y-auto bg-canvas">
       <div className="mx-auto flex max-w-2xl flex-col gap-4 p-3 sm:p-4 md:gap-6 md:p-6 lg:p-8">
@@ -84,6 +86,16 @@ export function SettingsView() {
         <Card icon={<KeyRound className="size-5" />} title="Chats">
           <Toggle checked={s.user.preferences.enterToSend} onChange={s.setEnterToSend} label="Enviar con Enter" description="Usa Mayús + Enter para un salto de línea." />
           <Toggle checked={s.user.preferences.notificationSound} onChange={s.setSound} label="Sonido de mensajes" description="Suena cuando llega un mensaje en otro chat." />
+        </Card>
+
+        <Card icon={<Bell className="size-5" />} title="Notificaciones">
+          <Toggle
+            checked={notifications.enabled}
+            onChange={notifications.toggle}
+            disabled={!notifications.available || notifications.busy}
+            label="Notificaciones push en este dispositivo"
+            description={notifications.description}
+          />
         </Card>
 
         <Card icon={<ShieldCheck className="size-5" />} title="Seguridad y privacidad">

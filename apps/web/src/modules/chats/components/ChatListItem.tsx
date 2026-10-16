@@ -1,4 +1,4 @@
-import { Camera, Mic, Video } from 'lucide-react';
+import { AtSign, Camera, ListChecks, Mic, Video } from 'lucide-react';
 import { Avatar } from '@shared/ui/Avatar';
 import type { ChatListEntry } from '../types/chats.types';
 import { DeliveryTicks } from './DeliveryTicks';
@@ -13,6 +13,7 @@ const MEDIA_ICON = {
   image: <Camera className="size-4 shrink-0" />,
   audio: <Mic className="size-4 shrink-0" />,
   video: <Video className="size-4 shrink-0" />,
+  task: <ListChecks className="size-4 shrink-0" />,
 };
 
 export function ChatListItem({ entry, active, onOpen }: ChatListItemProps) {
@@ -44,6 +45,15 @@ export function ChatListItem({ entry, active, onOpen }: ChatListItemProps) {
                 {preview.author && <span className="shrink-0 font-medium">{preview.author}:</span>}
                 {preview.media && preview.media !== 'text' && preview.media !== 'system' && MEDIA_ICON[preview.media]}
                 <span className="truncate">{preview.text}</span>
+              </span>
+            )}
+            {conversation.mentionCount > 0 && (
+              <span
+                className="flex size-5 shrink-0 animate-pop items-center justify-center rounded-full bg-cyan-600 text-white"
+                aria-label="Te mencionaron"
+                title="Te mencionaron"
+              >
+                <AtSign className="size-3.5" strokeWidth={2.5} />
               </span>
             )}
             {unread && (

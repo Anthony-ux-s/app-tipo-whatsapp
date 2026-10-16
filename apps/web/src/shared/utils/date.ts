@@ -56,3 +56,25 @@ export function formatDuration(ms: number): string {
   const seconds = total % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
+
+export type DueTone = 'overdue' | 'today' | 'soon' | 'later' | 'done';
+
+/** Etiqueta de la fecha límite de una tarea ("Vence hoy", "Venció el 12 oct.", "Mañana"…). */
+export function formatDue(dueDate: string | null, done: boolean, now = new Date()): { label: string; tone: DueTone } | null {
+  if (!dueDate) return null;
+  const [y, m, d] = dueDate.split('-').map(Number);
+  const due = new Date(y, m - 1, d);
+  const diff = daysBetween(now, due);
+  const short = shortDateFormat.format(due);
+  if (done) return { label: short, tone: 'done' };
+  if (diff < 0) return { label: `Venció el ${short}`, tone: 'overdue' };
+  if (diff === 0) return { label: 'Vence hoy', tone: 'today' };
+  if (diff === 1) return { label: 'Mañana', tone: 'soon' };
+  if (diff < 7) return { label: capitalize(weekdayFormat.format(due)), tone: 'soon' };
+  return { label: short, tone: 'later' };
+}
+
+/** Fecha local de hoy en formato AAAA-MM-DD (para los campos de fecha). */
+export function todayIso(now = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}

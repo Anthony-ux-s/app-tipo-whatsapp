@@ -1,26 +1,43 @@
+import type { Task } from '@parla/types';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
+import { useWorkspaceStore } from '@shared/stores/workspace.store';
+import type { ChatMessage } from '@shared/types/chat.types';
 import { errorMessage } from '@shared/utils/http';
+import { toTaskView } from '../../tasks/utils/task-view.utils';
+import type { TaskPrefill } from '../../tasks/types/tasks.types';
+import type { MessageActions } from '../types/message-actions.types';
 import { buildTimeline } from '../utils/message-timeline.utils';
 import { counterpart, headerSubtitle, typingLabel } from '../utils/conversation-preview.utils';
 
 const NEAR_BOTTOM_PX = 160;
 
-/** Conversación abierta: carga, lectura, desplazamiento y paneles. */
+export type SidePanel =
+  | { type: 'info' }
+  | { type: 'thread'; rootId: string }
+  | { type: 'tasks'; prefill: TaskPrefill | null }
+  | null;
+
+/** Conversación abierta: carga, lectura, desplazamiento, paneles laterales y acciones de cada mensaje. */
 export function useConversation() {
   const { workspaceId = '', conversationId = '' } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const user = useSessionStore((s) => s.user)!;
+  const isAdmin = useWorkspaceStore((s) => s.details[workspaceId]?.role === 'admin');
   const conversation = useChatStore((s) => s.conversations[conversationId]);
   const listStatus = useChatStore((s) => s.listStatus);
   const thread = useChatStore((s) => s.threads[conversationId]);
   const texts = useChatStore((s) => s.texts);
+  const tasks = useChatStore((s) => s.tasks);
   const typing = useChatStore((s) => s.typing[conversationId]);
-  const { setActive, loadMessages, loadOlder, markRead, fetchConversation, retry } = useChatStore.getState();
-  const [infoOpen, setInfoOpen] = useState(false);
+  const { setActive, loadMessages, loadOlder, markRead, fetchConversation, retry, setReplyDraft, updateTask } =
+    useChatStore.getState();
+  const [panel, setPanel] = useState<SidePanel>(null);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [showJump, setShowJump] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -32,10 +49,18 @@ export function useConversation() {
   useEffect(() => {
     if (!conversationId) return;
     setActive(conversationId);
-    setInfoOpen(false);
+    setPanel(null);
+    setMenuFor(null);
     stickToBottom.current = true;
     return () => setActive(null);
   }, [conversationId, setActive]);
+
+  // ?panel=tareas (desde "Mis tareas" o una notificación) abre el panel de tareas.
+  useEffect(() => {
+    if (searchParams.get('panel') !== 'tareas') return;
+    setPanel({ type: 'tasks', prefill: null });
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!conversation || loadedFor.current === conversationId) return;
@@ -89,6 +114,50 @@ export function useConversation() {
     }
   }, [thread?.nextCursor, thread?.loadingOlder, loadOlder, conversationId]);
 
+  const person = useCallback(
+    (userId: string) => {
+      const found = conversation?.participants.find((p) => p.user.id === userId)?.user;
+      return { name: found ? (found.id === user.id ? 'Tú' : found.displayName) : 'Ex miembro', color: found?.avatarColor ?? 'teal' };
+    },
+    [conversation?.participants, user.id],
+  );
+
+  const textOf = (message: ChatMessage) => {
+    const decrypted = texts[message.clientId];
+    return decrypted?.ok ? decrypted.text : '';
+  };
+
+  const actions: MessageActions = {
+    menuFor,
+    toggleMenu: (clientId) => setMenuFor((current) => (current === clientId ? null : clientId)),
+    reply: (message) => {
+      setMenuFor(null);
+      setReplyDraft(conversationId, message);
+    },
+    openThread: (rootId) => {
+      setMenuFor(null);
+      setPanel({ type: 'thread', rootId });
+    },
+    createTaskFrom: (message) => {
+      setMenuFor(null);
+      setPanel({ type: 'tasks', prefill: { title: textOf(message), sourceMessageId: message.id } });
+    },
+    copyText: (message) => {
+      setMenuFor(null);
+      void navigator.clipboard
+        .writeText(textOf(message))
+        .then(() => toast('Texto copiado', 'success'))
+        .catch(() => toast('No se pudo copiar', 'error'));
+    },
+    openImage: (url) => setLightbox(url),
+    retry: (clientId) => retry(clientId).catch((err) => toast(errorMessage(err), 'error')),
+    toggleTask: (task: Task) =>
+      updateTask(task, { status: task.status === 'done' ? 'open' : 'done' }).catch((err) => toast(errorMessage(err), 'error')),
+    openTasks: () => setPanel({ type: 'tasks', prefill: null }),
+    taskView: (task) => toTaskView(tasks[task.id] ?? task, conversation?.participants ?? [], texts, user.id, isAdmin),
+    person,
+  };
+
   const other = conversation ? counterpart(conversation, user.id) : null;
 
   return {
@@ -97,29 +166,25 @@ export function useConversation() {
     thread,
     timeline,
     texts,
-    workspaceId,
+    actions,
     typing: conversation ? typingLabel(conversation, typing) : null,
     subtitle: conversation ? headerSubtitle(conversation, user.id) : '',
     online: other?.presence === 'online',
-    infoOpen,
+    panel,
     lightbox,
     showJump,
     scrollRef,
     onScroll,
-    openInfo: () => setInfoOpen(true),
-    closeInfo: () => setInfoOpen(false),
-    openImage: (url: string) => setLightbox(url),
+    openInfo: () => setPanel({ type: 'info' }),
+    openTasks: () => setPanel({ type: 'tasks', prefill: null }),
+    closePanel: () => setPanel(null),
     closeImage: () => setLightbox(null),
+    closeMenu: () => setMenuFor(null),
     jumpToBottom: () => {
       const el = scrollRef.current;
       if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     },
-    retryMessage: (clientId: string) => retry(clientId).catch((err) => toast(errorMessage(err), 'error')),
     reload: () => loadMessages(conversationId).catch((err) => toast(errorMessage(err), 'error')),
     back: () => navigate(`/app/w/${workspaceId}`),
-    participantName: (userId: string) =>
-      conversation?.participants.find((p) => p.user.id === userId)?.user.displayName ?? 'Ex miembro',
-    participantColor: (userId: string) =>
-      conversation?.participants.find((p) => p.user.id === userId)?.user.avatarColor ?? 'teal',
   };
 }

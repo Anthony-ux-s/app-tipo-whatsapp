@@ -1,19 +1,23 @@
 import type {
   ConversationSummary,
+  EncryptedPayload,
   Message,
   MessagePage,
   MessageStatusUpdate,
   PresencePayload,
   PublicUser,
   SendMessageRequest,
+  Task,
+  ThreadPage,
   TypingPayload,
+  UpdateTaskRequest,
   UploadedFile,
 } from '@parla/types';
 import { create } from 'zustand';
 import type { ChatMessage, ConnectionState, DecryptedText, MessageThread } from '../types/chat.types';
 import { createWrappedKeys, openText, sealFile, sealText, wrapExistingKey, conversationKey } from '../utils/crypto-vault';
 import { http } from '../utils/http';
-import { newClientId } from '../utils/ids';
+import { newClientId, taskTextKey } from '../utils/ids';
 import { getSocket } from '../utils/socket';
 
 const TYPING_TTL = 5000;
@@ -27,6 +31,25 @@ export interface OutgoingMedia {
   mimeType: string;
   caption?: string;
   durationMs?: number;
+  replyToId?: string | null;
+}
+
+export interface SendOptions {
+  replyToId?: string | null;
+  mentions?: string[];
+}
+
+export interface NewTaskInput {
+  title: string;
+  assigneeId: string | null;
+  dueDate: string | null;
+  sourceMessageId: string | null;
+}
+
+export interface ThreadPanelState {
+  status: 'loading' | 'ready' | 'error';
+  root: ChatMessage | null;
+  replies: ChatMessage[];
 }
 
 interface ChatState {
@@ -40,7 +63,14 @@ interface ChatState {
   activeId: string | null;
   connection: ConnectionState;
   /** Retiene el último mensaje pendiente de enviar cuando falla, para reintentar. */
-  outbox: Record<string, { conversationId: string; text?: string; media?: OutgoingMedia }>;
+  outbox: Record<string, { conversationId: string; text?: string; media?: OutgoingMedia; options?: SendOptions }>;
+  /** Tareas conocidas, por id (se actualizan en vivo con task:upsert). */
+  tasks: Record<string, Task>;
+  taskLists: Record<string, 'loading' | 'ready' | 'error'>;
+  /** Mensaje al que se está respondiendo en cada conversación. */
+  replyDraft: Record<string, ChatMessage | null>;
+  /** Hilos abiertos en el panel lateral, por mensaje raíz. */
+  threadPanels: Record<string, ThreadPanelState>;
 
   setIdentity: (myId: string | null) => void;
   setConnection: (state: ConnectionState) => void;
@@ -55,7 +85,16 @@ interface ChatState {
   applyTyping: (payload: TypingPayload) => void;
   applyPresence: (payload: PresencePayload) => void;
   markRead: (conversationId: string) => Promise<void>;
-  sendText: (conversationId: string, text: string) => Promise<void>;
+  sendText: (conversationId: string, text: string, options?: SendOptions) => Promise<void>;
+  setReplyDraft: (conversationId: string, message: ChatMessage | null) => void;
+  loadThread: (conversationId: string, rootId: string) => Promise<void>;
+  applyReplies: (payload: { conversationId: string; messageId: string; replyCount: number }) => void;
+  loadTasks: (conversationId: string) => Promise<void>;
+  createTask: (conversationId: string, input: NewTaskInput) => Promise<Task>;
+  updateTask: (task: Task, changes: UpdateTaskRequest) => Promise<void>;
+  applyTask: (task: Task) => Promise<void>;
+  /** Descifra títulos de tareas que llegan por otra vía ("Mis tareas"). */
+  ingestTasks: (tasks: Task[]) => Promise<void>;
   sendMedia: (conversationId: string, media: OutgoingMedia) => Promise<void>;
   retry: (clientId: string) => Promise<void>;
   emitTyping: (conversationId: string, isTyping: boolean) => void;
@@ -79,19 +118,40 @@ const initialState = {
   activeId: null,
   connection: 'connecting' as const,
   outbox: {},
+  tasks: {},
+  taskLists: {},
+  replyDraft: {},
+  threadPanels: {},
 };
+
 
 export const useChatStore = create<ChatState>((set, get) => {
   /** Descifra en el navegador los mensajes que aún no tienen texto. */
-  const decryptAll = async (conversation: ConversationSummary, messages: Message[]) => {
-    const pending = messages.filter((m) => m.body && !get().texts[m.clientId]);
+  const decryptAll = async (conversation: ConversationSummary, messages: Message[], extraTasks: Task[] = []) => {
+    // Cuerpos de mensajes, citas de respuestas y títulos de tareas: todo se descifra aquí.
+    const payloads = new Map<string, EncryptedPayload>();
+    const taskUpdates: Record<string, Task> = {};
+    for (const m of messages) {
+      if (m.body) payloads.set(m.clientId, m.body);
+      if (m.replyTo?.body) payloads.set(m.replyTo.clientId, m.replyTo.body);
+      if (m.task) extraTasks = [...extraTasks, m.task];
+    }
+    for (const task of extraTasks) {
+      payloads.set(taskTextKey(task.id), task.title);
+      const known = get().tasks[task.id];
+      if (!known || known.status !== task.status || known.assigneeId !== task.assigneeId || known.dueDate !== task.dueDate) {
+        taskUpdates[task.id] = task;
+      }
+    }
+    if (Object.keys(taskUpdates).length) set({ tasks: { ...get().tasks, ...taskUpdates } });
+    const pending = [...payloads].filter(([key]) => !get().texts[key]);
     if (pending.length === 0) return;
     const entries = await Promise.all(
-      pending.map(async (m): Promise<[string, DecryptedText]> => {
+      pending.map(async ([key, payload]): Promise<[string, DecryptedText]> => {
         try {
-          return [m.clientId, { ok: true, text: await openText(conversation, m.body!) }];
+          return [key, { ok: true, text: await openText(conversation, payload) }];
         } catch {
-          return [m.clientId, { ok: false }];
+          return [key, { ok: false }];
         }
       }),
     );
@@ -104,8 +164,23 @@ export const useChatStore = create<ChatState>((set, get) => {
     set({ threads: { ...get().threads, [conversationId]: patch(thread) } });
   };
 
+  /** Lleva el mensaje también al panel de su hilo, si está abierto. */
+  const putInPanel = (message: ChatMessage) => {
+    const panels = get().threadPanels;
+    const rootId = message.replyTo?.id;
+    if (rootId && panels[rootId]) {
+      const panel = panels[rootId];
+      const index = panel.replies.findIndex((m) => m.clientId === message.clientId);
+      const replies = index === -1 ? [...panel.replies, message] : panel.replies.map((m, i) => (i === index ? { ...m, ...message } : m));
+      set({ threadPanels: { ...panels, [rootId]: { ...panel, replies } } });
+    } else if (panels[message.id]?.root) {
+      set({ threadPanels: { ...panels, [message.id]: { ...panels[message.id], root: { ...panels[message.id].root!, ...message } } } });
+    }
+  };
+
   /** Inserta o reemplaza un mensaje en su hilo (por id o por clientId del envío optimista). */
   const putMessage = (message: ChatMessage) => {
+    putInPanel(message);
     patchThread(message.conversationId, (thread) => {
       const index = thread.items.findIndex((m) => m.id === message.id || m.clientId === message.clientId);
       if (index === -1) return { ...thread, items: [...thread.items, message] };
@@ -135,7 +210,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     });
   };
 
-  const deliver = async (conversationId: string, outgoing: SendMessageRequest, media?: OutgoingMedia) => {
+  const deliver = async (conversationId: string, outgoing: SendMessageRequest, media?: OutgoingMedia, options?: SendOptions) => {
     try {
       const saved = await http.post<Message>(`/chats/${conversationId}/messages`, outgoing);
       putMessage(saved);
@@ -147,7 +222,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         ...thread,
         items: thread.items.map((m) => (m.clientId === outgoing.clientId ? { ...m, local: 'failed' } : m)),
       }));
-      set({ outbox: { ...get().outbox, [outgoing.clientId]: { conversationId, media } } });
+      set({ outbox: { ...get().outbox, [outgoing.clientId]: { conversationId, media, options } } });
       throw error;
     }
   };
@@ -164,11 +239,28 @@ export const useChatStore = create<ChatState>((set, get) => {
       clientId,
       status: 'sent',
       createdAt: new Date().toISOString(),
+      replyTo: null,
+      replyCount: 0,
+      mentions: [],
+      task: null,
       local: 'pending',
       ...extra,
     };
     putMessage(message);
     touchConversation(message, 0);
+  };
+
+  /** Cita del mensaje al que se responde, siempre apuntando a la raíz del hilo. */
+  const replyReference = (conversationId: string, targetId: string | null): Message['replyTo'] => {
+    if (!targetId) return null;
+    const pool = [
+      ...(get().threads[conversationId]?.items ?? []),
+      ...Object.values(get().threadPanels).flatMap((p) => (p.root ? [p.root, ...p.replies] : p.replies)),
+    ];
+    const target = pool.find((m) => m.id === targetId);
+    if (!target) return null;
+    if (target.replyTo) return target.replyTo;
+    return { id: target.id, senderId: target.senderId, kind: target.kind, body: target.body, clientId: target.clientId };
   };
 
   const uploadAndSend = async (conversationId: string, clientId: string, media: OutgoingMedia) => {
@@ -192,6 +284,7 @@ export const useChatStore = create<ChatState>((set, get) => {
             iv: sealed.iv,
             ...(media.durationMs ? { durationMs: Math.round(media.durationMs) } : {}),
           },
+          replyToId: media.replyToId ?? null,
         },
         media,
       );
@@ -222,7 +315,16 @@ export const useChatStore = create<ChatState>((set, get) => {
         const list = await http.get<ConversationSummary[]>(`/chats?workspaceId=${encodeURIComponent(workspaceId)}`);
         if (get().workspaceId !== workspaceId) return;
         set({ conversations: Object.fromEntries(list.map((c) => [c.id, c])), listStatus: 'ready' });
-        await Promise.all(list.map((c) => (c.lastMessage ? decryptAll(c, [c.lastMessage]) : undefined)));
+        const known = Object.values(get().tasks);
+        await Promise.all(
+          list.map((c) =>
+            decryptAll(
+              c,
+              c.lastMessage ? [c.lastMessage] : [],
+              known.filter((t) => t.conversationId === c.id),
+            ),
+          ),
+        );
       } catch (error) {
         if (get().workspaceId === workspaceId) set({ listStatus: 'error' });
         throw error;
@@ -300,6 +402,11 @@ export const useChatStore = create<ChatState>((set, get) => {
       const isActive = get().activeId === message.conversationId && focused;
       putMessage(message);
       touchConversation(message, mine || isActive || message.kind === 'system' ? 0 : 1);
+      const mentionsMe = !mine && !isActive && message.mentions.includes(get().myId ?? '');
+      if (mentionsMe) {
+        const current = get().conversations[message.conversationId];
+        if (current) set({ conversations: { ...get().conversations, [current.id]: { ...current, mentionCount: current.mentionCount + 1 } } });
+      }
       if (get().typing[message.conversationId]?.[message.senderId]) {
         get().applyTyping({ conversationId: message.conversationId, userId: message.senderId, isTyping: false });
       }
@@ -317,6 +424,13 @@ export const useChatStore = create<ChatState>((set, get) => {
       const upgrade = <T extends Message>(m: T): T =>
         ids.has(m.id) && STATUS_RANK[status] > STATUS_RANK[m.status] ? { ...m, status } : m;
       patchThread(conversationId, (thread) => ({ ...thread, items: thread.items.map(upgrade) }));
+      const panels = Object.fromEntries(
+        Object.entries(get().threadPanels).map(([id, panel]) => [
+          id,
+          { ...panel, root: panel.root ? upgrade(panel.root) : null, replies: panel.replies.map(upgrade) },
+        ]),
+      );
+      set({ threadPanels: panels });
       const conversation = get().conversations[conversationId];
       if (conversation?.lastMessage && ids.has(conversation.lastMessage.id)) {
         set({
@@ -360,21 +474,135 @@ export const useChatStore = create<ChatState>((set, get) => {
 
     markRead: async (conversationId) => {
       const conversation = get().conversations[conversationId];
-      if (conversation?.unreadCount) {
-        set({ conversations: { ...get().conversations, [conversationId]: { ...conversation, unreadCount: 0 } } });
+      if (conversation?.unreadCount || conversation?.mentionCount) {
+        set({ conversations: { ...get().conversations, [conversationId]: { ...conversation, unreadCount: 0, mentionCount: 0 } } });
       }
       await http.post(`/chats/${conversationId}/read`).catch(() => undefined);
     },
 
-    sendText: async (conversationId, text) => {
+    sendText: async (conversationId, text, options = {}) => {
       const conversation = get().conversations[conversationId];
       const clean = text.trim();
       if (!conversation || !clean) return;
       const clientId = newClientId();
       set({ texts: { ...get().texts, [clientId]: { ok: true, text: clean } } });
-      optimistic(conversationId, clientId, 'text');
+      optimistic(conversationId, clientId, 'text', {
+        replyTo: replyReference(conversationId, options.replyToId ?? null),
+        mentions: options.mentions ?? [],
+      });
       const body = await sealText(conversation, clean);
-      await deliver(conversationId, { clientId, kind: 'text', body, media: null });
+      await deliver(
+        conversationId,
+        { clientId, kind: 'text', body, media: null, replyToId: options.replyToId ?? null, mentions: options.mentions ?? [] },
+        undefined,
+        options,
+      );
+    },
+
+    setReplyDraft: (conversationId, message) => set({ replyDraft: { ...get().replyDraft, [conversationId]: message } }),
+
+    loadThread: async (conversationId, rootId) => {
+      const conversation = get().conversations[conversationId];
+      if (!conversation) return;
+      if (!get().threadPanels[rootId]) {
+        set({ threadPanels: { ...get().threadPanels, [rootId]: { status: 'loading', root: null, replies: [] } } });
+      }
+      try {
+        const page = await http.get<ThreadPage>(`/chats/${conversationId}/messages/${rootId}/thread`);
+        await decryptAll(conversation, [page.root, ...page.replies]);
+        const current = get().threadPanels[rootId];
+        const locals = current?.replies.filter((m) => m.local && !page.replies.some((r) => r.clientId === m.clientId)) ?? [];
+        set({
+          threadPanels: { ...get().threadPanels, [rootId]: { status: 'ready', root: page.root, replies: [...page.replies, ...locals] } },
+        });
+      } catch (error) {
+        set({ threadPanels: { ...get().threadPanels, [rootId]: { status: 'error', root: null, replies: [] } } });
+        throw error;
+      }
+    },
+
+    applyReplies: ({ conversationId, messageId, replyCount }) => {
+      const bump = <T extends Message>(m: T): T => (m.id === messageId ? { ...m, replyCount } : m);
+      patchThread(conversationId, (thread) => ({ ...thread, items: thread.items.map(bump) }));
+      const panel = get().threadPanels[messageId];
+      if (panel?.root) set({ threadPanels: { ...get().threadPanels, [messageId]: { ...panel, root: bump(panel.root) } } });
+    },
+
+    loadTasks: async (conversationId) => {
+      const conversation = get().conversations[conversationId];
+      if (!conversation) return;
+      if (get().taskLists[conversationId] !== 'ready') set({ taskLists: { ...get().taskLists, [conversationId]: 'loading' } });
+      try {
+        const tasks = await http.get<Task[]>(`/chats/${conversationId}/tasks`);
+        await decryptAll(conversation, [], tasks);
+        set({
+          tasks: { ...get().tasks, ...Object.fromEntries(tasks.map((t) => [t.id, t])) },
+          taskLists: { ...get().taskLists, [conversationId]: 'ready' },
+        });
+      } catch (error) {
+        set({ taskLists: { ...get().taskLists, [conversationId]: 'error' } });
+        throw error;
+      }
+    },
+
+    createTask: async (conversationId, input) => {
+      const conversation = get().conversations[conversationId];
+      if (!conversation) throw new Error('Conversación no disponible');
+      const titleText = input.title.trim();
+      const title = await sealText(conversation, titleText);
+      const task = await http.post<Task>(`/chats/${conversationId}/tasks`, {
+        clientId: newClientId(),
+        title,
+        assigneeId: input.assigneeId,
+        dueDate: input.dueDate,
+        sourceMessageId: input.sourceMessageId,
+      });
+      set({ texts: { ...get().texts, [taskTextKey(task.id)]: { ok: true, text: titleText } } });
+      await get().applyTask(task);
+      return task;
+    },
+
+    updateTask: async (task, changes) => {
+      // Optimista: la casilla responde al instante y se corrige si el servidor dice otra cosa.
+      set({ tasks: { ...get().tasks, [task.id]: { ...task, ...changes } } });
+      try {
+        await get().applyTask(await http.patch<Task>(`/chats/${task.conversationId}/tasks/${task.id}`, changes));
+      } catch (error) {
+        set({ tasks: { ...get().tasks, [task.id]: task } });
+        throw error;
+      }
+    },
+
+    applyTask: async (task) => {
+      const known = get().tasks[task.id];
+      const wasOpen = known ? known.status === 'open' : null;
+      set({ tasks: { ...get().tasks, [task.id]: task } });
+      const conversation = get().conversations[task.conversationId];
+      if (!conversation) return;
+      await decryptAll(conversation, [], [task]);
+      const isOpen = task.status === 'open';
+      const delta = wasOpen === null ? (isOpen ? 1 : 0) : Number(isOpen) - Number(wasOpen);
+      if (delta) {
+        const current = get().conversations[task.conversationId];
+        set({
+          conversations: {
+            ...get().conversations,
+            [current.id]: { ...current, openTaskCount: Math.max(0, current.openTaskCount + delta) },
+          },
+        });
+      }
+    },
+
+    ingestTasks: async (tasks) => {
+      set({ tasks: { ...get().tasks, ...Object.fromEntries(tasks.map((t) => [t.id, t])) } });
+      const byConversation = new Map<string, Task[]>();
+      for (const t of tasks) byConversation.set(t.conversationId, [...(byConversation.get(t.conversationId) ?? []), t]);
+      await Promise.all(
+        [...byConversation].map(([id, list]) => {
+          const conversation = get().conversations[id];
+          return conversation ? decryptAll(conversation, [], list) : undefined;
+        }),
+      );
     },
 
     sendMedia: async (conversationId, media) => {
@@ -408,7 +636,9 @@ export const useChatStore = create<ChatState>((set, get) => {
         kind: 'text',
         body: await sealText(conversation, text.text),
         media: null,
-      });
+        replyToId: pending.options?.replyToId ?? null,
+        mentions: pending.options?.mentions ?? [],
+      }, undefined, pending.options);
     },
 
     emitTyping: (conversationId, isTyping) => {

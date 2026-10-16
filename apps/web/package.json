@@ -6,9 +6,9 @@
   "description": "Web de Parla (PWA instalable): React + Vite + Tailwind",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.sw.json",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "icons": "node scripts/generate-icons.mjs"
@@ -33,6 +33,9 @@
     "typescript": "~5.9.3",
     "vite": "^7.1.6",
     "vite-plugin-pwa": "^1.0.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "workbox-core": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1"
   }
 }

@@ -2,7 +2,9 @@ import { expect, test } from '@playwright/test';
 import { openChat, openSession, PASSWORD } from './helpers';
 
 test('un colaborador nuevo se registra, se une con el enlace y la administradora gestiona su rol', async ({ browser }) => {
-  const username = `nuevo${Date.now().toString(36)}`;
+  const suffix = Date.now().toString(36);
+  const username = `nuevo${suffix}`;
+  const name = `Martina ${suffix}`;
   const context = await browser.newContext({ viewport: { width: 1366, height: 860 } });
   const page = await context.newPage();
   const errors: string[] = [];
@@ -12,7 +14,7 @@ test('un colaborador nuevo se registra, se une con el enlace y la administradora
   await page.goto('/invitacion/andino2026');
   await expect(page).toHaveURL(/\/entrar/);
   await page.getByRole('link', { name: 'Créala gratis' }).click();
-  await page.getByLabel('Tu nombre').fill('Martina Prueba');
+  await page.getByLabel('Tu nombre').fill(name);
   await page.getByLabel('Nombre de usuario').fill(username);
   await page.getByLabel('Contraseña').fill(PASSWORD);
   await page.getByRole('checkbox').check();
@@ -31,15 +33,15 @@ test('un colaborador nuevo se registra, se une con el enlace y la administradora
 
   // Laura recibe el chat nuevo y, como administradora, la asciende
   const laura = await openSession(browser, 'laura');
-  await openChat(laura.page, 'Martina Prueba');
+  await openChat(laura.page, name);
   await expect(laura.page.getByTestId('message').filter({ hasText: 'ya estoy en Parla' })).toBeVisible();
   await laura.page.goto(laura.page.url().replace(/\/c\/.*/, '/equipo'));
-  await laura.page.getByLabel('Rol de Martina Prueba').selectOption('admin');
+  await laura.page.getByLabel(`Rol de ${name}`).selectOption('admin');
   await expect(laura.page.getByText('Rol actualizado')).toBeVisible();
 
   // Martina ve su nuevo rol sin recargar
   await page.goto(page.url().replace(/\/c\/.*/, ''));
-  await expect(page.getByText('Martina Prueba · Administrador')).toBeVisible();
+  await expect(page.getByText(`${name} · Administrador`)).toBeVisible();
 
   expect(errors).toEqual([]);
   expect(laura.consoleErrors).toEqual([]);

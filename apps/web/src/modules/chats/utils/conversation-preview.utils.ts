@@ -2,6 +2,7 @@ import type { ConversationSummary, Message, PublicUser } from '@parla/types';
 import type { DecryptedText } from '@shared/types/chat.types';
 import { formatLastSeen } from '@shared/utils/date';
 import { firstName } from '@shared/utils/text';
+import { taskTextKey } from '@shared/utils/ids';
 import { MEDIA_LABELS } from '../const/chats.const';
 
 export interface Preview {
@@ -23,6 +24,10 @@ export function previewFor(
   const sender = conversation.participants.find((p) => p.user.id === message.senderId)?.user;
   const author =
     message.senderId === myId ? 'Tú' : conversation.kind === 'group' && sender ? firstName(sender.displayName) : null;
+  if (message.kind === 'task') {
+    const title = message.task ? texts[taskTextKey(message.task.id)] : undefined;
+    return { author, text: title?.ok ? title.text : MEDIA_LABELS.task, media: 'task' };
+  }
   const decrypted = texts[message.clientId];
   const caption = decrypted?.ok ? decrypted.text : '';
 

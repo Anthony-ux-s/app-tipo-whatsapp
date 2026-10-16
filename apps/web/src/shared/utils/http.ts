@@ -56,7 +56,7 @@ export const http = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
-  delete: <T>(path: string) => request<T>('DELETE', path),
+  delete: <T>(path: string, body?: unknown) => request<T>('DELETE', path, body),
   upload: <T>(path: string, form: FormData) => request<T>('POST', path, form),
   binary: (path: string) => request<ArrayBuffer>('GET', path, undefined, true),
 };

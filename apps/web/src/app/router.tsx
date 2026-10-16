@@ -10,6 +10,7 @@ import { WorkspaceLayoutView } from '../modules/shell/components/WorkspaceLayout
 import { JoinInviteView } from '../modules/workspaces/components/JoinInviteView';
 import { OnboardingView } from '../modules/workspaces/components/OnboardingView';
 import { TeamView } from '../modules/workspaces/components/TeamView';
+import { MyTasksView } from '../modules/tasks/components/MyTasksView';
 import { NotFoundView } from './NotFoundView';
 import { GuestOnly, RequireAuth } from './route-guards';
 
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
               { index: true, element: <NoChatSelected /> },
               { path: 'c/:conversationId', element: <ConversationView /> },
               { path: 'equipo', element: <TeamView /> },
+              { path: 'tareas', element: <MyTasksView /> },
               { path: 'ajustes', element: <SettingsView /> },
             ],
           },

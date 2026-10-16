@@ -1,4 +1,5 @@
-import { ChevronDown, MessageSquarePlus, Search, Users, X } from 'lucide-react';
+import { ChevronDown, ListChecks, MessageSquarePlus, Search, Users, X } from 'lucide-react';
+import { Link } from 'react-router';
 import { Avatar } from '@shared/ui/Avatar';
 import { Button, IconButton } from '@shared/ui/Button';
 import { EmptyChatsIllustration, NoResultsIllustration } from '@shared/ui/illustrations';
@@ -38,6 +39,16 @@ export function ChatListPanel() {
             </span>
           </span>
         </button>
+        {list.workspace && (
+          <Link
+            to={`/app/w/${list.workspace.id}/tareas`}
+            aria-label="Mis tareas"
+            title="Mis tareas"
+            className="hidden size-10 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors duration-200 hover:bg-surface-3 hover:text-ink md:inline-flex"
+          >
+            <ListChecks className="size-5" />
+          </Link>
+        )}
         <IconButton label="Nuevo grupo" onClick={() => list.openNewChat('group')}>
           <Users className="size-5" />
         </IconButton>

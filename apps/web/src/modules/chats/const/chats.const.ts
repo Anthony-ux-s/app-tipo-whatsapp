@@ -6,6 +6,7 @@ export const MEDIA_LABELS: Record<MessageKind, string> = {
   image: 'Foto',
   audio: 'Nota de voz',
   video: 'Video',
+  task: 'Tarea',
   system: 'Aviso',
 };
 

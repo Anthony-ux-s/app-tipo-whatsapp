@@ -26,7 +26,15 @@ export function useWorkspaceLayout() {
     void loadDetail(workspaceId).catch(() => undefined);
   }, [exists, workspaceId, loadConversations, loadDetail, navigate]);
 
-  const section = pathname.endsWith('/equipo') ? 'team' : pathname.endsWith('/ajustes') ? 'settings' : conversationId ? 'conversation' : 'list';
+  const section = pathname.endsWith('/equipo')
+    ? 'team'
+    : pathname.endsWith('/ajustes')
+      ? 'settings'
+      : pathname.endsWith('/tareas')
+        ? 'tasks'
+        : conversationId
+          ? 'conversation'
+          : 'list';
 
   return {
     workspaceId,
@@ -34,6 +42,6 @@ export function useWorkspaceLayout() {
     totalUnread,
     /** En el celular: la lista ocupa la pantalla; al abrir algo, el panel ocupa el 100%. */
     showListOnMobile: section === 'list',
-    showMobileNavInMain: section === 'team' || section === 'settings',
+    showMobileNavInMain: section === 'team' || section === 'settings' || section === 'tasks',
   };
 }

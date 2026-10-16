@@ -90,3 +90,23 @@ navegador, nunca en el servidor.
 - **Estados de un mensaje**: `sent` → `delivered` → `read`. En grupos el estado visible es el
   mínimo entre todos los destinatarios (se guarda un recibo por destinatario).
 - **Historial**: sin límite de días (la crítica a Slack); se pagina por cursor de 40 en 40.
+
+## Fase 3: tareas, hilos, menciones y notificaciones
+
+- **Tareas** viven en el motor `modules/platform/collaboration/tasks` (las usan todos los participantes
+  como iguales) y entran por la puerta de cada miembro (`/chats/:id/tasks` y `/tasks`). El título se
+  cifra con la clave de la conversación; fecha límite, responsable y estado van en claro porque el
+  servidor los necesita para filtrar y avisar. Cada tarea se publica también como un mensaje
+  `kind = task` para que quede en la historia del chat.
+- **Hilos**: un mensaje guarda `replyToId` apuntando siempre a la raíz (hilos de un solo nivel, como
+  Slack). La misma respuesta se ve en el chat con la cita y en el panel del hilo.
+- **Menciones**: como el texto va cifrado, el navegador envía aparte la lista de ids mencionados. El
+  servidor solo conoce *a quién* se menciona (no el texto) y así puede contar menciones sin leer y avisar.
+- **Notificaciones push**: **Web Push con VAPID** (librería `web-push`, MIT) detrás del puerto
+  `PushSender` en `infra/push`. Gratis, sin Firebase ni cuentas de terceros. Solo se envía push a
+  quien no tiene la app abierta; con la app en segundo plano el navegador muestra su propio aviso con el
+  texto descifrado. Los push del servidor nunca llevan contenido (sería romper el cifrado E2E).
+- **Service worker propio** (`apps/web/src/sw.ts`, estrategia *injectManifest* de vite-plugin-pwa):
+  precache de la app y manejo de `push` y `notificationclick`.
+- **Límite de intentos**: el inicio de sesión se limita por IP **y** por cuenta (10/min), para frenar la
+  fuerza bruta sin bloquear a todo un equipo que comparte IP.

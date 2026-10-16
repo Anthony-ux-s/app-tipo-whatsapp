@@ -2,8 +2,8 @@
 
 Chat tipo WhatsApp para equipos de trabajo: espacios de trabajo separados de la vida personal,
 chats individuales y grupales en tiempo real, fotos, videos y notas de voz, todo **cifrado de
-extremo a extremo**. Es la primera versión (Fase 1 + parte de la 2 y la 3 del plan de
-`INVESTIGACION.md`), instalable en el celular como PWA.
+extremo a extremo**. Incluye las Fases 1, 2 y 3 del plan de `INVESTIGACION.md` (mensajería, multimedia, espacios de
+trabajo, **tareas en el chat, hilos, menciones y notificaciones push**), instalable en el celular como PWA.
 
 ![Logo](apps/web/public/icons/icon-192.png)
 
@@ -74,6 +74,24 @@ La pantalla de inicio de sesión tiene accesos directos a las cuentas de prueba.
 - Huella de seguridad para verificar contactos. JWT, bcrypt, límites de intentos de inicio de sesión,
   validación en cada entrada y regla 404-no-403 para no revelar chats ni espacios ajenos.
 
+**Colaboración (Fase 3)**
+- **Tareas asignables dentro del chat**: se crean desde el panel de tareas o convirtiendo cualquier mensaje
+  (menú del mensaje → «Convertir en tarea»), con responsable y fecha límite. Aparecen como tarjeta en el
+  chat, se completan con una casilla y se actualizan en vivo para todos. Las completan quien la creó, la
+  persona asignada o un administrador. El título va **cifrado de extremo a extremo** como los mensajes.
+- **Mis tareas**: vista del espacio con *Asignadas a mí*, *Creadas por mí* y *Hechas*, con fechas
+  vencidas resaltadas; abre el chat de origen con su panel de tareas.
+- **Hilos de respuesta**: «Responder en hilo» abre un panel lateral con el mensaje raíz y sus respuestas;
+  el mensaje muestra «N respuestas» en vivo. «Responder» cita el mensaje en el chat principal.
+  Los hilos no se anidan (responder a una respuesta cuelga de la misma raíz).
+- **Menciones con @**: al escribir @ aparece la lista de participantes (con teclado: ↑ ↓ Enter); la
+  mención se resalta y, si es para ti, el mensaje se marca y el chat muestra un aviso **@** hasta leerlo.
+- **Notificaciones**: con la app abierta en segundo plano, aviso del sistema con el texto ya descifrado
+  en el navegador. Con la app cerrada, **Web Push** (VAPID, sin servicios de pago) a quien no está
+  conectado; por privacidad estos avisos no llevan el contenido («Laura te mencionó», «Nueva tarea»).
+  Se activan por dispositivo en *Ajustes → Notificaciones*. Las claves VAPID se generan solas la primera
+  vez (`apps/api/storage/vapid.json`) o se definen en `.env`.
+
 **Espacios de trabajo y roles**
 - **Administrador**: crea el espacio, invita por enlace (copiar, compartir, renovar), cambia roles,
   quita miembros, edita nombre/descripción y decide si los colaboradores pueden crear grupos.
@@ -117,21 +135,26 @@ el cifrado y PWA en lugar de app nativa. Todo gratis y de código abierto.
 
 ## Pruebas
 
-- **Unitarias (Vitest)**: cifrado E2E (7), reglas de dominio y casos de uso de la API con
-  adaptadores en memoria — estados de entrega, permisos, inicio de sesión, idempotencia — (34),
-  utilidades de la web (13).
+- **Unitarias (Vitest, 77)**: cifrado E2E (7); reglas de dominio y casos de uso de la API con
+  adaptadores en memoria (47) — estados de entrega, permisos, inicio de sesión, idempotencia, hilos,
+  menciones, tareas (crear, asignar, completar, permisos, fechas) y a quién llega cada push —;
+  utilidades de la web (23) — menciones, fechas límite, vistas de tareas, avisos locales.
 - **Punta a punta (Playwright, navegador real y peticiones reales)**: dos personas conversando en
   tiempo real con recibo de leído y verificación de que la API nunca devuelve texto en claro;
   descifrado de fotos y notas de voz; error de contraseña; entrada por teléfono; registro desde un
   enlace de invitación, unión al espacio, chat con la administradora y cambio de rol; y la
-  navegación en el celular.
+  navegación en el celular. Fase 3: mención con el selector @ y aviso al mencionado, respuesta en
+  hilo con contador en vivo, respuesta citada, mensaje convertido en tarea asignada que la otra
+  persona completa desde «Mis tareas» (y la autora lo ve al instante), permisos de las tareas y
+  alta/baja de suscripciones push contra la API real.
 
 ## Qué falta (siguientes fases)
 
 Según el plan de `INVESTIGACION.md`:
 
-- **Fase 3 (resto)**: tareas asignables dentro del chat, hilos de respuesta, menciones, búsqueda
-  dentro del historial (con cifrado E2E debe hacerse en el dispositivo), notificaciones push.
+- **Fase 3 (pendiente)**: búsqueda dentro del historial (con cifrado E2E debe hacerse en el
+  dispositivo), comentarios y subtareas en las tareas, recordatorios push antes de la fecha límite,
+  silenciar chats, y probar el push de punta a punta en celulares reales (Android/iOS instalada).
 - **Fase 4**: planes de suscripción con MercadoPago/Stripe detrás de un puerto `PaymentGateway`,
   términos y política de privacidad completos, despliegue a producción.
 - **Seguridad**: verificación del teléfono por SMS/OTP, rotación de la clave del grupo cuando alguien
