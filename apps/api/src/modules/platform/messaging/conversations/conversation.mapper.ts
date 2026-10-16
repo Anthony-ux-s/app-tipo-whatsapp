@@ -1,5 +1,6 @@
 import type { ConversationSummary, DeliveryStatus, Message, PresenceStatus } from '@parla/types';
 import { aggregateDeliveryStatus } from '../../../../kernel/delivery-status';
+import { toTask } from '../../collaboration/tasks/task.mapper';
 import { toPublicUser } from '../../identity/user.mapper';
 import type { ConversationRecord, MessageRecord } from './conversations.repository';
 
@@ -23,6 +24,21 @@ export function toMessage(message: MessageRecord, viewerId: string): Message {
     clientId: message.clientId,
     status: statusFor(message, viewerId),
     createdAt: message.createdAt.toISOString(),
+    replyTo: message.replyTo
+      ? {
+          id: message.replyTo.id,
+          senderId: message.replyTo.senderId,
+          kind: message.replyTo.kind,
+          body:
+            message.replyTo.ciphertext && message.replyTo.iv
+              ? { ciphertext: message.replyTo.ciphertext, iv: message.replyTo.iv }
+              : null,
+          clientId: message.replyTo.clientId,
+        }
+      : null,
+    replyCount: message.replyCount,
+    mentions: message.mentions,
+    task: message.task ? toTask(message.task) : null,
   };
 }
 
@@ -59,6 +75,8 @@ export function toConversationSummary(
       : null,
     lastMessage: conversation.lastMessage ? toMessage(conversation.lastMessage, viewerId) : null,
     unreadCount: conversation.unreadCount,
+    mentionCount: conversation.mentionCount,
+    openTaskCount: conversation.openTaskCount,
     createdById: conversation.createdById,
     createdAt: conversation.createdAt.toISOString(),
     updatedAt: conversation.updatedAt.toISOString(),

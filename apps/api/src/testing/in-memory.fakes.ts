@@ -13,6 +13,11 @@ import type {
   ReceiptChange,
 } from '../modules/platform/messaging/conversations/conversations.repository';
 import type { MembershipRecord, WorkspaceRecord, WorkspacesRepository } from '../modules/platform/workspaces/workspaces.repository';
+import type { TaskRecord } from '../modules/platform/collaboration/tasks/task.record';
+import type { NewTask, TaskChanges, TasksRepository } from '../modules/platform/collaboration/tasks/tasks.repository';
+import type { PushResult, PushSender, PushTarget } from '../infra/push/push-sender.port';
+import type { PushSubscriptionsRepository, StoredSubscription } from '../modules/platform/messaging/push/push-subscriptions.repository';
+import type { PushPayload, TaskScope } from '@parla/types';
 
 let seq = 0;
 const nextId = (prefix: string) => `${prefix}${++seq}`;
@@ -135,9 +140,11 @@ export class InMemoryWorkspacesRepository implements WorkspacesRepository {
 }
 
 export class InMemoryConversationsRepository implements ConversationsRepository {
-  conversations: Omit<ConversationRecord, 'lastMessage' | 'unreadCount'>[] = [];
+  conversations: Omit<ConversationRecord, 'lastMessage' | 'unreadCount' | 'mentionCount' | 'openTaskCount'>[] = [];
   messages: MessageRecord[] = [];
   files: { id: string; conversationId: string; uploaderId: string }[] = [];
+  /** Para que las tarjetas de tarea lleven su tarea (lo conecta la prueba). */
+  taskLookup?: (id: string) => TaskRecord | null;
 
   addConversation(id: string, users: UserRecord[], kind: 'direct' | 'group' = 'group') {
     this.conversations.push({
@@ -166,7 +173,7 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
   }
   async findForUser(conversationId: string, userId: string) {
     const c = this.conversations.find((x) => x.id === conversationId && x.participants.some((p) => p.user.id === userId));
-    return c ? { ...c, lastMessage: null, unreadCount: 0 } : null;
+    return c ? { ...c, lastMessage: null, unreadCount: 0, mentionCount: 0, openTaskCount: 0 } : null;
   }
   async findIdByDirectKey() {
     return null;
@@ -182,12 +189,18 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
   async createMessage(input: NewMessage) {
     const existing = this.messages.find((m) => m.senderId === input.senderId && m.clientId === input.clientId);
     if (existing) return existing;
-    const { recipientIds, ...data } = input;
+    const { recipientIds, replyToId = null, mentions = [], taskId = null, ...data } = input;
+    const root = replyToId ? this.messages.find((m) => m.id === replyToId) : undefined;
+    if (root) root.replyCount += 1;
     const message: MessageRecord = {
       ...data,
       id: nextId('m'),
       createdAt: new Date(),
       receipts: recipientIds.map((userId) => ({ userId, deliveredAt: null, readAt: null })),
+      replyTo: root ? { id: root.id, senderId: root.senderId, kind: root.kind, ciphertext: root.ciphertext, iv: root.iv, clientId: root.clientId } : null,
+      replyCount: 0,
+      mentions,
+      task: taskId ? (this.taskLookup?.(taskId) ?? null) : null,
     };
     this.messages.push(message);
     return message;
@@ -197,6 +210,9 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
   }
   async findMessages(ids: string[]) {
     return this.messages.filter((m) => ids.includes(m.id));
+  }
+  async listReplies(rootId: string) {
+    return this.messages.filter((m) => m.replyTo?.id === rootId);
   }
   async markDelivered(userId: string, scope: { conversationId: string; messageIds: string[] } | 'all') {
     return this.touch(userId, (m) => scope === 'all' || (m.conversationId === scope.conversationId && scope.messageIds.includes(m.id)), 'delivered');
@@ -221,5 +237,72 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
   }
   async findFile(fileId: string) {
     return this.files.find((f) => f.id === fileId) ?? null;
+  }
+}
+
+export class InMemoryTasksRepository implements TasksRepository {
+  tasks: TaskRecord[] = [];
+  async create(input: NewTask) {
+    const task: TaskRecord = { ...input, id: nextId('t'), status: 'open', createdAt: new Date(), completedAt: null, completedById: null };
+    this.tasks.push(task);
+    return task;
+  }
+  async findById(id: string) {
+    return this.tasks.find((t) => t.id === id) ?? null;
+  }
+  async update(id: string, changes: TaskChanges) {
+    const task = this.tasks.find((t) => t.id === id)!;
+    Object.assign(task, changes);
+    return { ...task };
+  }
+  async delete(id: string) {
+    this.tasks = this.tasks.filter((t) => t.id !== id);
+  }
+  async listForConversation(conversationId: string) {
+    return this.tasks.filter((t) => t.conversationId === conversationId);
+  }
+  async listForUser(workspaceId: string, userId: string, scope: TaskScope) {
+    return this.tasks.filter(
+      (t) =>
+        t.workspaceId === workspaceId &&
+        (scope === 'assigned'
+          ? t.assigneeId === userId && t.status === 'open'
+          : scope === 'created'
+            ? t.createdById === userId && t.status === 'open'
+            : t.status === 'done' && (t.assigneeId === userId || t.createdById === userId)),
+    );
+  }
+}
+
+export class InMemoryPushSubscriptions implements PushSubscriptionsRepository {
+  items: StoredSubscription[] = [];
+  async save(sub: StoredSubscription) {
+    this.items = [...this.items.filter((s) => s.endpoint !== sub.endpoint), sub];
+  }
+  async remove(userId: string, endpoint: string) {
+    this.items = this.items.filter((s) => !(s.userId === userId && s.endpoint === endpoint));
+  }
+  async removeByEndpoint(endpoint: string) {
+    this.items = this.items.filter((s) => s.endpoint !== endpoint);
+  }
+  async listForUsers(userIds: string[]) {
+    return this.items.filter((s) => userIds.includes(s.userId));
+  }
+  async countForUser(userId: string) {
+    return this.items.filter((s) => s.userId === userId).length;
+  }
+}
+
+export class RecordingPushSender implements PushSender {
+  sent: { target: PushTarget; payload: PushPayload }[] = [];
+  /** Endpoints que el servicio push da por caducados. */
+  gone = new Set<string>();
+  publicKey() {
+    return 'clave-publica-vapid';
+  }
+  async send(target: PushTarget, payload: PushPayload): Promise<PushResult> {
+    if (this.gone.has(target.endpoint)) return 'gone';
+    this.sent.push({ target, payload });
+    return 'sent';
   }
 }

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { ConversationKind, MessageKind, WorkspaceRole, WrappedKey } from '@parla/types';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../infra/prisma/prisma.service';
+import { toTaskRecord } from '../../../../infra/prisma/task-row';
 import { toUserRecord } from '../../../../infra/prisma/user-row';
 import type {
   ConversationRecord,
@@ -12,7 +13,13 @@ import type {
   ReceiptChange,
 } from './conversations.repository';
 
-const messageInclude = { receipts: true } satisfies Prisma.MessageInclude;
+const messageInclude = {
+  receipts: true,
+  mentions: { select: { userId: true } },
+  task: true,
+  replyTo: { select: { id: true, senderId: true, kind: true, ciphertext: true, iv: true, clientId: true } },
+  _count: { select: { replies: true } },
+} satisfies Prisma.MessageInclude;
 type MessageRow = Prisma.MessageGetPayload<{ include: typeof messageInclude }>;
 
 const conversationInclude = (workspaceId: string) =>
@@ -42,10 +49,20 @@ function toMessageRecord(row: MessageRow): MessageRecord {
     clientId: row.clientId,
     createdAt: row.createdAt,
     receipts: row.receipts.map((r) => ({ userId: r.userId, deliveredAt: r.deliveredAt, readAt: r.readAt })),
+    replyTo: row.replyTo ? { ...row.replyTo, kind: row.replyTo.kind as MessageKind } : null,
+    replyCount: row._count.replies,
+    mentions: row.mentions.map((m) => m.userId),
+    task: row.task ? toTaskRecord(row.task) : null,
   };
 }
 
-function toConversationRecord(row: ConversationRow, unreadCount: number): ConversationRecord {
+interface Counters {
+  unread: number;
+  mentions: number;
+  openTasks: number;
+}
+
+function toConversationRecord(row: ConversationRow, counters: Counters): ConversationRecord {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -65,7 +82,9 @@ function toConversationRecord(row: ConversationRow, unreadCount: number): Conver
       wrapperPublicKey: p.wrappedBy.publicKey,
     })),
     lastMessage: row.messages[0] ? toMessageRecord(row.messages[0]) : null,
-    unreadCount,
+    unreadCount: counters.unread,
+    mentionCount: counters.mentions,
+    openTaskCount: counters.openTasks,
   };
 }
 
@@ -76,14 +95,31 @@ const keyRows = (keys: WrappedKey[]) =>
 export class PrismaConversationsRepository implements ConversationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async unreadCounts(userId: string, conversationIds: string[]): Promise<Map<string, number>> {
-    if (conversationIds.length === 0) return new Map();
-    const groups = await this.prisma.messageReceipt.groupBy({
-      by: ['conversationId'],
-      where: { userId, readAt: null, conversationId: { in: conversationIds } },
-      _count: { _all: true },
-    });
-    return new Map(groups.map((g) => [g.conversationId, g._count._all]));
+/** No leídos, menciones sin leer y tareas abiertas por conversación, en tres consultas agrupadas. */
+  private async counters(userId: string, conversationIds: string[]): Promise<(id: string) => Counters> {
+    if (conversationIds.length === 0) return () => ({ unread: 0, mentions: 0, openTasks: 0 });
+    const inIds = { in: conversationIds };
+    const [unread, mentions, tasks] = await Promise.all([
+      this.prisma.messageReceipt.groupBy({
+        by: ['conversationId'],
+        where: { userId, readAt: null, conversationId: inIds },
+        _count: { _all: true },
+      }),
+      this.prisma.messageReceipt.groupBy({
+        by: ['conversationId'],
+        where: { userId, readAt: null, conversationId: inIds, message: { mentions: { some: { userId } } } },
+        _count: { _all: true },
+      }),
+      this.prisma.task.groupBy({
+        by: ['conversationId'],
+        where: { status: 'open', conversationId: inIds },
+        _count: { _all: true },
+      }),
+    ]);
+    const toMap = (groups: { conversationId: string; _count: { _all: number } }[]) =>
+      new Map(groups.map((g) => [g.conversationId, g._count._all]));
+    const [u, m, t] = [toMap(unread), toMap(mentions), toMap(tasks)];
+    return (id) => ({ unread: u.get(id) ?? 0, mentions: m.get(id) ?? 0, openTasks: t.get(id) ?? 0 });
   }
 
   async listForUser(userId: string, workspaceId: string): Promise<ConversationRecord[]> {
@@ -93,8 +129,8 @@ export class PrismaConversationsRepository implements ConversationsRepository {
       take: 200,
       include: conversationInclude(workspaceId),
     });
-    const unread = await this.unreadCounts(userId, rows.map((r) => r.id));
-    return rows.map((row) => toConversationRecord(row, unread.get(row.id) ?? 0));
+    const countersOf = await this.counters(userId, rows.map((r) => r.id));
+    return rows.map((row) => toConversationRecord(row, countersOf(row.id)));
   }
 
   async findForUser(conversationId: string, userId: string): Promise<ConversationRecord | null> {
@@ -107,8 +143,8 @@ export class PrismaConversationsRepository implements ConversationsRepository {
       where: { id: conversationId },
       include: conversationInclude(base.workspaceId),
     });
-    const unread = await this.unreadCounts(userId, [conversationId]);
-    return toConversationRecord(row, unread.get(conversationId) ?? 0);
+    const countersOf = await this.counters(userId, [conversationId]);
+    return toConversationRecord(row, countersOf(conversationId));
   }
 
   async findIdByDirectKey(directKey: string): Promise<string | null> {
@@ -153,16 +189,21 @@ export class PrismaConversationsRepository implements ConversationsRepository {
     });
     if (existing) return toMessageRecord(existing);
 
-    const { recipientIds, media, ...data } = input;
+    const { recipientIds, media, mentions = [], replyToId = null, taskId = null, ...data } = input;
     const now = new Date();
     const [row] = await this.prisma.$transaction([
       this.prisma.message.create({
         data: {
           ...data,
+          replyToId,
+          taskId,
           media: media ? JSON.stringify(media) : null,
           createdAt: now,
           receipts: {
             create: recipientIds.map((userId) => ({ userId, conversationId: input.conversationId })),
+          },
+          mentions: {
+            create: [...new Set(mentions)].map((userId) => ({ userId, conversationId: input.conversationId })),
           },
         },
         include: messageInclude,
@@ -185,6 +226,16 @@ export class PrismaConversationsRepository implements ConversationsRepository {
 
   async findMessages(messageIds: string[]): Promise<MessageRecord[]> {
     const rows = await this.prisma.message.findMany({ where: { id: { in: messageIds } }, include: messageInclude });
+    return rows.map(toMessageRecord);
+  }
+
+  async listReplies(rootId: string, take: number): Promise<MessageRecord[]> {
+    const rows = await this.prisma.message.findMany({
+      where: { replyToId: rootId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take,
+      include: messageInclude,
+    });
     return rows.map(toMessageRecord);
   }
 

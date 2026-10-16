@@ -1,4 +1,4 @@
-import type { ConversationKind, DeliveryStatus, MessageKind, WorkspaceRole } from './enums.types';
+import type { ConversationKind, DeliveryStatus, MessageKind, TaskStatus, WorkspaceRole } from './enums.types';
 import type { PublicUser } from './identity.types';
 
 /** Clave de la conversación envuelta para un miembro concreto. */
@@ -30,6 +30,15 @@ export interface ConversationParticipant {
   role: WorkspaceRole;
 }
 
+/** Resumen del mensaje al que se responde (para dibujar la cita). */
+export interface ReplyReference {
+  id: string;
+  senderId: string;
+  kind: MessageKind;
+  body: EncryptedPayload | null;
+  clientId: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -43,6 +52,14 @@ export interface Message {
   clientId: string;
   status: DeliveryStatus;
   createdAt: string;
+  /** Hilo: la raíz a la que responde este mensaje. */
+  replyTo: ReplyReference | null;
+  /** Respuestas en el hilo de este mensaje (si es raíz). */
+  replyCount: number;
+  /** Personas mencionadas con @ (ids). */
+  mentions: string[];
+  /** Tarea que presenta el mensaje (kind = task). */
+  task: Task | null;
 }
 
 export interface ConversationSummary {
@@ -58,6 +75,10 @@ export interface ConversationSummary {
   myKey: (WrappedKey & { wrapperPublicKey: string }) | null;
   lastMessage: Message | null;
   unreadCount: number;
+  /** Mensajes sin leer que me mencionan. */
+  mentionCount: number;
+  /** Tareas abiertas del chat. */
+  openTaskCount: number;
   createdById: string;
   createdAt: string;
   updatedAt: string;
@@ -89,9 +110,64 @@ export interface AddParticipantsRequest {
 
 export interface SendMessageRequest {
   clientId: string;
-  kind: Exclude<MessageKind, 'system'>;
+  kind: Exclude<MessageKind, 'system' | 'task'>;
   body: EncryptedPayload | null;
   media: MediaAttachment | null;
+  /** Responder en el hilo de este mensaje. */
+  replyToId?: string | null;
+  /** Ids de las personas mencionadas con @. */
+  mentions?: string[];
+}
+
+export interface ThreadPage {
+  root: Message;
+  replies: Message[];
+}
+
+/** Tarea asignable dentro de un chat (el título va cifrado con la clave de la conversación). */
+export interface Task {
+  id: string;
+  conversationId: string;
+  workspaceId: string;
+  title: EncryptedPayload;
+  assigneeId: string | null;
+  createdById: string;
+  dueDate: string | null;
+  status: TaskStatus;
+  sourceMessageId: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  completedById: string | null;
+}
+
+export interface CreateTaskRequest {
+  clientId: string;
+  title: EncryptedPayload;
+  assigneeId: string | null;
+  dueDate: string | null;
+  sourceMessageId: string | null;
+}
+
+export interface UpdateTaskRequest {
+  status?: TaskStatus;
+  assigneeId?: string | null;
+  dueDate?: string | null;
+}
+
+export type TaskScope = 'assigned' | 'created' | 'done';
+
+/** Suscripción Web Push del navegador. */
+export interface PushSubscriptionRequest {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+
+/** Contenido de una notificación push: sin texto de mensajes (van cifrados de extremo a extremo). */
+export interface PushPayload {
+  title: string;
+  body: string;
+  url: string;
+  tag: string;
 }
 
 export interface UploadedFile {

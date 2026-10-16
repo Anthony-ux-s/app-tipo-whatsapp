@@ -51,8 +51,13 @@ const USERS: SeedUser[] = [
 ];
 
 type Media = { kind: 'image' | 'audio'; file: 'packaging' | 'route' | 'wireframe' | 'voice' };
-/** [autor, texto, minutos atrás, archivo opcional] */
-type Line = [string, string, number, Media?];
+/** Hilo (índice del mensaje al que responde) y personas mencionadas con @. */
+type LineOptions = { replyTo?: number; mentions?: string[] };
+/** [autor, texto, minutos atrás, archivo opcional, opciones] */
+type Line = [string, string, number, Media?, LineOptions?];
+
+/** [quien la crea, título, asignada a, vence en N días (null = sin fecha), hecha, minutos atrás] */
+type SeedTask = [string, string, string | null, number | null, boolean, number];
 
 interface SeedConversation {
   workspace: 'andino' | 'faro';
@@ -65,6 +70,13 @@ interface SeedConversation {
   /** Últimos N mensajes que aún no llegan al dispositivo de esa persona. */
   undelivered?: Record<string, number>;
   lines: Line[];
+  tasks?: SeedTask[];
+}
+
+/** Fecha local AAAA-MM-DD dentro de N días. */
+function localDate(days: number): string {
+  const d = new Date(Date.now() + days * 24 * 3600_000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 const H = 60;
@@ -86,11 +98,13 @@ const CONVERSATIONS: SeedConversation[] = [
       ['mateo', 'Recordatorio: el cierre de mes es el viernes. Por favor suban las facturas de proveedores antes del jueves a las 5 p. m.', 2 * D + 2 * H, undefined],
       ['sofia', 'Anotado. Esta semana entraron 18 solicitudes nuevas de clientes corporativos 📈', 1 * D + 6 * H, undefined],
       ['diego', '¡Y cerramos el contrato con la cadena de hoteles en Chapinero! 120 kg mensuales ☕', 1 * D + 5 * H + 30, undefined],
-      ['laura', '¡Qué noticia, Diego! 👏👏 Esto merece pandebono para todos el lunes.', 1 * D + 5 * H, undefined],
+      ['laura', '¡Qué noticia, @Diego Herrera! 👏👏 Esto merece pandebono para todos el lunes.', 1 * D + 5 * H, undefined, { mentions: ['diego'] }],
       ['camila', 'Yo llevo el pandebono 😄', 3 * H, undefined],
       ['valentina', 'Mañana hacemos catación del lote nuevo a las 10 a. m. en la sala de tostión. Están todos invitados.', 25, undefined],
-      ['andres', 'Ahí estaré. ¿Llevo las tazas de cata nuevas?', 12, undefined],
+      ['andres', 'Ahí estaré. ¿Llevo las tazas de cata nuevas?', 12, undefined, { replyTo: 9 }],
+      ['valentina', 'Sí, porfa. Y las cucharas de cata 🥄', 6, undefined, { replyTo: 9 }],
     ],
+    tasks: [['mateo', 'Subir las facturas de proveedores de octubre', 'laura', 1, false, 2 * D + 2 * H - 5]],
   },
   {
     workspace: 'andino',
@@ -102,14 +116,18 @@ const CONVERSATIONS: SeedConversation[] = [
     lines: [
       ['andres', 'Inventario de hoy: 340 kg de Huila, 210 kg de Nariño y 95 kg de Sierra Nevada.', 2 * D + 3 * H, undefined],
       ['sofia', 'El cliente de Usaquén pregunta si podemos adelantar su pedido al jueves.', 2 * D + 2 * H, undefined],
-      ['laura', 'Si Andrés cuadra la ruta, sí. Andrés, ¿te da?', 2 * D + H + 50, undefined],
+      ['laura', 'Si Andrés cuadra la ruta, sí. @Andrés Rojas, ¿te da?', 2 * D + H + 50, undefined, { mentions: ['andres'] }],
       ['andres', 'Sí, lo meto en la ruta del jueves. Les comparto el recorrido 👇', 2 * D + H + 30, undefined],
       ['andres', 'Ruta del jueves: 3 paradas, salimos 7:30 a. m.', 2 * D + H + 29, { kind: 'image', file: 'route' }],
       ['diego', 'Perfecto, le confirmo al cliente.', 1 * D + 2 * H, undefined],
       ['sofia', 'Llegó una queja: un paquete de Nariño llegó con la válvula rota. Ya le ofrecimos reposición.', 3 * H, undefined],
-      ['andres', 'Revisé el lote: fue un problema del proveedor de bolsas. Cambio el lote completo hoy mismo.', 2 * H, undefined],
+      ['andres', 'Revisé el lote: fue un problema del proveedor de bolsas. Cambio el lote completo hoy mismo.', 2 * H, undefined, { replyTo: 6 }],
       ['andres', 'Les dejo nota de voz con el detalle para el informe.', H + 40, { kind: 'audio', file: 'voice' }],
-      ['sofia', 'Gracias, Andrés. Le aviso al cliente que la reposición sale mañana.', 40, undefined],
+      ['sofia', 'Gracias, Andrés. Le aviso al cliente que la reposición sale mañana.', 40, undefined, { replyTo: 6 }],
+    ],
+    tasks: [
+      ['laura', 'Confirmar la entrega en Usaquén para el jueves', 'sofia', 2, true, 2 * D + H + 20],
+      ['andres', 'Cambiar el lote de bolsas de Nariño', 'andres', 1, false, 2 * H - 2],
     ],
   },
   {
@@ -127,7 +145,12 @@ const CONVERSATIONS: SeedConversation[] = [
       ['camila', 'Ya está: "Huila · 1.850 msnm" 😉', 1 * D + 5 * H + 40, undefined],
       ['laura', 'Aprobado por mi parte. Valentina, ¿cuántas bolsas de 250 g sacamos del lote?', 5 * H, undefined],
       ['valentina', 'Unas 400 bolsas. Si vendemos bien, guardo 20 kg verdes para una segunda tanda.', 4 * H + 30, undefined],
-      ['laura', 'Perfecto. Diego, arma la preventa para clientes corporativos 🚀', 50, undefined],
+      ['laura', 'Perfecto. @Diego Herrera, arma la preventa para clientes corporativos 🚀', 50, undefined, { mentions: ['diego'] }],
+    ],
+    tasks: [
+      ['laura', 'Aprobar el arte final del empaque v3', 'camila', -1, true, 1 * D + 5 * H + 30],
+      ['laura', 'Armar la preventa para clientes corporativos', 'diego', 5, false, 48],
+      ['valentina', 'Guardar 20 kg de café verde para la segunda tanda', 'valentina', null, false, 4 * H + 20],
     ],
   },
   {
@@ -198,8 +221,9 @@ const CONVERSATIONS: SeedConversation[] = [
       ['camila', 'Wireframe de la home, versión 2:', 1 * D + 2 * H, { kind: 'image', file: 'wireframe' }],
       ['diego', 'Pondría el botón de comprar más arriba en el celular, la mayoría de los pedidos llegan desde ahí.', 1 * D + H, undefined],
       ['camila', 'Buen punto. Lo ajusto para la v3.', 2 * H, undefined],
-      ['camila', 'Laura, ¿puedes revisar los textos de la página de suscripción?', 30, undefined],
+      ['camila', '@Laura Méndez, ¿puedes revisar los textos de la página de suscripción?', 30, undefined, { mentions: ['laura'] }],
     ],
+    tasks: [['camila', 'Revisar los textos de la página de suscripción', 'laura', 3, false, 29]],
   },
   {
     workspace: 'faro',
@@ -336,7 +360,8 @@ async function main(): Promise<void> {
     }
 
     const total = conv.lines.length;
-    for (const [index, [author, text, minutesAgo, media]] of conv.lines.entries()) {
+    const messageIds: string[] = [];
+    for (const [index, [author, text, minutesAgo, media, options]] of conv.lines.entries()) {
       const sender = person(author);
       const createdAt = new Date(Date.now() - minutesAgo * 60_000);
       const fromEnd = total - index;
@@ -363,11 +388,15 @@ async function main(): Promise<void> {
       }
 
       const recipients = conv.members.filter((m) => m !== author);
-      await prisma.message.create({
+      const created = await prisma.message.create({
         data: {
           conversationId: conversation.id,
           senderId: sender.id,
           kind: media?.kind ?? 'text',
+          replyToId: options?.replyTo !== undefined ? messageIds[options.replyTo] : null,
+          mentions: {
+            create: (options?.mentions ?? []).map((m) => ({ userId: person(m).id, conversationId: conversation.id })),
+          },
           ciphertext: body.ciphertext,
           iv: body.iv,
           media: mediaJson,
@@ -384,6 +413,48 @@ async function main(): Promise<void> {
                 readAt: unread || undelivered ? null : new Date(createdAt.getTime() + 60_000),
               };
             }),
+          },
+        },
+      });
+      messageIds.push(created.id);
+    }
+
+    for (const [creator, title, assignee, dueInDays, done, minutesAgo] of conv.tasks ?? []) {
+      const createdAt = new Date(Date.now() - minutesAgo * 60_000);
+      const sealed = await encryptText(key, title);
+      const task = await prisma.task.create({
+        data: {
+          conversationId: conversation.id,
+          workspaceId: workspaceIds[conv.workspace],
+          titleCiphertext: sealed.ciphertext,
+          titleIv: sealed.iv,
+          assigneeId: assignee ? person(assignee).id : null,
+          createdById: person(creator).id,
+          dueDate: dueInDays === null ? null : localDate(dueInDays),
+          status: done ? 'done' : 'open',
+          createdAt,
+          completedAt: done ? new Date(createdAt.getTime() + 3 * 3600_000) : null,
+          completedById: done && assignee ? person(assignee).id : null,
+        },
+      });
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: person(creator).id,
+          kind: 'task',
+          taskId: task.id,
+          clientId: randomUUID(),
+          createdAt,
+          mentions: assignee ? { create: { userId: person(assignee).id, conversationId: conversation.id } } : undefined,
+          receipts: {
+            create: conv.members
+              .filter((m) => m !== creator)
+              .map((m) => ({
+                userId: person(m).id,
+                conversationId: conversation.id,
+                deliveredAt: new Date(createdAt.getTime() + 20_000),
+                readAt: new Date(createdAt.getTime() + 60_000),
+              })),
           },
         },
       });

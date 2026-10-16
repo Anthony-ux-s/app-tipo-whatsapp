@@ -1,9 +1,11 @@
 import type { DeliveryStatus, PresenceStatus } from './enums.types';
-import type { ConversationSummary, Message } from './messaging.types';
+import type { ConversationSummary, Message, Task } from './messaging.types';
 
 /** Eventos que el servidor emite por el socket. */
 export interface ServerToClientEvents {
   'message:new': (message: Message) => void;
+  'message:replies': (payload: { conversationId: string; messageId: string; replyCount: number }) => void;
+  'task:upsert': (task: Task) => void;
   'message:status': (update: MessageStatusUpdate) => void;
   'conversation:upsert': (conversation: ConversationSummary) => void;
   'workspace:changed': (payload: { workspaceId: string }) => void;

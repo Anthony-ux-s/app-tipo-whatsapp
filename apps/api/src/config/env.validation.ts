@@ -7,6 +7,9 @@ export interface AppEnv {
   jwtSecret: string;
   jwtExpiresIn: string;
   storageDir: string;
+  /** Claves VAPID para Web Push; si faltan, el adaptador las genera y las guarda. */
+  vapid: { publicKey: string; privateKey: string } | null;
+  vapidSubject: string;
 }
 
 /** Carga apps/api/.env (si existe) y valida las variables que la API necesita. */
@@ -29,6 +32,11 @@ export function loadEnv(): AppEnv {
     jwtSecret: process.env.JWT_SECRET!,
     jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
     storageDir: resolve(process.cwd(), process.env.STORAGE_DIR ?? './storage'),
+    vapid:
+      process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+        ? { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY }
+        : null,
+    vapidSubject: process.env.VAPID_SUBJECT ?? 'mailto:soporte@parla.app',
   };
 }
 

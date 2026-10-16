@@ -1,13 +1,35 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Message, SendMessageRequest } from '@parla/types';
 import { randomUUID } from 'node:crypto';
+import { messagePush, sanitizeMentions, threadRootOf, type PushContext } from '../../../../../kernel/collaboration-rules';
 import { ValidationError } from '../../../../../kernel/domain-error';
 import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../../infra/realtime/realtime-publisher.port';
+import { NotificationDispatcher } from '../../push/use-cases/notification-dispatcher';
 import { toMessage } from '../conversation.mapper';
-import { CONVERSATIONS_REPOSITORY, type ConversationsRepository } from '../conversations.repository';
+import {
+  CONVERSATIONS_REPOSITORY,
+  type ConversationRecord,
+  type ConversationsRepository,
+  type MessageRecord,
+} from '../conversations.repository';
 import { GetConversationUseCase } from './get-conversation.use-case';
 
 const MEDIA_PREFIX = { image: 'image/', audio: 'audio/', video: 'video/' } as const;
+
+/** Contexto de la notificación push de una conversación, visto por cada destinatario. */
+export function pushContextFor(conversation: ConversationRecord, senderId: string, recipientId: string): PushContext {
+  const sender = conversation.participants.find((p) => p.user.id === senderId)?.user.displayName ?? 'Alguien';
+  return {
+    conversationId: conversation.id,
+    workspaceId: conversation.workspaceId,
+    conversationKind: conversation.kind,
+    conversationTitle:
+      conversation.kind === 'direct'
+        ? (conversation.participants.find((p) => p.user.id !== recipientId)?.user.displayName ?? sender)
+        : conversation.title,
+    senderName: sender,
+  };
+}
 
 @Injectable()
 export class SendMessageUseCase {
@@ -15,6 +37,7 @@ export class SendMessageUseCase {
     @Inject(CONVERSATIONS_REPOSITORY) private readonly conversations: ConversationsRepository,
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
     private readonly getConversation: GetConversationUseCase,
+    private readonly notifications: NotificationDispatcher,
   ) {}
 
   async execute(userId: string, conversationId: string, input: SendMessageRequest): Promise<Message> {
@@ -22,6 +45,10 @@ export class SendMessageUseCase {
     await this.validate(userId, conversationId, input);
 
     const participantIds = conversation.participants.map((p) => p.user.id);
+    const recipients = participantIds.filter((id) => id !== userId);
+    const replyToId = input.replyToId ? await this.resolveThreadRoot(conversationId, input.replyToId) : null;
+    const mentions = sanitizeMentions(input.mentions, participantIds, userId);
+
     const message = await this.conversations.createMessage({
       conversationId,
       senderId: userId,
@@ -31,11 +58,26 @@ export class SendMessageUseCase {
       media: input.media,
       systemText: null,
       clientId: input.clientId,
-      recipientIds: participantIds.filter((id) => id !== userId),
+      recipientIds: recipients,
+      replyToId,
+      mentions,
     });
 
     const contract = toMessage(message, userId);
     this.realtime.toUsers(participantIds, 'message:new', contract);
+    if (replyToId) await this.announceReplies(participantIds, conversationId, replyToId);
+
+    const mentioned = new Set(message.mentions);
+    void this.notifications.notify(recipients, (recipientId) =>
+      messagePush(pushContextFor(conversation, userId, recipientId), message.kind, mentioned.has(recipientId)),
+    );
+    return contract;
+  }
+
+  /** Publica un mensaje ya construido por otro motor (p. ej. la tarjeta de una tarea). */
+  async publish(conversation: ConversationRecord, message: MessageRecord, actorId: string): Promise<Message> {
+    const contract = toMessage(message, actorId);
+    this.realtime.toUsers(conversation.participants.map((p) => p.user.id), 'message:new', contract);
     return contract;
   }
 
@@ -53,6 +95,24 @@ export class SendMessageUseCase {
       recipientIds: [],
     });
     this.realtime.toUsers(audience, 'message:new', toMessage(message, actorId));
+  }
+
+  private async resolveThreadRoot(conversationId: string, targetId: string): Promise<string> {
+    const [target] = await this.conversations.findMessages([targetId]);
+    if (!target || target.conversationId !== conversationId) {
+      throw new ValidationError('El mensaje al que respondes no está en esta conversación');
+    }
+    return threadRootOf(target);
+  }
+
+  private async announceReplies(participantIds: string[], conversationId: string, rootId: string): Promise<void> {
+    const [root] = await this.conversations.findMessages([rootId]);
+    if (!root) return;
+    this.realtime.toUsers(participantIds, 'message:replies', {
+      conversationId,
+      messageId: rootId,
+      replyCount: root.replyCount,
+    });
   }
 
   private async validate(userId: string, conversationId: string, input: SendMessageRequest): Promise<void> {

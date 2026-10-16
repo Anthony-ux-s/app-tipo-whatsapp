@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Message, MessageStatusUpdate } from '@parla/types';
 import { NotFoundError, ValidationError } from '../../../../../kernel/domain-error';
 import { PresenceRegistry } from '../../../../../infra/realtime/presence.registry';
-import { InMemoryConversationsRepository, makeUser, RecordingRealtime } from '../../../../../testing/in-memory.fakes';
+import {
+  InMemoryConversationsRepository,
+  InMemoryPushSubscriptions,
+  makeUser,
+  RecordingPushSender,
+  RecordingRealtime,
+} from '../../../../../testing/in-memory.fakes';
+import { NotificationDispatcher } from '../../push/use-cases/notification-dispatcher';
 import { ConversationEvents } from '../conversation-events';
 import { assertKeysCover, directKeyFor } from '../domain/conversation-rules';
 import { GetConversationUseCase } from './get-conversation.use-case';
@@ -29,7 +36,8 @@ describe('mensajería', () => {
     const presence = new PresenceRegistry();
     const get = new GetConversationUseCase(repo, presence);
     const events = new ConversationEvents(repo, realtime, presence);
-    send = new SendMessageUseCase(repo, realtime, get);
+    const dispatcher = new NotificationDispatcher(new InMemoryPushSubscriptions(), new RecordingPushSender(), presence);
+    send = new SendMessageUseCase(repo, realtime, get, dispatcher);
     markRead = new MarkReadUseCase(repo, get, events);
     markDelivered = new MarkDeliveredUseCase(repo, get, events);
   });

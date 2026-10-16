@@ -33,6 +33,8 @@ model User {
   wrappedKeys  ConversationParticipant[] @relation("WrappedBy")
   messages     Message[]
   receipts     MessageReceipt[]
+  mentions     MessageMention[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Workspace {
@@ -83,6 +85,7 @@ model Conversation {
   participants ConversationParticipant[]
   messages     Message[]
   files        StoredFile[]
+  tasks        Task[]
 
   @@index([workspaceId, updatedAt])
 }
@@ -118,14 +121,76 @@ model Message {
   systemText     String?
   /// Id generado por el cliente: hace idempotente el reenvío.
   clientId       String
+  /// Hilo: mensaje raíz al que responde (siempre la raíz, los hilos no se anidan).
+  replyToId      String?
+  /// Tarea que presenta este mensaje (kind = task).
+  taskId         String?  @unique
   createdAt      DateTime @default(now())
 
   conversation Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User             @relation(fields: [senderId], references: [id], onDelete: Cascade)
   receipts     MessageReceipt[]
+  replyTo      Message?         @relation("Thread", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      Message[]        @relation("Thread")
+  mentions     MessageMention[]
+  task         Task?            @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@unique([senderId, clientId])
   @@index([conversationId, createdAt])
+  @@index([replyToId])
+}
+
+/// Personas mencionadas con @ en un mensaje. El texto va cifrado; solo se conoce a quién se menciona.
+model MessageMention {
+  messageId      String
+  userId         String
+  conversationId String
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([userId, conversationId])
+}
+
+/// Tarea asignable dentro de un chat. El título va cifrado con la clave de la conversación.
+model Task {
+  id              String    @id @default(cuid())
+  conversationId  String
+  workspaceId     String
+  titleCiphertext String
+  titleIv         String
+  assigneeId      String?
+  createdById     String
+  /// Fecha límite (AAAA-MM-DD), sin hora.
+  dueDate         String?
+  /// TaskStatus: open | done
+  status          String    @default("open")
+  sourceMessageId String?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+  completedById   String?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message?
+
+  @@index([conversationId, status])
+  @@index([workspaceId, assigneeId, status])
+  @@index([workspaceId, createdById])
+}
+
+/// Suscripción Web Push de un navegador.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 /// Un recibo por destinatario: guarda cuándo se entregó y cuándo se leyó.

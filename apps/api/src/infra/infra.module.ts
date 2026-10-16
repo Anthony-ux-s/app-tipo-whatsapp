@@ -6,6 +6,8 @@ import { JwtTokenService } from './identity/jwt-token-service.adapter';
 import { PASSWORD_HASHER } from './identity/password-hasher.port';
 import { TOKEN_SERVICE } from './identity/token-service.port';
 import { PrismaService } from './prisma/prisma.service';
+import { PUSH_SENDER } from './push/push-sender.port';
+import { WebPushSender } from './push/web-push-sender.adapter';
 import { PresenceRegistry } from './realtime/presence.registry';
 import { REALTIME_PUBLISHER } from './realtime/realtime-publisher.port';
 import { SocketIoRealtimePublisher } from './realtime/socket-io-realtime-publisher.adapter';
@@ -28,6 +30,7 @@ const env = loadEnv();
     { provide: TOKEN_SERVICE, useClass: JwtTokenService },
     { provide: FILE_STORAGE, useClass: LocalDiskFileStorage },
     { provide: REALTIME_PUBLISHER, useClass: SocketIoRealtimePublisher },
+    { provide: PUSH_SENDER, useClass: WebPushSender },
   ],
   exports: [
     APP_ENV,
@@ -38,6 +41,7 @@ const env = loadEnv();
     TOKEN_SERVICE,
     FILE_STORAGE,
     REALTIME_PUBLISHER,
+    PUSH_SENDER,
   ],
 })
 export class InfraModule {}

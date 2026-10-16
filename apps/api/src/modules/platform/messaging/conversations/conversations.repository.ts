@@ -1,6 +1,7 @@
 import type { ConversationKind, MediaAttachment, MessageKind, WorkspaceRole, WrappedKey } from '@parla/types';
 import type { ReceiptState } from '../../../../kernel/delivery-status';
 import type { UserRecord } from '../../identity/user.record';
+import type { TaskRecord } from '../../collaboration/tasks/task.record';
 
 export interface ParticipantRecord {
   user: UserRecord;
@@ -9,6 +10,15 @@ export interface ParticipantRecord {
   keyIv: string;
   wrappedById: string;
   wrapperPublicKey: string;
+}
+
+export interface ReplyRecord {
+  id: string;
+  senderId: string;
+  kind: MessageKind;
+  ciphertext: string | null;
+  iv: string | null;
+  clientId: string;
 }
 
 export interface MessageRecord {
@@ -23,6 +33,10 @@ export interface MessageRecord {
   clientId: string;
   createdAt: Date;
   receipts: (ReceiptState & { userId: string })[];
+  replyTo: ReplyRecord | null;
+  replyCount: number;
+  mentions: string[];
+  task: TaskRecord | null;
 }
 
 export interface ConversationRecord {
@@ -38,6 +52,8 @@ export interface ConversationRecord {
   participants: ParticipantRecord[];
   lastMessage: MessageRecord | null;
   unreadCount: number;
+  mentionCount: number;
+  openTaskCount: number;
 }
 
 export interface NewConversation {
@@ -62,6 +78,9 @@ export interface NewMessage {
   clientId: string;
   /** Destinatarios: se crea un recibo pendiente para cada uno. */
   recipientIds: string[];
+  replyToId?: string | null;
+  mentions?: string[];
+  taskId?: string | null;
 }
 
 /** Recibo que cambió: sirve para avisar al remitente del nuevo estado. */
@@ -84,6 +103,8 @@ export interface ConversationsRepository {
   createMessage(input: NewMessage): Promise<MessageRecord>;
   listMessages(conversationId: string, before: string | null, take: number): Promise<MessageRecord[]>;
   findMessages(messageIds: string[]): Promise<MessageRecord[]>;
+  /** Respuestas del hilo de un mensaje raíz, en orden cronológico. */
+  listReplies(rootId: string, take: number): Promise<MessageRecord[]>;
   markDelivered(userId: string, scope: { conversationId: string; messageIds: string[] } | 'all'): Promise<ReceiptChange[]>;
   markRead(userId: string, conversationId: string): Promise<ReceiptChange[]>;
   registerFile(input: { id: string; conversationId: string; uploaderId: string; size: number }): Promise<void>;
