@@ -8,6 +8,8 @@ export interface DeliveryMapProps {
   store?: GeoPoint | null;
   destination?: GeoPoint | null;
   driver?: GeoPoint | null;
+  /** Recorrido por las calles (si se conoce); si no, se unen los puntos en línea recta. */
+  route?: GeoPoint[] | null;
   /** Modo selector: tocar el mapa (o arrastrar el pin) marca el destino. */
   onPick?: (point: GeoPoint) => void;
   className?: string;
@@ -34,7 +36,7 @@ function pin(kind: 'store' | 'destination' | 'driver'): L.DivIcon {
  * Mapa del delivery con OpenStreetMap (sin clave): la tienda, el destino y el repartidor en vivo.
  * Se encuadra solo con los puntos que haya; en modo selector, el cliente marca dónde le entregan.
  */
-export function DeliveryMap({ store, destination, driver, onPick, className = '', label }: DeliveryMapProps) {
+export function DeliveryMap({ store, destination, driver, route: path, onPick, className = '', label }: DeliveryMapProps) {
   const host = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const markers = useRef<Partial<Record<'store' | 'destination' | 'driver', L.Marker>>>({});
@@ -82,14 +84,17 @@ export function DeliveryMap({ store, destination, driver, onPick, className = ''
         markers.current[kind] = marker.addTo(m);
       }
     }
-    // Recorrido: repartidor → tienda (si aún no recoge) → destino.
-    const line = [driver, store, destination].filter((p): p is GeoPoint => !!p).map((p) => L.latLng(p.lat, p.lng));
+    // Recorrido por las calles si se conoce; si no, en línea recta: repartidor → tienda → destino.
+    const line = (path?.length ? path : [driver, store, destination].filter((p): p is GeoPoint => !!p)).map((p) => L.latLng(p.lat, p.lng));
     route.current?.remove();
-    route.current = line.length > 1 ? L.polyline(line, { color: '#0f766e', weight: 4, opacity: 0.6, dashArray: '6 8' }).addTo(m) : null;
+    route.current =
+      line.length > 1
+        ? L.polyline(line, path?.length ? { color: '#0f766e', weight: 5, opacity: 0.75 } : { color: '#0f766e', weight: 4, opacity: 0.6, dashArray: '6 8' }).addTo(m)
+        : null;
     const all = [store, destination, driver].filter((p): p is GeoPoint => !!p);
     if (all.length > 1) m.fitBounds(L.latLngBounds(all.map((p) => [p.lat, p.lng])), { padding: [40, 40], maxZoom: 16, animate: false });
     else if (all.length === 1) m.setView([all[0].lat, all[0].lng], Math.max(m.getZoom(), 15), { animate: false });
-  }, [store?.lat, store?.lng, destination?.lat, destination?.lng, driver?.lat, driver?.lng, onPick]);
+  }, [store?.lat, store?.lng, destination?.lat, destination?.lng, driver?.lat, driver?.lng, path, onPick]);
 
   return <div ref={host} role="img" aria-label={label} data-testid="delivery-map" className={`z-0 h-56 w-full overflow-hidden rounded-2xl bg-surface-3 md:h-64 ${className}`} />;
 }

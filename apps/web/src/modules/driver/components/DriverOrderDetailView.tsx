@@ -1,6 +1,7 @@
 import { Ban, Bike, KeyRound, MapPin, MessageCircle, Navigation, PackageCheck, ShieldCheck, Store, Undo2 } from 'lucide-react';
 import { useDriverStore } from '@shared/stores/driver.store';
 import { LazyDeliveryMap } from '@shared/ui/LazyDeliveryMap';
+import { useRoute } from '../../services/hooks/use-route.hook';
 import { Button } from '@shared/ui/Button';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatTime } from '@shared/utils/date';
@@ -19,6 +20,12 @@ export function DriverOrderDetailView() {
   const chat = useOrderChat(order?.id);
   const sharing = useDriverStore((s) => s.sharing);
   const myLocation = useDriverStore((s) => s.myLocation);
+  const pickingUp = order?.status === 'driver_assigned';
+  // Ruta por las calles: de donde estás a la tienda (si aún no recoges) y de ahí al cliente.
+  const route = useRoute(
+    order ? [order.mine ? myLocation : null, pickingUp || !order.mine ? order.business.location : null, order.address.location] : [],
+    !!order && (order.status === 'searching_driver' || (order.mine && (order.status === 'driver_assigned' || order.status === 'on_the_way'))),
+  );
 
   if (!order) {
     return (
@@ -34,8 +41,8 @@ export function DriverOrderDetailView() {
   return (
     <ServicePage>
       <PageHeader
-        title={`Entrega · ganas ${formatSoles(order.deliveryFeeCents)}`}
-        subtitle={`Pedido de ${order.customerName}`}
+        title={`Entrega · ganas ${formatSoles(order.deliveryFeeCents + order.tipCents)}`}
+        subtitle={order.tipCents > 0 ? `Pedido de ${order.customerName} · incluye ${formatSoles(order.tipCents)} de propina` : `Pedido de ${order.customerName}`}
         onBack={d.back}
         action={order.mine ? <OrderStatusBadge status={order.status} /> : undefined}
       />
@@ -46,8 +53,14 @@ export function DriverOrderDetailView() {
             store={order.business.location}
             destination={order.address.location ?? null}
             driver={onRoute ? myLocation : null}
+            route={route?.path}
             label="Mapa con la tienda, el destino y tu ubicación"
           />
+          {route && (
+            <p className="px-1 text-xs font-semibold text-ink-soft" data-testid="route-summary">
+              Ruta por calles: {route.distanceKm.toFixed(1)} km · unos {route.minutes} min
+            </p>
+          )}
           {onRoute && <SharingNote sharing={sharing} />}
         </section>
       )}

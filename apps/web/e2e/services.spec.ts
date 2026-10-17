@@ -35,14 +35,17 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     await expect(page.getByTestId('cart-line')).toHaveCount(2);
     await page.getByLabel('Dirección', { exact: true }).fill('Av. Larco 123, Miraflores');
     await page.getByLabel('Referencia').fill('Puerta verde');
+    // Propina de S/ 2 para el repartidor (va en el mismo cobro)
+    await page.getByRole('radio', { name: 'S/ 2.00' }).click();
     const quote = page.getByTestId('quote');
+    await expect(quote.getByText('Propina para el repartidor')).toBeVisible({ timeout: 15_000 });
     await expect(quote.getByText('Total a pagar')).toBeVisible({ timeout: 15_000 });
     const rows = quote.locator('div.flex.items-center.justify-between');
     const productsCents = soles(await rows.filter({ hasText: 'Productos' }).locator('span').last().textContent());
     const deliveryCents = soles(await rows.filter({ hasText: 'Delivery' }).locator('span').last().textContent());
     const totalCents = soles(await rows.filter({ hasText: 'Total a pagar' }).locator('span').last().textContent());
     expect(deliveryCents).toBeGreaterThan(0);
-    expect(totalCents).toBe(productsCents + deliveryCents);
+    expect(totalCents).toBe(productsCents + deliveryCents + 200);
 
     await page.getByRole('button', { name: /Pagar S\/ [\d.]+ con QR/ }).click();
 
@@ -101,7 +104,8 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     await carlos.page.getByTestId('my-rapidito').click();
     await expect(carlos.page.getByRole('heading', { name: 'Rapidito' })).toBeVisible();
     const offer = carlos.page.getByTestId('driver-order-item').filter({ hasText: 'Laura · Av. Larco 123' }).last();
-    await expect(offer).toContainText(`Ganas S/ ${(deliveryCents / 100).toFixed(2)}`);
+    await expect(offer).toContainText(`Ganas S/ ${((deliveryCents + 200) / 100).toFixed(2)}`);
+    await expect(offer).toContainText('incluye S/ 2.00 de propina');
     await offer.click();
     await carlos.page.getByTestId('take-order').click();
     await expect(carlos.page.getByTestId('order-status')).toHaveAttribute('data-status', 'driver_assigned');
@@ -133,6 +137,14 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     await expect(page.getByTestId('delivery-card')).toContainText('¡Entregado por Carlos Huamán!');
     await expect(elena.page.getByTestId('delivery-proof')).toContainText('Confirmado con el código del cliente', { timeout: 15_000 });
     await expect(elena.page.getByTestId('order-timeline')).toContainText('Recogido en la tienda');
+
+    // Laura califica al repartidor y a la tienda; Elena lo ve en su pedido
+    await page.getByRole('radiogroup', { name: 'Calificación del repartidor' }).getByRole('radio', { name: '5 estrellas' }).click();
+    await page.getByRole('radiogroup', { name: 'Calificación de la tienda' }).getByRole('radio', { name: '4 estrellas' }).click();
+    await page.getByLabel('Comentario').fill('Llegó rapidísimo');
+    await page.getByTestId('send-rating').click();
+    await expect(page.getByTestId('order-rated')).toContainText('¡Gracias por calificar!');
+    await expect(elena.page.getByTestId('business-rating')).toContainText('Llegó rapidísimo', { timeout: 15_000 });
     expect(elena.consoleErrors).toEqual([]);
     // El único error esperado es el 400 del código equivocado que se probó a propósito.
     expect(carlos.consoleErrors.filter((e) => !e.includes('status of 400'))).toEqual([]);

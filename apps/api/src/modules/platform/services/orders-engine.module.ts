@@ -39,9 +39,11 @@ import {
   GetMyOrderUseCase,
   ListMyOrdersUseCase,
   OrderEvents,
+  RateOrderUseCase,
   RenewDeliveryCodeUseCase,
   UpdateOrderUseCase,
 } from './use-cases/orders.use-cases';
+import { DeliveryWatchService, WatchDeliveriesUseCase } from './use-cases/delivery-watch.use-cases';
 
 const USE_CASES = [
   CreateOrderUseCase,
@@ -70,6 +72,7 @@ const USE_CASES = [
   LeaveDriverUseCase,
   GetDriverEarningsUseCase,
   ReportDriverLocationUseCase,
+  RateOrderUseCase,
 ];
 
 /** El MOTOR de pedidos de Servicios: lo comparten la puerta del gateway, la del cliente, la del negocio y la del repartidor. */
@@ -80,6 +83,8 @@ const USE_CASES = [
     { provide: BUSINESSES_REPOSITORY, useClass: PrismaBusinessesRepository },
     { provide: DRIVERS_REPOSITORY, useClass: PrismaDriversRepository },
     OrderEvents,
+    WatchDeliveriesUseCase,
+    DeliveryWatchService,
     ...USE_CASES,
   ],
   exports: USE_CASES,

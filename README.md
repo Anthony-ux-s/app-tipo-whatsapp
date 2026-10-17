@@ -124,10 +124,20 @@ pones tu nombre, un usuario opcional y la contraseña.
     vehículo (moto, bicicleta, auto o a pie) y su placa. En su perfil se **conecta o desconecta** (solo
     a los conectados les llegan pedidos), cambia el vehículo, ve sus **ganancias** (hoy, 7 días y total)
     y puede **dejar de repartir** (su historial queda y puede volver).
+  - **Propina**: en el carrito el cliente elige S/ 1, 2, 3, 5 u otro monto; se cobra en el mismo QR
+    y va completa al repartidor (que la ve en la oferta y en sus ganancias).
+  - **Calificaciones**: al recibir el pedido, el cliente califica al repartidor y a la tienda (1 a 5
+    estrellas y un comentario). La tienda la ve en el pedido y su promedio en «Mi tienda»; el
+    repartidor, su promedio en su perfil.
+  - **Vigilancia automática** (cada minuto): un pedido listo que nadie toma en 5 minutos se vuelve a
+    ofrecer y se avisa a la tienda; si el repartidor no lo recoge en 25 minutos o su celular deja de
+    mandar ubicación 8 minutos, el pedido se le quita y se ofrece a otros (con aviso a él y anotado en
+    el historial). Los tiempos se cambian con `DELIVERY_*` en `apps/api/.env`.
   - **Mapa en vivo** (OpenStreetMap): el cliente marca en el carrito dónde le entregan; mientras dura
     la entrega, el celular del repartidor comparte su ubicación (solo con el cliente y la tienda de ese
-    pedido) y ambos lo ven moverse, con la distancia que falta, la hora estimada y un aviso si se
-    queda sin señal.
+    pedido) y ambos lo ven moverse **por la ruta de las calles** (OSRM), con la distancia que falta,
+    la hora estimada según esa ruta y un aviso si se queda sin señal. El repartidor ve la ruta a la
+    tienda y al cliente. Si el servicio de rutas no responde, se usa la línea recta.
   - **Repartidor** (*Delivery → Rapidito · Repartidor*): ve los pedidos listos con la tienda, el destino
     y lo que gana; el primero que lo toma se lo queda (una entrega a la vez). Recoge en la tienda y
     entrega **solo con el código del cliente**: con 5 códigos equivocados se bloquea, para que no se
@@ -310,9 +320,8 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 - **Probado en esta PC sin Docker**: los `Dockerfile` y el `docker-compose.yml` no se pudieron
   construir aquí; el modo producción sí se probó sin Docker.
 - **Llamadas**: TURN propio para redes muy restrictivas, compartir pantalla, SFU para grupos grandes.
-- **Delivery**: ruta por calles (hoy el mapa traza líneas rectas y la hora estimada usa la distancia
-  con un factor de calles); reasignación automática si nadie toma el pedido o el repartidor no avanza;
-  calificaciones y propinas; liquidación de las ganancias al repartidor.
+- **Delivery**: liquidación (pago) de las ganancias al repartidor; en producción, un servidor de
+  mapas y de rutas propio o con clave (las teselas y OSRM públicos tienen límites de uso).
 - **Negocios**: se registran y administran en el sistema de producción de cada negocio; Parla solo
   los consulta y procesa sus pedidos.
 - **Ofertas de restaurantes y salud**: son una vitrina de ejemplo; todavía no se pueden pedir.

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { LazyDeliveryMap } from '@shared/ui/LazyDeliveryMap';
 import { formatTime } from '@shared/utils/date';
 import { distanceKm, etaMinutes, formatDistance, isStale } from '@shared/utils/geo';
+import { useRoute } from '../hooks/use-route.hook';
 
 /**
  * Seguimiento en vivo del repartidor (como en Rappi o PedidosYa): el mapa con la tienda, el destino
@@ -17,7 +18,6 @@ export function LiveTracking({ order, audience }: { order: Pick<Order, 'status' 
   }, []);
 
   const tracking = order.status === 'driver_assigned' || order.status === 'on_the_way';
-  if (!tracking) return null;
   const driver = order.driverLocation ?? null;
   const store = order.business?.location ?? null;
   const destination = order.address.location ?? null;
@@ -27,13 +27,18 @@ export function LiveTracking({ order, audience }: { order: Pick<Order, 'status' 
   const legs: [GeoPoint, GeoPoint][] = [];
   if (driver && pickingUp && store) legs.push([driver, store]);
   if (destination && (pickingUp ? store : driver)) legs.push([(pickingUp ? store : driver)!, destination]);
-  const remainingKm = legs.reduce((sum, [a, b]) => sum + distanceKm(a, b), 0);
-  const eta = driver && legs.length ? new Date(now + etaMinutes(...legs) * 60_000).toISOString() : null;
+  // Ruta por las calles (OSRM) por las paradas que faltan.
+  const route = useRoute(legs.length ? [legs[0][0], ...legs.map(([, b]) => b)] : [], tracking);
+
+  if (!tracking) return null;
+  const remainingKm = route?.distanceKm ?? legs.reduce((sum, [a, b]) => sum + distanceKm(a, b), 0);
+  const minutes = route?.minutes ?? (legs.length ? etaMinutes(...legs) : null);
+  const eta = driver && minutes !== null ? new Date(now + minutes * 60_000).toISOString() : null;
   const toStoreKm = driver && pickingUp && store ? distanceKm(driver, store) : null;
 
   return (
     <section className="flex flex-col gap-2 rounded-2xl bg-surface p-3 shadow-float md:p-4" aria-label="Seguimiento en vivo" data-testid="live-tracking">
-      <LazyDeliveryMap store={store} destination={destination} driver={driver} label="Mapa del delivery en vivo" />
+      <LazyDeliveryMap store={store} destination={destination} driver={driver} route={route?.path} label="Mapa del delivery en vivo" />
       <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-sm">
         {!driver ? (
           <span className="text-ink-soft">Esperando la ubicación del repartidor…</span>

@@ -13,6 +13,7 @@ import {
   RecordingRealtime,
 } from '../../../testing/in-memory.fakes';
 import { NotificationDispatcher } from '../messaging/push/use-cases/notification-dispatcher';
+import { WatchDeliveriesUseCase } from './use-cases/delivery-watch.use-cases';
 import {
   DecideBusinessOrderUseCase,
   GetBusinessOrderUseCase,
@@ -36,6 +37,7 @@ import {
   GetMyOrderUseCase,
   ListMyOrdersUseCase,
   OrderEvents,
+  RateOrderUseCase,
   RenewDeliveryCodeUseCase,
   UpdateOrderUseCase,
 } from './use-cases/orders.use-cases';
@@ -58,6 +60,7 @@ describe('pedidos de Servicios (core)', () => {
   let events: OrderEvents;
   let realtime: RecordingRealtime;
   let push: RecordingPushSender;
+  let dispatcher: NotificationDispatcher;
   let create: CreateOrderUseCase;
   let update: UpdateOrderUseCase;
   let decide: DecideBusinessOrderUseCase;
@@ -110,7 +113,8 @@ describe('pedidos de Servicios (core)', () => {
       await subs.save({ userId: u.id, endpoint: `https://push.example/${name}`, p256dh: 'k', auth: 'a' });
     }
     push = new RecordingPushSender();
-    events = new OrderEvents(realtime, users, drivers, new NotificationDispatcher(subs, push, new PresenceRegistry()));
+    dispatcher = new NotificationDispatcher(subs, push, new PresenceRegistry());
+    events = new OrderEvents(realtime, users, drivers, dispatcher);
     create = new CreateOrderUseCase(orders, users, businesses, events);
     update = new UpdateOrderUseCase(orders, events);
     decide = new DecideBusinessOrderUseCase(orders, users, events);
@@ -223,7 +227,7 @@ describe('pedidos de Servicios (core)', () => {
     it('la dueña pausa los pedidos y cambia el horario; el cliente y el gateway lo ven', async () => {
       const update = new UpdateMyBusinessUseCase(businesses);
       const noon = new Date('2026-10-17T12:00:00-05:00');
-      expect((await new GetBusinessStatusUseCase(businesses).execute('mercado', noon))?.open).toBe(true);
+      expect((await new GetBusinessStatusUseCase(businesses, orders).execute('mercado', noon))?.open).toBe(true);
       await expect(update.execute(beto.id, { acceptingOrders: false })).rejects.toThrow(NotFoundError);
       await expect(update.execute(rosa.id, { opensAt: '9:00' })).rejects.toThrow(ValidationError);
       await expect(update.execute(rosa.id, {})).rejects.toThrow('No hay cambios');
@@ -231,7 +235,7 @@ describe('pedidos de Servicios (core)', () => {
       const internal = await new GetInternalBusinessUseCase(businesses).execute('service', 'mercado', noon);
       expect(internal).toMatchObject({ ownerId: rosa.id, open: false, closedMessage: expect.stringContaining('pausó') });
       await update.execute(rosa.id, { acceptingOrders: true, opensAt: '13:00', closesAt: '23:00' });
-      expect((await new GetBusinessStatusUseCase(businesses).execute('mercado', noon))?.closedMessage).toBe('Bodega MercaYa está cerrada. Abre a las 13:00.');
+      expect((await new GetBusinessStatusUseCase(businesses, orders).execute('mercado', noon))?.closedMessage).toBe('Bodega MercaYa está cerrada. Abre a las 13:00.');
       expect((await new GetInternalBusinessUseCase(businesses).execute('owner', rosa.id, noon)).service).toBe('mercado');
     });
 
@@ -355,6 +359,7 @@ describe('pedidos de Servicios (core)', () => {
       await deliver.execute(carlos.id, ID, await codeOf());
       expect(await new GetDriverEarningsUseCase(drivers, orders).execute(carlos.id)).toEqual({
         todayCents: 650, todayDeliveries: 1, weekCents: 650, weekDeliveries: 1, totalCents: 650, totalDeliveries: 1,
+        tipsCents: 0, rating: { average: null, count: 0 },
       });
     });
 
@@ -375,6 +380,78 @@ describe('pedidos de Servicios (core)', () => {
       expect((await new GetMyOrderUseCase(orders).execute(ana.id, ID)).driverLocation).toMatchObject({ lat: -12.12, lng: -77.03 });
       await expect(report.execute(carlos.id, { lat: 200, lng: 0 })).rejects.toThrow(ValidationError);
       await expect(report.execute(beto.id, here)).rejects.toThrow(ForbiddenError);
+    });
+  });
+
+  it('la propina se suma al total, la cobra el pedido y la gana el repartidor', async () => {
+    await expect(create.execute(newOrder({ tipCents: 200 }))).rejects.toThrow('propina');
+    await create.execute(newOrder({ tipCents: 200, totalCents: 2270 }));
+    await pay();
+    await decide.execute(rosa.id, ID, 'accept');
+    await decide.execute(rosa.id, ID, 'ready');
+    expect((await new ListDriverOrdersUseCase(drivers, orders, users).execute(carlos.id)).available[0]).toMatchObject({ deliveryFeeCents: 650, tipCents: 200 });
+    await take.execute(carlos.id, ID);
+    await decide.execute(rosa.id, ID, 'handoff');
+    await deliver.execute(carlos.id, ID, await codeOf());
+    expect(await new GetDriverEarningsUseCase(drivers, orders).execute(carlos.id)).toMatchObject({ totalCents: 850, tipsCents: 200 });
+    await expect(create.execute(newOrder({ id: 'ord_toobig12', tipCents: 10_001, totalCents: 12_071 }))).rejects.toThrow('propina');
+  });
+
+  it('al recibirlo, la clienta califica al repartidor y a la tienda una sola vez', async () => {
+    await readyForDrivers();
+    const rate = new RateOrderUseCase(orders, events);
+    await take.execute(carlos.id, ID);
+    await expect(rate.execute(ana.id, ID, { driverStars: 5 })).rejects.toThrow('cuando recibas');
+    await decide.execute(rosa.id, ID, 'handoff');
+    await deliver.execute(carlos.id, ID, await codeOf());
+    await expect(rate.execute(beto.id, ID, { driverStars: 5 })).rejects.toThrow(NotFoundError);
+    await expect(rate.execute(ana.id, ID, { driverStars: 6 })).rejects.toThrow('1 a 5');
+    await expect(rate.execute(ana.id, ID, {})).rejects.toThrow('al menos una');
+    const rated = await rate.execute(ana.id, ID, { driverStars: 5, storeStars: 4, comment: '  ¡Rapidísimo!  ' });
+    expect(rated.rating).toMatchObject({ driverStars: 5, storeStars: 4, comment: '¡Rapidísimo!' });
+    await expect(rate.execute(ana.id, ID, { driverStars: 1 })).rejects.toThrow('Ya calificaste');
+    expect((await new GetDriverEarningsUseCase(drivers, orders).execute(carlos.id)).rating).toEqual({ average: 5, count: 1 });
+    expect((await new GetBusinessStatusUseCase(businesses, orders).execute('mercado'))?.rating).toEqual({ average: 4, count: 1 });
+    // La tienda ve la calificación en su pedido
+    expect((realtime.events('business-order:updated').at(-1)!.payload as BusinessOrder).rating?.storeStars).toBe(4);
+  });
+
+  describe('vigilancia de los deliveries', () => {
+    const config = { intervalMs: 60_000, untakenMinutes: 5, pickupMinutes: 25, silentMinutes: 8 };
+    const later = (minutes: number) => new Date(Date.now() + minutes * 60_000);
+
+    it('un pedido que nadie toma se vuelve a ofrecer y se avisa a la tienda, sin repetir antes de tiempo', async () => {
+      const watch = new WatchDeliveriesUseCase(orders, drivers, events, dispatcher);
+      await readyForDrivers();
+      expect((await watch.execute(config, later(2))).nudged).toEqual([]);
+      expect((await watch.execute(config, later(6))).nudged).toEqual([ID]);
+      expect((await watch.execute(config, later(8))).nudged).toEqual([]);
+      expect((await watch.execute(config, later(12))).nudged).toEqual([ID]);
+      await flush();
+      expect(push.sent.filter((s) => s.target.endpoint.endsWith('/rosa')).map((s) => s.payload.title)).toContain('Tu pedido sigue esperando repartidor');
+    });
+
+    it('si el repartidor no lo recoge a tiempo o se queda sin señal, se reasigna solo', async () => {
+      const watch = new WatchDeliveriesUseCase(orders, drivers, events, dispatcher);
+      const report = new ReportDriverLocationUseCase(drivers, orders, realtime);
+      await readyForDrivers();
+      await take.execute(carlos.id, ID);
+      // Con señal reciente y antes del límite, no pasa nada
+      await report.execute(carlos.id, { lat: -12.12, lng: -77.03 }, later(5));
+      expect((await watch.execute(config, later(10))).reassigned).toEqual([]);
+      // 8 minutos sin señal: se le quita y se ofrece a otros
+      expect((await watch.execute(config, later(14))).reassigned).toEqual([ID]);
+      const order = (await orders.findById(ID))!;
+      expect(order).toMatchObject({ status: 'searching_driver', driverId: null });
+      expect(order.timeline.at(-1)?.note).toBe('Reasignado automáticamente: Carlos Huamán se quedó sin señal');
+      await flush();
+      expect(push.sent.filter((s) => s.target.endpoint.endsWith('/carlos')).map((s) => s.payload.title)).toContain('Ya no tienes este pedido');
+      // Lucía lo toma con señal, pero no lo recoge en 25 minutos
+      await take.execute(lucia.id, ID);
+      for (const m of [5, 10, 15, 20, 24]) await report.execute(lucia.id, { lat: -12.12, lng: -77.03 }, later(m));
+      expect((await watch.execute(config, later(20))).reassigned).toEqual([]);
+      expect((await watch.execute(config, later(26))).reassigned).toEqual([ID]);
+      expect((await orders.findById(ID))!.timeline.at(-1)?.note).toContain('no lo recogió en 25 minutos');
     });
   });
 

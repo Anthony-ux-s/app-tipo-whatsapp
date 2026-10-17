@@ -21,6 +21,9 @@ export function useCheckout() {
   const remove = useCartStore((s) => s.remove);
   const setAddress = useCartStore((s) => s.setAddress);
   const clear = useCartStore((s) => s.clear);
+  const tipCents = useCartStore((s) => s.tipCents);
+  const setTip = useCartStore((s) => s.setTip);
+  const [customTip, setCustomTip] = useState('');
   const upsertOrder = useOrdersStore((s) => s.upsert);
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -33,8 +36,9 @@ export function useCheckout() {
     () => ({
       items: Object.values(items).map((i) => ({ productId: i.product.id, quantity: i.quantity })),
       address: { line: address.line.trim(), reference: address.reference.trim(), location: address.location ?? null },
+      tipCents,
     }),
-    [items, address],
+    [items, address, tipCents],
   );
   const addressReady = request.address.line.length >= MIN_ADDRESS;
 
@@ -73,6 +77,19 @@ export function useCheckout() {
     remove,
     onAddressChange: (line: string) => setAddress({ ...address, line }),
     onReferenceChange: (reference: string) => setAddress({ ...address, reference }),
+    /** Propina como en Rappi: montos rápidos u «Otro». Va completa al repartidor. */
+    tipCents,
+    tipOptions: [0, 100, 200, 300, 500],
+    customTip,
+    selectTip: (cents: number) => {
+      setCustomTip('');
+      setTip(cents);
+    },
+    onCustomTip: (value: string) => {
+      const clean = value.replace(',', '.').replace(/[^\d.]/g, '');
+      setCustomTip(clean);
+      setTip(Math.round(Number(clean || '0') * 100));
+    },
     /** El punto de entrega en el mapa (para que el repartidor llegue y el cliente lo siga). */
     onPickLocation: (location: GeoPoint) => setAddress({ ...address, location }),
     locating,

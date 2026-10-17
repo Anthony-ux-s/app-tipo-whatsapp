@@ -17,7 +17,7 @@ import type { PushSubscriptionsRepository, StoredSubscription } from '../modules
 import type { PushPayload } from '@parla/types';
 import type { UpdateBusinessRequest } from '@parla/types';
 import type { BusinessesRepository, BusinessRecord } from '../modules/platform/services/businesses.repository';
-import type { DriverProfileRequest, GeoPoint } from '@parla/types';
+import type { DriverProfileRequest, GeoPoint, OrderRating } from '@parla/types';
 import type { DriverRecord, DriversRepository } from '../modules/platform/services/drivers.repository';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
 import type { AppEnv } from '../config/env.validation';
@@ -334,6 +334,7 @@ export class InMemoryOrdersRepository implements OrdersRepository {
       driverId: null,
       driverLocation: null,
       deliveryCodeAttempts: 0,
+      rating: null,
       timeline: [{ status: order.status, at: now.toISOString() }],
       createdAt: now,
       updatedAt: now,
@@ -368,9 +369,25 @@ export class InMemoryOrdersRepository implements OrdersRepository {
     const done = this.orders.filter((o) => o.driverId === driverId && o.status === 'delivered');
     const sum = (from?: Date): [number, number] => {
       const list = done.filter((o) => !from || o.updatedAt >= from);
-      return [list.reduce((s, o) => s + o.deliveryFeeCents, 0), list.length];
+      return [list.reduce((s, o) => s + o.deliveryFeeCents + o.tipCents, 0), list.length];
     };
-    return { today: sum(since.today), week: sum(since.week), total: sum() };
+    return { today: sum(since.today), week: sum(since.week), total: sum(), tipsCents: done.reduce((s, o) => s + o.tipCents, 0) };
+  }
+  async listByStatus(statuses: OrderStatus[], limit: number) {
+    return this.orders.filter((o) => statuses.includes(o.status)).slice(0, limit).map((o) => this.withLocation(o));
+  }
+  async rate(id: string, rating: Omit<OrderRating, 'at'>, at: Date) {
+    const order = this.orders.find((o) => o.id === id);
+    if (!order || order.rating) return null;
+    order.rating = { ...rating, at: at.toISOString() };
+    return this.withLocation(order);
+  }
+  async ratingSummary(of: { driverId: string } | { businessId: string }) {
+    const stars = this.orders
+      .filter((o) => ('driverId' in of ? o.driverId === of.driverId : o.business?.id === of.businessId))
+      .map((o) => ('driverId' in of ? o.rating?.driverStars : o.rating?.storeStars))
+      .filter((n): n is number => typeof n === 'number');
+    return { average: stars.length ? Math.round((stars.reduce((a, b) => a + b, 0) / stars.length) * 10) / 10 : null, count: stars.length };
   }
   /** Como el include de Prisma: la última ubicación del repartidor viene con el pedido. */
   private withLocation(o: OrderRecord): OrderRecord {

@@ -181,7 +181,7 @@ model StoredFile {
 /// precios de la tienda y la tarifa del delivery; el core lo guarda y avisa cada cambio al cliente y al negocio.
 model Order {
   /// Id generado por el gateway ("ord_…").
-  id                   String   @id
+  id                   String    @id
   userId               String
   /// ServiceId: mercado | salud
   service              String
@@ -191,6 +191,8 @@ model Order {
   lines                String
   subtotalCents        Int
   deliveryFeeCents     Int
+  /// Propina para el repartidor (incluida en totalCents).
+  tipCents             Int       @default(0)
   totalCents           Int
   currency             String
   /// JSON DeliveryAddress
@@ -200,7 +202,7 @@ model Order {
   /// Cotización de Rapidito con la que se calculó la tarifa de delivery.
   deliveryQuoteId      String
   /// Minutos que Rapidito estimó para el envío (para la hora estimada de llegada).
-  etaMinutes           Int      @default(30)
+  etaMinutes           Int       @default(30)
   /// JSON OrderDelivery (repartidor, vehículo, tiempo estimado); null hasta que un repartidor lo toma.
   delivery             String?
   /// Negocio que prepara el pedido; null en pedidos sin negocio asignado.
@@ -210,11 +212,16 @@ model Order {
   /// Código de entrega de 4 dígitos (solo lo ve el cliente); el repartidor lo pide al entregar.
   deliveryCode         String
   /// Intentos fallidos del código: al quinto se bloquea la entrega con código.
-  deliveryCodeAttempts Int      @default(0)
+  deliveryCodeAttempts Int       @default(0)
+  /// Calificación del cliente al recibirlo (1 a 5), al repartidor y a la tienda.
+  driverStars          Int?
+  storeStars           Int?
+  ratingComment        String    @default("")
+  ratedAt              DateTime?
   /// JSON OrderTimelineEntry[]: cada paso con su hora (constancia para cliente y negocio).
-  timeline             String   @default("[]")
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  timeline             String    @default("[]")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)

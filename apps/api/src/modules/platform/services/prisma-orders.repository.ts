@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Currency, OrderStatus, OrderTimelineEntry, ServiceId } from '@parla/types';
+import type { Currency, OrderRating, OrderStatus, OrderTimelineEntry, RatingSummary, ServiceId } from '@parla/types';
 import type { Business as BusinessRow, Order as OrderRow, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from './orders.repository';
@@ -35,6 +35,7 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
     lines: JSON.parse(row.lines),
     subtotalCents: row.subtotalCents,
     deliveryFeeCents: row.deliveryFeeCents,
+    tipCents: row.tipCents,
     totalCents: row.totalCents,
     currency: row.currency as Currency,
     address: JSON.parse(row.address),
@@ -50,6 +51,9 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
     deliveryCode: row.deliveryCode,
     deliveryCodeAttempts: row.deliveryCodeAttempts,
     timeline: JSON.parse(row.timeline),
+    rating: row.ratedAt
+      ? { driverStars: row.driverStars, storeStars: row.storeStars, comment: row.ratingComment, at: row.ratedAt.toISOString() }
+      : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -119,13 +123,40 @@ export class PrismaOrdersRepository implements OrdersRepository {
   }
 
   async driverEarnings(driverId: string, since: { today: Date; week: Date }) {
-    const sum = async (from?: Date): Promise<[number, number]> => {
+    const sum = async (from?: Date): Promise<[number, number, number]> => {
       const where: Prisma.OrderWhereInput = { driverId, status: 'delivered', ...(from ? { updatedAt: { gte: from } } : {}) };
-      const r = await this.prisma.order.aggregate({ where, _sum: { deliveryFeeCents: true }, _count: true });
-      return [r._sum.deliveryFeeCents ?? 0, r._count];
+      const r = await this.prisma.order.aggregate({ where, _sum: { deliveryFeeCents: true, tipCents: true }, _count: true });
+      const tips = r._sum.tipCents ?? 0;
+      return [(r._sum.deliveryFeeCents ?? 0) + tips, r._count, tips];
     };
     const [today, week, total] = await Promise.all([sum(since.today), sum(since.week), sum()]);
-    return { today, week, total };
+    return { today: [today[0], today[1]] as [number, number], week: [week[0], week[1]] as [number, number], total: [total[0], total[1]] as [number, number], tipsCents: total[2] };
+  }
+
+  async listByStatus(statuses: OrderStatus[], limit: number): Promise<OrderRecord[]> {
+    const rows = await this.prisma.order.findMany({ where: { status: { in: statuses } }, orderBy: { updatedAt: 'asc' }, take: limit, include: WITH_BUSINESS });
+    return rows.map(toOrderRecord);
+  }
+
+  async rate(id: string, rating: Omit<OrderRating, 'at'>, at: Date): Promise<OrderRecord | null> {
+    const { count } = await this.prisma.order.updateMany({
+      where: { id, ratedAt: null },
+      data: { driverStars: rating.driverStars, storeStars: rating.storeStars, ratingComment: rating.comment, ratedAt: at },
+    });
+    return count === 1 ? this.findById(id) : null;
+  }
+
+  async ratingSummary(of: { driverId: string } | { businessId: string }): Promise<RatingSummary> {
+    const byDriver = 'driverId' in of;
+    const field = byDriver ? 'driverStars' : 'storeStars';
+    const r = await this.prisma.order.aggregate({
+      where: { ...(byDriver ? { driverId: of.driverId } : { businessId: of.businessId }), [field]: { not: null } },
+      _avg: { [field]: true },
+      _count: { [field]: true },
+    });
+    const avg = (r._avg as Record<string, number | null>)[field];
+    const count = (r._count as Record<string, number>)[field] ?? 0;
+    return { average: avg === null ? null : Math.round(avg * 10) / 10, count };
   }
 
   async updateIfStatus(id: string, expected: OrderStatus, changes: OrderChanges): Promise<OrderRecord | null> {

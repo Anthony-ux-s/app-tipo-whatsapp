@@ -48,12 +48,16 @@ export class UpdateMyBusinessUseCase {
 /** Si el negocio de un servicio recibe pedidos ahora (lo ve el cliente en el Mercado). Null si no hay negocio. */
 @Injectable()
 export class GetBusinessStatusUseCase {
-  constructor(@Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository) {}
+  constructor(
+    @Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository,
+    @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
+  ) {}
 
   async execute(service: ServiceId, now = new Date()): Promise<BusinessStatus | null> {
     const business = await this.businesses.findByService(service);
     if (!business) return null;
-    return { name: business.name, ...businessStatus(business, now), opensAt: business.opensAt, closesAt: business.closesAt };
+    const rating = await this.orders.ratingSummary({ businessId: business.id });
+    return { name: business.name, ...businessStatus(business, now), opensAt: business.opensAt, closesAt: business.closesAt, rating };
   }
 }
 

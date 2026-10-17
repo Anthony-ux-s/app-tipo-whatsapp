@@ -9,6 +9,7 @@ import { ORDER_STEPS } from '../const/services.const';
 import { useOrderChat } from '../hooks/use-order-chat.hook';
 import { useOrderDetail } from '../hooks/use-orders.hook';
 import { LiveTracking } from './LiveTracking';
+import { RateOrderCard } from './RateOrderCard';
 import { AmountRow, OrderStatusBadge, OrderTimeline, PageHeader, ServicePage } from './ServicesUi';
 
 /**
@@ -166,6 +167,7 @@ export function OrderDetailView() {
       )}
 
       <LiveTracking order={order} audience="customer" />
+      <RateOrderCard order={order} />
 
       {d.canCancel && (
         <Button variant="ghost" className="self-center" icon={<X className="size-4" />} onClick={d.askCancel} data-testid="cancel-order">
@@ -212,6 +214,7 @@ export function OrderDetailView() {
         <div className="my-1 border-t border-dashed border-line" />
         <AmountRow label="Productos" value={formatSoles(order.subtotalCents)} />
         <AmountRow label="Delivery" value={formatSoles(order.deliveryFeeCents)} />
+        {order.tipCents > 0 && <AmountRow label="Propina para el repartidor" value={formatSoles(order.tipCents)} />}
         <AmountRow label="Total" value={formatSoles(order.totalCents)} strong />
         <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-soft">
           <MapPin className="mt-0.5 size-3.5 shrink-0" />

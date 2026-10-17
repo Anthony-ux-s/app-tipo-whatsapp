@@ -2,6 +2,7 @@ import { LogOut, Save } from 'lucide-react';
 import { Navigate } from 'react-router';
 import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
+import { Stars } from '@shared/ui/Stars';
 import { Toggle } from '@shared/ui/Toggle';
 import { formatSoles } from '@shared/utils/money';
 import { PageHeader, ServicePage } from '../../services/components/ServicesUi';
@@ -31,6 +32,19 @@ export function DriverProfileView() {
           </div>
         ))}
       </section>
+
+      {e && (
+        <p className="-mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-ink-soft" data-testid="driver-rating">
+          {e.tipsCents > 0 && <span>Propinas: <span className="font-semibold text-ink">{formatSoles(e.tipsCents)}</span></span>}
+          {e.rating.average !== null ? (
+            <span className="flex items-center gap-1.5">
+              <Stars value={e.rating.average} /> {e.rating.average.toFixed(1)} ({e.rating.count})
+            </span>
+          ) : (
+            <span>Aún sin calificaciones</span>
+          )}
+        </p>
+      )}
 
       <section className="rounded-2xl bg-surface p-4 shadow-float md:p-5">
         <Toggle

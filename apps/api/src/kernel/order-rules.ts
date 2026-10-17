@@ -29,11 +29,15 @@ export function assertOrderTransition(from: OrderStatus, to: OrderStatus): void 
   if (!NEXT[from].includes(to)) throw new ConflictError(`El pedido no puede pasar de ${from} a ${to}`);
 }
 
+/** Propina máxima para el repartidor (S/ 100). */
+export const MAX_TIP_CENTS = 10_000;
+
 /**
  * Los montos los calcula el gateway con los precios de la tienda; el core igual los verifica antes de
- * guardarlos (defensa en profundidad): cada línea cuadra, el subtotal es la suma y el total suma el envío.
+ * guardarlos (defensa en profundidad): cada línea cuadra, el subtotal es la suma y el total suma el
+ * envío y la propina.
  */
-export function assertOrderTotals(lines: OrderLine[], subtotalCents: number, deliveryFeeCents: number, totalCents: number): void {
+export function assertOrderTotals(lines: OrderLine[], subtotalCents: number, deliveryFeeCents: number, totalCents: number, tipCents = 0): void {
   if (lines.length === 0) throw new ValidationError('El pedido no tiene productos');
   for (const line of lines) {
     if (line.quantity < 1 || line.unitPriceCents < 0 || line.totalCents !== line.unitPriceCents * line.quantity) {
@@ -42,8 +46,9 @@ export function assertOrderTotals(lines: OrderLine[], subtotalCents: number, del
   }
   const sum = lines.reduce((acc, l) => acc + l.totalCents, 0);
   if (sum !== subtotalCents) throw new ValidationError('El subtotal no coincide con los productos');
-  if (deliveryFeeCents < 0 || totalCents !== subtotalCents + deliveryFeeCents) {
-    throw new ValidationError('El total no coincide con el subtotal más el delivery');
+  if (tipCents < 0 || tipCents > MAX_TIP_CENTS) throw new ValidationError('La propina debe estar entre S/ 0 y S/ 100');
+  if (deliveryFeeCents < 0 || totalCents !== subtotalCents + deliveryFeeCents + tipCents) {
+    throw new ValidationError('El total no coincide con el subtotal más el delivery y la propina');
   }
 }
 

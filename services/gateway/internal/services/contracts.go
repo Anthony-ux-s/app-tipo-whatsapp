@@ -59,6 +59,8 @@ type Address struct {
 type QuoteRequest struct {
 	Items   []CartItem `json:"items"`
 	Address Address    `json:"address"`
+	// TipCents: propina para el repartidor (opcional, la elige el cliente).
+	TipCents int `json:"tipCents"`
 }
 
 type OrderLine struct {
@@ -74,6 +76,7 @@ type OrderQuote struct {
 	Lines            []OrderLine `json:"lines"`
 	SubtotalCents    int         `json:"subtotalCents"`
 	DeliveryFeeCents int         `json:"deliveryFeeCents"`
+	TipCents         int         `json:"tipCents"`
 	TotalCents       int         `json:"totalCents"`
 	Currency         string      `json:"currency"`
 	ETAMinutes       int         `json:"etaMinutes"`
@@ -136,6 +139,7 @@ type Order struct {
 	Lines            []OrderLine          `json:"lines"`
 	SubtotalCents    int                  `json:"subtotalCents"`
 	DeliveryFeeCents int                  `json:"deliveryFeeCents"`
+	TipCents         int                  `json:"tipCents"`
 	TotalCents       int                  `json:"totalCents"`
 	Currency         string               `json:"currency"`
 	Address          Address              `json:"address"`
@@ -155,6 +159,7 @@ type InternalCreateOrder struct {
 	Lines            []OrderLine  `json:"lines"`
 	SubtotalCents    int          `json:"subtotalCents"`
 	DeliveryFeeCents int          `json:"deliveryFeeCents"`
+	TipCents         int          `json:"tipCents"`
 	TotalCents       int          `json:"totalCents"`
 	Currency         string       `json:"currency"`
 	Address          Address      `json:"address"`

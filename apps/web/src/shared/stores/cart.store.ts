@@ -26,6 +26,9 @@ interface CartState {
   change: (product: Product, delta: number) => void;
   remove: (productId: string) => void;
   setAddress: (address: DeliveryAddress) => void;
+  /** Propina para el repartidor (se cobra con el pedido). */
+  tipCents: number;
+  setTip: (cents: number) => void;
   clear: () => void;
 }
 
@@ -61,7 +64,9 @@ export const useCartStore = create<CartState>((set, get) => ({
     }
   },
 
-  clear: () => set({ items: {} }),
+  tipCents: 0,
+  setTip: (cents) => set({ tipCents: Math.max(0, Math.min(10_000, Math.round(cents))) }),
+  clear: () => set({ items: {}, tipCents: 0 }),
 }));
 
 export function cartCount(items: Record<string, CartItem>): number {

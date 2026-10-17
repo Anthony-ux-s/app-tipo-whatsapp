@@ -34,7 +34,7 @@ import {
 } from 'class-validator';
 import { InternalTokenGuard } from '../../../http/internal-token.guard';
 import { Public } from '../../../http/public.decorator';
-import { ORDER_STATUSES } from '../../../kernel/order-rules';
+import { MAX_TIP_CENTS, ORDER_STATUSES } from '../../../kernel/order-rules';
 import { CreateOrderUseCase, GetInternalOrderUseCase, UpdateOrderUseCase } from './use-cases/orders.use-cases';
 
 const MAX_CENTS = 10_000_000; // S/ 100 000: tope de cordura para un pedido de supermercado
@@ -84,6 +84,7 @@ class CreateOrderDto implements InternalCreateOrder {
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(30) @ValidateNested({ each: true }) @Type(() => OrderLineDto) lines: OrderLineDto[];
   @IsInt() @Min(0) @Max(MAX_CENTS) subtotalCents: number;
   @IsInt() @Min(0) @Max(MAX_CENTS) deliveryFeeCents: number;
+  @IsInt() @Min(0) @Max(MAX_TIP_CENTS) tipCents: number;
   @IsInt() @Min(1) @Max(MAX_CENTS) totalCents: number;
   @IsIn(['PEN']) currency: Currency;
   @ValidateNested() @Type(() => AddressDto) address: AddressDto;

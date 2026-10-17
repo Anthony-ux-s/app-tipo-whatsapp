@@ -28,6 +28,8 @@ import (
 const (
 	maxItems    = 30
 	maxQuantity = 50
+	// maxTipCents: tope de la propina para el repartidor (S/ 100).
+	maxTipCents = 10_000
 )
 
 // Commerce: lo que el orquestador necesita de la tienda.
@@ -150,6 +152,9 @@ func validateRequest(req services.QuoteRequest) (services.QuoteRequest, error) {
 	if p := req.Address.Location; p != nil && (math.IsNaN(p.Lat) || math.IsNaN(p.Lng) || math.Abs(p.Lat) > 90 || math.Abs(p.Lng) > 180) {
 		return req, invalid("La ubicación marcada en el mapa no es válida")
 	}
+	if req.TipCents < 0 || req.TipCents > maxTipCents {
+		return req, invalid("La propina debe estar entre S/ 0 y S/ 100")
+	}
 	return req, nil
 }
 
@@ -200,7 +205,9 @@ func (o *Orchestrator) quote(ctx context.Context, req services.QuoteRequest) (se
 		return q, req, rapidito.Quote{}, unavailable("El delivery")
 	}
 	q.DeliveryFeeCents = delivery.FeeCents
-	q.TotalCents = q.SubtotalCents + q.DeliveryFeeCents
+	// La propina va íntegra al repartidor: se suma aparte del delivery.
+	q.TipCents = req.TipCents
+	q.TotalCents = q.SubtotalCents + q.DeliveryFeeCents + q.TipCents
 	q.ETAMinutes = delivery.ETAMinutes
 	return q, req, delivery, nil
 }
@@ -232,9 +239,13 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 	for _, line := range q.Lines {
 		units += line.Quantity
 	}
+	concept := fmt.Sprintf("Pedido Parla · %d productos + delivery", units)
+	if q.TipCents > 0 {
+		concept += " + propina"
+	}
 	charge, err := o.Payments.CreateCharge(ctx, pagaya.ChargeRequest{
 		AmountCents: q.TotalCents,
-		Concept:     fmt.Sprintf("Pedido Parla · %d productos + delivery", units),
+		Concept:     concept,
 		Reference:   id,
 		NotifyURL:   o.PublicURL + "/hooks/pagaya",
 	})
@@ -245,7 +256,7 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 
 	saved, err := o.Core.CreateOrder(ctx, services.InternalCreateOrder{
 		ID: id, UserID: userID, Service: services.Mercado, Lines: q.Lines,
-		SubtotalCents: q.SubtotalCents, DeliveryFeeCents: q.DeliveryFeeCents, TotalCents: q.TotalCents, Currency: services.Currency,
+		SubtotalCents: q.SubtotalCents, DeliveryFeeCents: q.DeliveryFeeCents, TipCents: q.TipCents, TotalCents: q.TotalCents, Currency: services.Currency,
 		Address: req.Address,
 		Payment: services.OrderPayment{
 			Provider: pagaya.Provider, ChargeID: charge.ID, QRText: charge.QRText, PayURL: charge.PayURL,

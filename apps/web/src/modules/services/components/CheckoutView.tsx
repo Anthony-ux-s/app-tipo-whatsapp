@@ -1,4 +1,4 @@
-import { Bike, LocateFixed, MapPin, Minus, Plus, QrCode, ShoppingBasket, Trash2 } from 'lucide-react';
+import { Bike, HandCoins, LocateFixed, MapPin, Minus, Plus, QrCode, ShoppingBasket, Trash2 } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { Field, FieldError } from '@shared/ui/Field';
 import { LazyDeliveryMap } from '@shared/ui/LazyDeliveryMap';
@@ -76,6 +76,40 @@ export function CheckoutView() {
         </div>
       </section>
 
+      <section className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Propina">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-bold text-ink">
+            <HandCoins className="size-5 text-brand dark:text-teal-300" /> Propina para tu repartidor
+          </h2>
+          <p className="text-sm text-ink-soft">Opcional. Va completa al repartidor que te lleve el pedido.</p>
+        </div>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Propina">
+          {c.tipOptions.map((cents) => (
+            <button
+              key={cents}
+              type="button"
+              role="radio"
+              aria-checked={!c.customTip && c.tipCents === cents}
+              onClick={() => c.selectTip(cents)}
+              className={`h-10 rounded-full px-4 text-sm font-semibold transition-colors duration-200 ${!c.customTip && c.tipCents === cents ? 'bg-brand text-white' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
+            >
+              {cents === 0 ? 'Sin propina' : formatSoles(cents)}
+            </button>
+          ))}
+          <label className="flex h-10 items-center gap-1 rounded-full bg-surface-3 px-3 text-sm text-ink-soft focus-within:ring-2 focus-within:ring-teal-500/40">
+            S/
+            <input
+              inputMode="decimal"
+              value={c.customTip}
+              onChange={(e) => c.onCustomTip(e.target.value)}
+              placeholder="Otro"
+              aria-label="Otra propina en soles"
+              className="w-16 bg-transparent font-semibold text-ink outline-none placeholder:text-ink-faint"
+            />
+          </label>
+        </div>
+      </section>
+
       <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Resumen" data-testid="quote">
         {!c.addressReady ? (
           <p className="text-sm text-ink-soft">Escribe la dirección para calcular el delivery y el total.</p>
@@ -87,6 +121,7 @@ export function CheckoutView() {
           <>
             <AmountRow label="Productos" value={formatSoles(c.quote.subtotalCents)} />
             <AmountRow label="Delivery Rapidito" value={formatSoles(c.quote.deliveryFeeCents)} />
+            {c.quote.tipCents > 0 && <AmountRow label="Propina para el repartidor" value={formatSoles(c.quote.tipCents)} />}
             <div className="my-1 border-t border-dashed border-line" />
             <AmountRow label="Total a pagar" value={formatSoles(c.quote.totalCents)} strong />
             <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-soft">

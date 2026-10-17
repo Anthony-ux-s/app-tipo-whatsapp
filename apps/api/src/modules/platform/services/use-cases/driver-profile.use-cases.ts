@@ -79,7 +79,7 @@ export class GetDriverEarningsUseCase {
     const today = new Date(now);
     today.setHours(0, 0, 0, 0);
     const week = new Date(today.getTime() - 6 * 24 * 3_600_000);
-    const e = await this.orders.driverEarnings(userId, { today, week });
+    const [e, rating] = await Promise.all([this.orders.driverEarnings(userId, { today, week }), this.orders.ratingSummary({ driverId: userId })]);
     return {
       todayCents: e.today[0],
       todayDeliveries: e.today[1],
@@ -87,6 +87,8 @@ export class GetDriverEarningsUseCase {
       weekDeliveries: e.week[1],
       totalCents: e.total[0],
       totalDeliveries: e.total[1],
+      tipsCents: e.tipsCents,
+      rating,
     };
   }
 }

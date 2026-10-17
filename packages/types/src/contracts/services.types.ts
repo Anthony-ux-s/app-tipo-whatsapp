@@ -52,6 +52,8 @@ export interface DeliveryAddress {
 export interface QuoteRequest {
   items: CartItemRequest[];
   address: DeliveryAddress;
+  /** Propina para el repartidor (0 a S/ 100); se cobra con el pedido y va completa al repartidor. */
+  tipCents?: number;
 }
 
 export interface OrderLine {
@@ -67,6 +69,7 @@ export interface OrderQuote {
   lines: OrderLine[];
   subtotalCents: number;
   deliveryFeeCents: number;
+  tipCents: number;
   totalCents: number;
   currency: Currency;
   etaMinutes: number;
@@ -138,6 +141,7 @@ export interface BusinessStatus {
   closedMessage: string | null;
   opensAt: string;
   closesAt: string;
+  rating: RatingSummary;
 }
 
 export interface UpdateBusinessRequest {
@@ -173,6 +177,8 @@ export interface Order {
   lines: OrderLine[];
   subtotalCents: number;
   deliveryFeeCents: number;
+  /** Propina para el repartidor (incluida en el total). */
+  tipCents: number;
   totalCents: number;
   currency: Currency;
   address: DeliveryAddress;
@@ -188,6 +194,8 @@ export interface Order {
   deliveryCodeLocked?: boolean;
   /** Última ubicación del repartidor mientras lo lleva (cliente y tienda); null sin señal aún. */
   driverLocation?: DriverLocation | null;
+  /** Calificación que dejó el cliente al recibirlo; null si aún no califica. */
+  rating?: OrderRating | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -205,6 +213,26 @@ export interface BusinessOrder extends Order {
 }
 
 export type DriverVehicle = 'Moto' | 'Bicicleta' | 'Auto' | 'A pie';
+
+/** Calificación de un pedido entregado (como en Rappi): al repartidor y a la tienda, de 1 a 5. */
+export interface OrderRating {
+  driverStars: number | null;
+  storeStars: number | null;
+  comment: string;
+  at: string;
+}
+
+export interface RateOrderRequest {
+  driverStars?: number | null;
+  storeStars?: number | null;
+  comment?: string;
+}
+
+/** Promedio de calificaciones (null si todavía no hay ninguna). */
+export interface RatingSummary {
+  average: number | null;
+  count: number;
+}
 
 /** Repartidor de Rapidito (cuenta de Parla con su vehículo). */
 export interface DriverInfo {
@@ -229,6 +257,9 @@ export interface DriverEarnings {
   weekDeliveries: number;
   totalCents: number;
   totalDeliveries: number;
+  /** De lo ganado, cuánto fue propina. */
+  tipsCents: number;
+  rating: RatingSummary;
 }
 
 /** Ubicación del repartidor durante una entrega (la ven el cliente y la tienda de ese pedido). */
@@ -246,8 +277,9 @@ export interface DriverOrder {
   address: DeliveryAddress;
   customerName: string;
   lines: OrderLine[];
-  /** Lo que gana el repartidor por la entrega (la tarifa de delivery). */
+  /** Lo que gana el repartidor por la entrega (la tarifa de delivery) más la propina. */
   deliveryFeeCents: number;
+  tipCents: number;
   /** Lo tiene este repartidor (si no, es una oferta disponible). */
   mine: boolean;
   timeline: OrderTimelineEntry[];
@@ -281,6 +313,7 @@ export interface InternalCreateOrder {
   lines: OrderLine[];
   subtotalCents: number;
   deliveryFeeCents: number;
+  tipCents: number;
   totalCents: number;
   currency: Currency;
   address: DeliveryAddress;

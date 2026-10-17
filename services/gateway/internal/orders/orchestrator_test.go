@@ -150,7 +150,7 @@ func (f *fakeCore) CreateOrder(_ context.Context, in services.InternalCreateOrde
 	o := services.InternalOrder{
 		Order: services.Order{
 			ID: in.ID, Service: in.Service, Status: services.PendingPayment, Lines: in.Lines,
-			SubtotalCents: in.SubtotalCents, DeliveryFeeCents: in.DeliveryFeeCents, TotalCents: in.TotalCents,
+			SubtotalCents: in.SubtotalCents, DeliveryFeeCents: in.DeliveryFeeCents, TipCents: in.TipCents, TotalCents: in.TotalCents,
 			Currency: in.Currency, Address: in.Address, Payment: in.Payment,
 		},
 		UserID: in.UserID, DeliveryQuoteID: in.DeliveryQuoteID, BusinessOwnerID: &owner,
@@ -293,6 +293,34 @@ func TestCrearReservaCobraElTotalYGuardaEnElCore(t *testing.T) {
 	saved := w.core.orders["ord_1"]
 	if saved.UserID != "u_laura" || saved.DeliveryQuoteID != "q_1" || saved.Payment.Provider != "PagaYa" || saved.Payment.ExpiresAt != "2026-10-17T12:15:00Z" {
 		t.Fatalf("lo guardado en el core no es lo esperado: %+v", saved)
+	}
+}
+
+func TestLaPropinaSeSumaAlTotalYAlCobro(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	req := cart
+	req.TipCents = 300
+	q, err := w.orch.Quote(ctx, req)
+	if err != nil || q.TipCents != 300 || q.TotalCents != q.SubtotalCents+q.DeliveryFeeCents+300 {
+		t.Fatalf("la propina debía sumarse al total: %+v %v", q, err)
+	}
+	order, err := w.orch.Create(ctx, "u", req)
+	if err != nil || order.TipCents != 300 || order.TotalCents != 2330 {
+		t.Fatalf("pedido con propina inesperado: %+v %v", order, err)
+	}
+	if w.payments.last.AmountCents != 2330 || !strings.HasSuffix(w.payments.last.Concept, "+ propina") {
+		t.Fatalf("el cobro debía incluir la propina: %+v", w.payments.last)
+	}
+	if saved := w.core.orders["ord_1"]; saved.TipCents != 300 || saved.TotalCents != 2330 {
+		t.Fatalf("el core debía recibir la propina: %+v", saved)
+	}
+	for _, tip := range []int{-1, 10_001} {
+		bad := cart
+		bad.TipCents = tip
+		if _, err := w.orch.Quote(ctx, bad); status(err) != http.StatusBadRequest {
+			t.Fatalf("propina %d: esperaba 400, obtuve %v", tip, err)
+		}
 	}
 }
 

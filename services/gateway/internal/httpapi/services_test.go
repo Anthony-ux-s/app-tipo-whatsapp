@@ -156,6 +156,14 @@ func TestLaCotizacionIgnoraPreciosDelNavegador(t *testing.T) {
 	if status != 200 || q.SubtotalCents != 900 || q.DeliveryFeeCents != 600 || q.TotalCents != 1500 {
 		t.Fatalf("cotización inesperada: %d %s", status, raw)
 	}
+	// La propina sí la elige el cliente: se suma al total que calcula el gateway.
+	tipped := `{"items":[{"productId":"AZU-RUB-1K","quantity":2,"priceCents":1}],"address":{"line":"Av. Larco 123","reference":""},"tipCents":200,"totalCents":1}`
+	status, raw = call(t, http.MethodPost, gw.URL+"/api/services/mercado/quote", jwt("u_1"), tipped, nil)
+	q = services.OrderQuote{}
+	_ = json.Unmarshal([]byte(raw), &q)
+	if status != 200 || q.TipCents != 200 || q.TotalCents != 1700 {
+		t.Fatalf("cotización con propina inesperada: %d %s", status, raw)
+	}
 	status, raw = call(t, http.MethodPost, gw.URL+"/api/services/mercado/quote", jwt("u_1"), `{"items":[]`, nil)
 	if status != 400 || !strings.Contains(raw, `"statusCode":400`) {
 		t.Fatalf("un JSON roto debe dar 400 con el formato de errores: %d %s", status, raw)

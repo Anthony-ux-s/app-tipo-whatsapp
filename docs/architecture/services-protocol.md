@@ -17,11 +17,15 @@ navegador ─► gateway Go ─┬─ traductor mercaya ──► MercaYa  (tien
 
 1. `GET /api/services` → catálogo de servicios (Mercado disponible; Salud «próximamente»).
 2. `GET /api/services/mercado/products?q=azucar` → el gateway consulta MercaYa y devuelve `Product[]`.
-3. `POST /api/services/mercado/quote` `{items, address}` → el gateway **vuelve a pedir los precios a
-   la tienda** (nunca confía en el navegador), cotiza el delivery en Rapidito y **suma todo**:
-   `OrderQuote {lines, subtotalCents, deliveryFeeCents, totalCents, etaMinutes}`.
-4. `POST /api/services/mercado/orders` `{items, address}` → recotiza igual que el paso 3, reserva en
-   MercaYa, crea el cobro en PagaYa (QR) y guarda el pedido en el core (`pending_payment`), con el id
+3. `POST /api/services/mercado/quote` `{items, address, tipCents?}` → el gateway **vuelve a pedir los
+   precios a la tienda** (nunca confía en el navegador), cotiza el delivery en Rapidito y **suma todo**:
+   `OrderQuote {lines, subtotalCents, deliveryFeeCents, tipCents, totalCents, etaMinutes}`, con
+   `totalCents = subtotalCents + deliveryFeeCents + tipCents`. La propina para el repartidor
+   (`tipCents`, opcional, 0 a 10 000 = S/ 100) es lo único del total que elige el cliente; cualquier
+   otro monto que mande el navegador se descarta.
+4. `POST /api/services/mercado/orders` `{items, address, tipCents?}` → recotiza igual que el paso 3,
+   reserva en MercaYa, crea el cobro en PagaYa (QR) por el total **con la propina incluida** (el
+   concepto dice «+ propina» si la hay) y guarda el pedido en el core (`pending_payment`, con `tipCents`), con el id
    del cobro (`payment.chargeId`, para anularlo o devolverlo) y el tiempo estimado de Rapidito
    (`etaMinutes`).
    Responde `Order` con `payment.qrText` y `payment.payUrl`.

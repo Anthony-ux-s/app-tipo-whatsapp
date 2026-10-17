@@ -6,6 +6,8 @@ import type {
   OrderDelivery,
   OrderLine,
   OrderPayment,
+  OrderRating,
+  RatingSummary,
   OrderStatus,
   OrderTimelineEntry,
   ServiceId,
@@ -22,6 +24,8 @@ export interface OrderRecord {
   lines: OrderLine[];
   subtotalCents: number;
   deliveryFeeCents: number;
+  /** Propina para el repartidor (incluida en el total). */
+  tipCents: number;
   totalCents: number;
   currency: Currency;
   address: DeliveryAddress;
@@ -38,13 +42,15 @@ export interface OrderRecord {
   deliveryCode: string;
   deliveryCodeAttempts: number;
   timeline: OrderTimelineEntry[];
+  /** Calificación del cliente al recibirlo; null si aún no califica. */
+  rating: OrderRating | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export type NewOrder = Omit<
   OrderRecord,
-  'createdAt' | 'updatedAt' | 'delivery' | 'business' | 'driverId' | 'driverLocation' | 'deliveryCodeAttempts' | 'timeline'
+  'createdAt' | 'updatedAt' | 'delivery' | 'business' | 'driverId' | 'driverLocation' | 'deliveryCodeAttempts' | 'timeline' | 'rating'
 > & { businessId: string | null };
 
 export interface OrderChanges {
@@ -73,7 +79,10 @@ export interface OrdersRepository {
   countActiveForDriver(driverId: string): Promise<number>;
   listActiveForDriver(driverId: string): Promise<OrderRecord[]>;
   /** [céntimos, entregas] de las entregas terminadas del repartidor: desde hoy, desde la semana y en total. */
-  driverEarnings(driverId: string, since: { today: Date; week: Date }): Promise<{ today: [number, number]; week: [number, number]; total: [number, number] }>;
+  driverEarnings(
+    driverId: string,
+    since: { today: Date; week: Date },
+  ): Promise<{ today: [number, number]; week: [number, number]; total: [number, number]; tipsCents: number }>;
   /**
    * Aplica el cambio solo si el pedido sigue en `expected` (comparar y cambiar atómico) y, si cambia
    * de estado, lo anota en la línea de tiempo. Devuelve el pedido actualizado, o null si otro cambio
@@ -84,6 +93,12 @@ export interface OrdersRepository {
   addFailedCodeAttempt(id: string): Promise<number>;
   /** Código de entrega nuevo, con los intentos en cero (lo pide el cliente si se bloqueó). */
   resetDeliveryCode(id: string, code: string): Promise<OrderRecord>;
+  /** Pedidos en estos estados (para la vigilancia de los deliveries), del más viejo al más nuevo. */
+  listByStatus(statuses: OrderStatus[], limit: number): Promise<OrderRecord[]>;
+  /** Guarda la calificación (solo si aún no tenía). Devuelve null si ya estaba calificado. */
+  rate(id: string, rating: Omit<OrderRating, 'at'>, at: Date): Promise<OrderRecord | null>;
+  /** Promedio de estrellas de un repartidor o de una tienda. */
+  ratingSummary(of: { driverId: string } | { businessId: string }): Promise<RatingSummary>;
 }
 
 export const ORDERS_REPOSITORY = Symbol('ORDERS_REPOSITORY');

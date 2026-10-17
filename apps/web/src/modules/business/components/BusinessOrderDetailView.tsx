@@ -1,5 +1,6 @@
 import { Bike, Check, MapPin, MessageCircle, PackageCheck, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { Avatar } from '@shared/ui/Avatar';
+import { Stars } from '@shared/ui/Stars';
 import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
@@ -49,6 +50,15 @@ export function BusinessOrderDetailView() {
             <p className="font-bold text-ink">Entregado a {order.customer.displayName} · {formatTime(delivered.at)}</p>
             <p className="text-sm text-ink-soft">{delivered.note ?? 'Confirmado con el código del cliente'}</p>
           </div>
+        </section>
+      )}
+
+      {order.rating?.storeStars && (
+        <section className="flex flex-col gap-1 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Calificación del cliente" data-testid="business-rating">
+          <p className="flex items-center justify-between gap-3 font-bold text-ink">
+            {order.customer.displayName} calificó a tu tienda <Stars value={order.rating.storeStars} />
+          </p>
+          {order.rating.comment && <p className="text-sm text-ink-soft">«{order.rating.comment}»</p>}
         </section>
       )}
 
@@ -142,6 +152,7 @@ export function BusinessOrderDetailView() {
         <div className="my-1 border-t border-dashed border-line" />
         <AmountRow label="Productos" value={formatSoles(order.subtotalCents)} />
         <AmountRow label="Delivery Rapidito" value={formatSoles(order.deliveryFeeCents)} />
+        {order.tipCents > 0 && <AmountRow label="Propina (para el repartidor)" value={formatSoles(order.tipCents)} />}
         <AmountRow label="Cobrado al cliente" value={formatSoles(order.totalCents)} strong />
       </section>
 

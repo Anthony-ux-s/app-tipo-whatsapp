@@ -1,6 +1,7 @@
 import { ChevronRight, Clock, Tags } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@shared/ui/Button';
+import { Stars } from '@shared/ui/Stars';
 import { Toggle } from '@shared/ui/Toggle';
 import { useStoreSettings } from '../hooks/use-store-settings.hook';
 
@@ -25,6 +26,11 @@ export function StoreSettingsCard() {
         </span>
         <span className="min-w-0 flex-1 truncate text-sm text-ink-soft">{open ? 'Los clientes pueden hacer pedidos.' : s.status?.closedMessage}</span>
       </div>
+      {s.status?.rating.average !== null && s.status?.rating.average !== undefined && (
+        <p className="flex items-center gap-2 text-sm text-ink-soft" data-testid="store-rating">
+          <Stars value={s.status.rating.average} /> {s.status.rating.average.toFixed(1)} · {s.status.rating.count} {s.status.rating.count === 1 ? 'calificación' : 'calificaciones'}
+        </p>
+      )}
 
       <Toggle
         checked={s.business.acceptingOrders}

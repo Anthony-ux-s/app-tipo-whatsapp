@@ -8,8 +8,9 @@ import type {
   Order,
   OrderCustomer,
   OrderStatus,
+  RateOrderRequest,
 } from '@parla/types';
-import { ConflictError, NotFoundError } from '../../../../kernel/domain-error';
+import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
 import {
   assertOrderTotals,
   assertOrderTransition,
@@ -50,12 +51,14 @@ export function toOrder(order: OrderRecord, forCustomer = false): Order {
     lines: order.lines,
     subtotalCents: order.subtotalCents,
     deliveryFeeCents: order.deliveryFeeCents,
+    tipCents: order.tipCents,
     totalCents: order.totalCents,
     currency: order.currency,
     address: order.address,
     payment: order.payment,
     delivery: order.delivery,
     timeline: order.timeline,
+    rating: order.rating,
     // Mientras el repartidor lo lleva, cliente y tienda lo siguen en el mapa.
     ...(order.status === 'driver_assigned' || order.status === 'on_the_way'
       ? { driverLocation: order.driverLocation && { orderId: order.id, lat: order.driverLocation.lat, lng: order.driverLocation.lng, at: order.driverLocation.at.toISOString() } }
@@ -97,6 +100,7 @@ export function toDriverOrder(order: OrderRecord, driverId: string, customers: M
     customerName: customerOf(order, customers).displayName.split(' ')[0],
     lines: order.lines,
     deliveryFeeCents: order.deliveryFeeCents,
+    tipCents: order.tipCents,
     mine: order.driverId === driverId,
     timeline: order.timeline,
     createdAt: order.createdAt.toISOString(),
@@ -175,7 +179,7 @@ export class CreateOrderUseCase {
   async execute(input: InternalCreateOrder): Promise<InternalOrder> {
     const [customer] = await this.users.findActiveByIds([input.userId]);
     if (!customer) throw new NotFoundError('Esa cuenta no existe');
-    assertOrderTotals(input.lines, input.subtotalCents, input.deliveryFeeCents, input.totalCents);
+    assertOrderTotals(input.lines, input.subtotalCents, input.deliveryFeeCents, input.totalCents, input.tipCents ?? 0);
     if (await this.orders.findById(input.id)) throw new ConflictError('Ese pedido ya existe');
 
     // El negocio que atiende el servicio recibe el pedido cuando se pague.
@@ -186,6 +190,7 @@ export class CreateOrderUseCase {
       status: 'pending_payment',
       deliveryCode: newDeliveryCode(),
       etaMinutes: input.etaMinutes,
+      tipCents: input.tipCents ?? 0,
     });
     this.events.changed(order);
     return toInternalOrder(order);
@@ -281,5 +286,36 @@ export class RenewDeliveryCodeUseCase {
     const updated = await this.orders.resetDeliveryCode(id, newDeliveryCode());
     this.events.changed(updated, null, false);
     return toOrder(updated, true);
+  }
+}
+
+/**
+ * Al recibir el pedido, el cliente califica al repartidor y a la tienda (1 a 5 estrellas) y deja un
+ * comentario si quiere. Una sola vez por pedido; la tienda lo ve en su pedido.
+ */
+@Injectable()
+export class RateOrderUseCase {
+  constructor(
+    @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
+    private readonly events: OrderEvents,
+  ) {}
+
+  async execute(userId: string, id: string, input: RateOrderRequest): Promise<Order> {
+    const order = await this.orders.findById(id);
+    if (!order || order.userId !== userId) throw new NotFoundError('Pedido no encontrado');
+    if (order.status !== 'delivered') throw new ConflictError('Podrás calificar cuando recibas tu pedido');
+    const stars = (n: number | null | undefined) => {
+      if (n === null || n === undefined) return null;
+      if (!Number.isInteger(n) || n < 1 || n > 5) throw new ValidationError('Las estrellas van de 1 a 5');
+      return n;
+    };
+    const driverStars = order.driverId ? stars(input.driverStars) : null;
+    const storeStars = order.business ? stars(input.storeStars) : null;
+    if (driverStars === null && storeStars === null) throw new ValidationError('Elige al menos una calificación');
+    const comment = (input.comment ?? '').trim().slice(0, 300);
+    const rated = await this.orders.rate(id, { driverStars, storeStars, comment }, new Date());
+    if (!rated) throw new ConflictError('Ya calificaste este pedido');
+    this.events.changed(rated, null, false);
+    return toOrder(rated, true);
   }
 }
