@@ -11,7 +11,8 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   paid: 'Esperando al negocio',
   preparing: 'Preparando',
   rejected: 'No aceptado',
-  searching_driver: 'Buscando motorizado',
+  searching_driver: 'Buscando repartidor',
+  driver_assigned: 'Repartidor asignado',
   on_the_way: 'En camino',
   delivered: 'Entregado',
   payment_expired: 'Cobro vencido',
@@ -22,7 +23,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 export const ORDER_STEPS: { status: OrderStatus; label: string }[] = [
   { status: 'pending_payment', label: 'Pago' },
   { status: 'preparing', label: 'Preparando' },
-  { status: 'searching_driver', label: 'Motorizado' },
+  { status: 'driver_assigned', label: 'Repartidor' },
   { status: 'on_the_way', label: 'En camino' },
   { status: 'delivered', label: 'Entregado' },
 ];

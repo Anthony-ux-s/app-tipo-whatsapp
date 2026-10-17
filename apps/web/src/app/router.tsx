@@ -1,5 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import { WelcomeView } from '../modules/account/components/WelcomeView';
+import { DriverOrderDetailView } from '../modules/driver/components/DriverOrderDetailView';
+import { DriverOrdersView } from '../modules/driver/components/DriverOrdersView';
 import { ForgotPasswordView } from '../modules/auth/components/ForgotPasswordView';
 import { LoginView } from '../modules/auth/components/LoginView';
 import { RegisterView } from '../modules/auth/components/RegisterView';
@@ -50,6 +52,8 @@ export const router = createBrowserRouter([
           { path: 'pedidos/:orderId', element: <OrderDetailView /> },
           { path: 'negocio', element: <BusinessOrdersView /> },
           { path: 'negocio/pedidos/:orderId', element: <BusinessOrderDetailView /> },
+          { path: 'rapidito', element: <DriverOrdersView /> },
+          { path: 'rapidito/pedidos/:orderId', element: <DriverOrderDetailView /> },
           { path: 'ajustes', element: <SettingsView /> },
           { path: 'ajustes/:section', element: <SettingsSectionView /> },
         ],

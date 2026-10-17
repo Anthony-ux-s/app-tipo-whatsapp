@@ -46,24 +46,10 @@ func (f *fakeCommerce) Reserve(_ context.Context, ref string, items []services.C
 	return nil
 }
 
-type fakeDelivery struct {
-	mu         sync.Mutex
-	dispatched []string
-	fail       bool
-}
+type fakeDelivery struct{}
 
 func (f *fakeDelivery) Quote(context.Context, services.Address) (rapidito.Quote, error) {
 	return rapidito.Quote{ID: "q_1", FeeCents: 650, ETAMinutes: 30}, nil
-}
-
-func (f *fakeDelivery) Dispatch(_ context.Context, quoteID, ref, callback string) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.fail {
-		return "", errors.New("Rapidito caído")
-	}
-	f.dispatched = append(f.dispatched, quoteID+"|"+ref+"|"+callback)
-	return "dlv_1", nil
 }
 
 type fakePayments struct{ last pagaya.ChargeRequest }
@@ -89,7 +75,7 @@ func (f *fakeCore) CreateOrder(_ context.Context, in services.InternalCreateOrde
 			SubtotalCents: in.SubtotalCents, DeliveryFeeCents: in.DeliveryFeeCents, TotalCents: in.TotalCents,
 			Currency: in.Currency, Address: in.Address, Payment: in.Payment,
 		},
-		UserID: in.UserID, DeliveryQuoteID: in.DeliveryQuoteID, BusinessOwnerID: &owner,
+		UserID: in.UserID, DeliveryQuoteID: in.DeliveryQuoteID,
 	}
 	f.orders[in.ID] = o
 	return o, nil
@@ -152,9 +138,6 @@ func newWorld() world {
 	}
 	return w
 }
-
-// owner: dueño del negocio que atiende los pedidos de prueba.
-var owner = "dueño"
 
 var cart = services.QuoteRequest{
 	Items:   []services.CartItem{{ProductID: "AZU-RUB-1K", Quantity: 2}, {ProductID: "ARR-EXT-1K", Quantity: 1}},
@@ -245,15 +228,7 @@ func paidEvent() pagaya.Event {
 	return pagaya.Event{ChargeID: "cob_1", Reference: "ord_1", Status: services.Paid, PaidAt: &at}
 }
 
-// accept imita al dueño aceptando el pedido en el core (pagado → preparando).
-func (w world) accept(t *testing.T) {
-	t.Helper()
-	if _, err := w.core.UpdateOrder(context.Background(), "ord_1", services.InternalUpdateOrder{ExpectStatus: services.Paid, Status: services.Preparing}); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestPagoEsperaAlNegocioSinDespachar(t *testing.T) {
+func TestPagoEsperaAlNegocio(t *testing.T) {
 	w := newWorld()
 	ctx := context.Background()
 	if _, err := w.orch.Create(ctx, "u", cart); err != nil {
@@ -267,56 +242,8 @@ func TestPagoEsperaAlNegocioSinDespachar(t *testing.T) {
 		t.Fatal(err)
 	}
 	order := w.core.orders["ord_1"]
-	if order.Status != services.Paid || *order.Payment.PaidAt != "2026-10-17T12:05:00Z" || len(w.delivery.dispatched) != 0 {
-		t.Fatalf("tras el pago el pedido espera al negocio: %+v %v", order, w.delivery.dispatched)
-	}
-}
-
-func TestListoDespachaRapiditoUnaSolaVezYSoloElDueño(t *testing.T) {
-	w := newWorld()
-	ctx := context.Background()
-	_, _ = w.orch.Create(ctx, "u", cart)
-	_ = w.orch.PaymentEvent(ctx, paidEvent())
-
-	if _, err := w.orch.Ready(ctx, owner, "ord_1"); status(err) != http.StatusConflict {
-		t.Fatalf("sin aceptar no se puede despachar, obtuve %v", err)
-	}
-	w.accept(t)
-	if _, err := w.orch.Ready(ctx, "u", "ord_1"); status(err) != http.StatusNotFound {
-		t.Fatalf("el cliente no puede marcarlo listo, obtuve %v", err)
-	}
-	if _, err := w.orch.Ready(ctx, owner, "ord_x"); status(err) != http.StatusNotFound {
-		t.Fatalf("pedido desconocido, obtuve %v", err)
-	}
-	order, err := w.orch.Ready(ctx, owner, "ord_1")
-	if err != nil || order.Status != services.SearchingDriver || order.Delivery.Provider != "Rapidito" {
-		t.Fatalf("listo debía despachar: %+v %v", order, err)
-	}
-	// Tocar «listo» dos veces no manda un segundo motorizado.
-	if again, err := w.orch.Ready(ctx, owner, "ord_1"); err != nil || again.Status != services.SearchingDriver {
-		t.Fatalf("repetir debía devolver el pedido: %+v %v", again, err)
-	}
-	if len(w.delivery.dispatched) != 1 || w.delivery.dispatched[0] != "q_1|ord_1|http://gw/hooks/rapidito" {
-		t.Fatalf("despachos inesperados: %v", w.delivery.dispatched)
-	}
-}
-
-func TestSiRapiditoFallaElPedidoSigueEnPreparacion(t *testing.T) {
-	w := newWorld()
-	ctx := context.Background()
-	_, _ = w.orch.Create(ctx, "u", cart)
-	_ = w.orch.PaymentEvent(ctx, paidEvent())
-	w.accept(t)
-	w.delivery.fail = true
-	if _, err := w.orch.Ready(ctx, owner, "ord_1"); status(err) != http.StatusBadGateway {
-		t.Fatalf("debía avisar que Rapidito no responde, obtuve %v", err)
-	}
-	if w.core.orders["ord_1"].Status != services.Preparing {
-		t.Fatal("el pedido sigue en preparación para reintentar")
-	}
-	w.delivery.fail = false
-	if order, err := w.orch.Ready(ctx, owner, "ord_1"); err != nil || order.Status != services.SearchingDriver || len(w.delivery.dispatched) != 1 {
-		t.Fatalf("el reintento debía despachar: %+v %v", order, err)
+	if order.Status != services.Paid || *order.Payment.PaidAt != "2026-10-17T12:05:00Z" {
+		t.Fatalf("tras el pago el pedido espera al negocio: %+v", order)
 	}
 }
 
@@ -330,42 +257,11 @@ func TestCobroVencidoYAvisoDesconocido(t *testing.T) {
 	if w.core.orders["ord_1"].Status != services.PaymentExpired {
 		t.Fatal("debía quedar vencido")
 	}
-	// Un pago que llega después del vencimiento no despacha nada.
-	if err := w.orch.PaymentEvent(ctx, paidEvent()); err != nil || len(w.delivery.dispatched) != 0 {
-		t.Fatalf("no debía despachar: %v %v", err, w.delivery.dispatched)
+	// Un pago que llega después del vencimiento no revive el pedido.
+	if err := w.orch.PaymentEvent(ctx, paidEvent()); err != nil || w.core.orders["ord_1"].Status != services.PaymentExpired {
+		t.Fatalf("debía seguir vencido: %v %+v", err, w.core.orders["ord_1"])
 	}
 	if err := w.orch.PaymentEvent(ctx, pagaya.Event{Reference: "ord_x", Status: services.Paid}); err != nil {
 		t.Fatalf("un pedido desconocido se ignora, obtuve %v", err)
-	}
-}
-
-func TestAvisosDelDeliveryAvanzanElPedido(t *testing.T) {
-	w := newWorld()
-	ctx := context.Background()
-	_, _ = w.orch.Create(ctx, "u", cart)
-	_ = w.orch.PaymentEvent(ctx, paidEvent())
-	w.accept(t)
-	_, _ = w.orch.Ready(ctx, owner, "ord_1")
-	eta := 18
-	if err := w.orch.DeliveryEvent(ctx, rapidito.Event{Reference: "ord_1", Status: services.OnTheWay, DriverName: "Rosa Quispe", Vehicle: "Moto · C3M-915", ETAMinutes: &eta}); err != nil {
-		t.Fatal(err)
-	}
-	order := w.core.orders["ord_1"]
-	if order.Status != services.OnTheWay || *order.Delivery.DriverName != "Rosa Quispe" || *order.Delivery.ETAMinutes != 18 {
-		t.Fatalf("pedido inesperado: %+v %+v", order, order.Delivery)
-	}
-	zero := 0
-	if err := w.orch.DeliveryEvent(ctx, rapidito.Event{Reference: "ord_1", Status: services.Delivered, ETAMinutes: &zero}); err != nil {
-		t.Fatal(err)
-	}
-	order = w.core.orders["ord_1"]
-	if order.Status != services.Delivered || *order.Delivery.DriverName != "Rosa Quispe" {
-		t.Fatalf("al entregar se conserva el motorizado: %+v %+v", order, order.Delivery)
-	}
-	// Un aviso viejo que llega tarde no hace retroceder el pedido.
-	before := len(w.core.updates)
-	_ = w.orch.DeliveryEvent(ctx, rapidito.Event{Reference: "ord_1", Status: services.OnTheWay})
-	if len(w.core.updates) != before || w.core.orders["ord_1"].Status != services.Delivered {
-		t.Fatal("un aviso fuera de orden no debe cambiar nada")
 	}
 }

@@ -47,7 +47,6 @@ type motoFake struct{}
 func (motoFake) Quote(context.Context, services.Address) (rapidito.Quote, error) {
 	return rapidito.Quote{ID: "q_1", FeeCents: 600, ETAMinutes: 30}, nil
 }
-func (motoFake) Dispatch(context.Context, string, string, string) (string, error) { return "d_1", nil }
 
 type coreFake struct{ seen []string }
 
@@ -82,7 +81,7 @@ func servicesGateway(t *testing.T) (*httptest.Server, *coreFake) {
 		JWTSecret: jwtSecret,
 		Services: &orders.HTTP{
 			Orch:         &orders.Orchestrator{Commerce: shopFake{}, Delivery: motoFake{}, Payments: payFake{}, Core: core, PublicURL: "http://gw"},
-			PagayaSecret: pagayaSecret, RapiditoSecret: "rapidito-secreto-de-prueba",
+			PagayaSecret: pagayaSecret,
 		},
 	}))
 	t.Cleanup(gw.Close)
@@ -170,9 +169,6 @@ func TestAvisosDeProveedoresExigenFirma(t *testing.T) {
 	}
 	if status, _ := call(t, http.MethodPost, gw.URL+"/hooks/pagaya", "", payload, map[string]string{"x-pagaya-firma": webhook.Sign(pagayaSecret, []byte(payload))}); status != http.StatusNoContent {
 		t.Fatalf("aviso válido: esperaba 204, obtuve %d", status)
-	}
-	if status, _ := call(t, http.MethodPost, gw.URL+"/hooks/rapidito", "", `{}`, nil); status != http.StatusUnauthorized {
-		t.Fatalf("Rapidito sin firma: esperaba 401, obtuve %d", status)
 	}
 }
 

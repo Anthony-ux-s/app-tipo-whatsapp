@@ -1,7 +1,7 @@
 // Simuladores de los sistemas externos con los que se integra Parla, para desarrollo y pruebas:
 //
 //	/mercaya/*  tienda en línea (catálogo y reservas)
-//	/rapidito/*   delivery en moto (cotización, despacho y avisos)
+//	/rapidito/* tarifa del delivery en moto (cotización)
 //	/pagaya/*   billetera con cobros por QR al estilo Yape
 //
 // Cada uno tiene su propio formato de API; el gateway los traduce a los contratos de Parla.
@@ -50,9 +50,7 @@ func main() {
 		notify.WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "parla-providers", "systems": []string{"mercaya", "rapidito", "pagaya"}})
 	})
 	mercaya.NewStore().Routes(mux)
-	rapidito.New(millis("RAPIDITO_STEP_MS", 4000), notify.Notifier{
-		Secret: env("RAPIDITO_WEBHOOK_SECRET", "rapidito-dev-secret"), Header: "x-rapidito-signature", Retries: 4, Backoff: time.Second,
-	}).Routes(mux)
+	rapidito.New().Routes(mux)
 	pagaya.New(publicURL, millis("PAGAYA_EXPIRY_MS", 15*60*1000), notify.Notifier{
 		Secret: env("PAGAYA_WEBHOOK_SECRET", "pagaya-dev-secret"), Header: "x-pagaya-firma", Retries: 4, Backoff: time.Second,
 	}).Routes(mux)

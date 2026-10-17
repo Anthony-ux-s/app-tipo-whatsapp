@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { BusinessInfo, BusinessOrder, PublicUser } from '@parla/types';
+import type { BusinessInfo, BusinessOrder, OrderContactRole, OrderStatus, PublicUser } from '@parla/types';
 import { PresenceRegistry } from '../../../../infra/realtime/presence.registry';
-import { ConflictError, NotFoundError } from '../../../../kernel/domain-error';
+import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { toPublicUser } from '../../identity/user.mapper';
 import { BUSINESSES_REPOSITORY, type BusinessesRepository } from '../businesses.repository';
@@ -61,10 +61,20 @@ export class GetBusinessOrderUseCase {
   }
 }
 
+export type BusinessAction = 'accept' | 'reject' | 'ready' | 'handoff';
+
+/** De qué estado a cuál lleva cada acción del dueño, y qué le dice si ya no se puede. */
+const ACTIONS: Record<BusinessAction, { from: OrderStatus; to: OrderStatus; late: string }> = {
+  accept: { from: 'paid', to: 'preparing', late: 'Este pedido ya no está esperando tu respuesta' },
+  reject: { from: 'paid', to: 'rejected', late: 'Este pedido ya no está esperando tu respuesta' },
+  ready: { from: 'preparing', to: 'searching_driver', late: 'Primero acepta el pedido para prepararlo' },
+  handoff: { from: 'driver_assigned', to: 'on_the_way', late: 'Todavía ningún repartidor tomó este pedido' },
+};
+
 /**
- * El dueño acepta (empieza a prepararlo) o rechaza un pedido pagado. Repetir la misma decisión no
- * cambia nada; cambiar de opinión cuando ya se decidió, no se puede. «Listo» lo resuelve el gateway,
- * porque despacha el motorizado de Rapidito.
+ * El dueño avanza su pedido: lo acepta o lo rechaza, avisa que está listo (se ofrece a los
+ * repartidores de Rapidito) y confirma que se lo entregó al repartidor. Repetir la misma acción no
+ * cambia nada; saltarse un paso o volver atrás, no se puede.
  */
 @Injectable()
 export class DecideBusinessOrderUseCase {
@@ -74,13 +84,14 @@ export class DecideBusinessOrderUseCase {
     private readonly events: OrderEvents,
   ) {}
 
-  async execute(userId: string, id: string, decision: 'accept' | 'reject'): Promise<BusinessOrder> {
+  async execute(userId: string, id: string, action: BusinessAction): Promise<BusinessOrder> {
     let order = await findBusinessOrder(this.orders, userId, id);
-    const target = decision === 'accept' ? 'preparing' : 'rejected';
-    if (order.status !== target) {
-      if (order.status !== 'paid') throw new ConflictError('Este pedido ya no está esperando tu respuesta');
-      const updated = await this.orders.updateIfStatus(id, 'paid', { status: target });
-      if (!updated) throw new ConflictError('Este pedido ya no está esperando tu respuesta');
+    const step = ACTIONS[action];
+    if (order.status !== step.to) {
+      if (order.status !== step.from) throw new ConflictError(step.late);
+      const note = action === 'handoff' && order.delivery?.driverName ? `Entregado a ${order.delivery.driverName} en la tienda` : undefined;
+      const updated = await this.orders.updateIfStatus(id, step.from, { status: step.to, note });
+      if (!updated) throw new ConflictError(step.late);
       this.events.changed(updated);
       order = updated;
     }
@@ -89,9 +100,10 @@ export class DecideBusinessOrderUseCase {
 }
 
 /**
- * Con quién hablar sobre un pedido (bidireccional): al cliente le devuelve el dueño del negocio y al
- * dueño, el cliente. Con su clave pública, el navegador abre el chat cifrado de siempre. 404 para
- * cualquier otra persona, y para el dueño mientras el pedido no esté pagado.
+ * Con quién hablar sobre un pedido, en los dos sentidos: cliente ↔ negocio, cliente ↔ repartidor y
+ * negocio ↔ repartidor. Devuelve a la otra persona con su clave pública para abrir el chat cifrado
+ * de siempre. 404 para quien no participa, para el negocio antes del pago y con el repartidor antes
+ * de que alguien tome el pedido.
  */
 @Injectable()
 export class GetOrderContactUseCase {
@@ -101,13 +113,21 @@ export class GetOrderContactUseCase {
     private readonly presence: PresenceRegistry,
   ) {}
 
-  async execute(userId: string, orderId: string): Promise<PublicUser> {
+  async execute(userId: string, orderId: string, withRole: OrderContactRole): Promise<PublicUser> {
+    if (!['business', 'customer', 'driver'].includes(withRole)) throw new ValidationError('Elige con quién quieres hablar');
     const order = await this.orders.findById(orderId);
     if (!order) throw new NotFoundError('Pedido no encontrado');
-    let contactId: string | null = null;
-    if (order.userId === userId) contactId = order.business?.ownerId ?? null;
-    else if (order.business?.ownerId === userId) contactId = (await findBusinessOrder(this.orders, userId, orderId)).userId;
-    if (!contactId || contactId === userId) throw new NotFoundError('Pedido no encontrado');
+    const paid = order.status !== 'pending_payment' && order.status !== 'payment_expired';
+    const people: Record<OrderContactRole, string | null> = {
+      customer: order.userId,
+      business: paid ? (order.business?.ownerId ?? null) : (order.userId === userId ? (order.business?.ownerId ?? null) : null),
+      driver: order.driverId,
+    };
+    const iAm = (Object.keys(people) as OrderContactRole[]).filter((role) => people[role] === userId);
+    const contactId = people[withRole];
+    // Hay que ser parte del pedido (y el negocio, solo una vez pagado) para ver a los demás.
+    const allowed = iAm.some((role) => role !== withRole && (role !== 'business' || paid));
+    if (!allowed || !contactId || contactId === userId) throw new NotFoundError('Pedido no encontrado');
     const [contact] = await this.users.findActiveByIds([contactId]);
     if (!contact) throw new NotFoundError('Esa cuenta ya no está en Parla');
     return toPublicUser(contact, this.presence.statusOf(contact.id));

@@ -16,6 +16,7 @@ import type { PushResult, PushSender, PushTarget } from '../infra/push/push-send
 import type { PushSubscriptionsRepository, StoredSubscription } from '../modules/platform/messaging/push/push-subscriptions.repository';
 import type { PushPayload } from '@parla/types';
 import type { BusinessesRepository, BusinessRecord } from '../modules/platform/services/businesses.repository';
+import type { DriverRecord, DriversRepository } from '../modules/platform/services/drivers.repository';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
 import type { AppEnv } from '../config/env.validation';
 import type { VerificationSender } from '../infra/messaging/verification-sender.port';
@@ -285,32 +286,67 @@ export class InMemoryBusinessesRepository implements BusinessesRepository {
   }
 }
 
+export class InMemoryDriversRepository implements DriversRepository {
+  drivers: DriverRecord[] = [];
+  async findByUser(userId: string) {
+    return this.drivers.find((d) => d.userId === userId) ?? null;
+  }
+  async listUserIds() {
+    return this.drivers.map((d) => d.userId);
+  }
+}
+
 export class InMemoryOrdersRepository implements OrdersRepository {
   orders: OrderRecord[] = [];
   constructor(private readonly businesses = new InMemoryBusinessesRepository()) {}
   async create({ businessId, ...order }: NewOrder) {
     const found = this.businesses.businesses.find((b) => b.id === businessId);
-    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId } : null;
-    const record: OrderRecord = { ...order, business, delivery: null, createdAt: new Date(), updatedAt: new Date() };
+    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId, address: found.address } : null;
+    const now = new Date();
+    const record: OrderRecord = {
+      ...order,
+      business,
+      delivery: null,
+      driverId: null,
+      deliveryCodeAttempts: 0,
+      timeline: [{ status: order.status, at: now.toISOString() }],
+      createdAt: now,
+      updatedAt: now,
+    };
     this.orders.push(record);
-    return { ...record };
+    return structuredClone(record);
   }
   async findById(id: string) {
     const order = this.orders.find((o) => o.id === id);
-    return order ? { ...order } : null;
+    return order ? structuredClone(order) : null;
   }
   async listForUser(userId: string, limit: number) {
-    return this.orders.filter((o) => o.userId === userId).slice(0, limit);
+    return this.orders.filter((o) => o.userId === userId).slice(0, limit).map((o) => structuredClone(o));
   }
   async listForBusiness(businessId: string, limit: number) {
     const hidden: OrderStatus[] = ['pending_payment', 'payment_expired'];
-    return this.orders.filter((o) => o.business?.id === businessId && !hidden.includes(o.status)).slice(0, limit);
+    return this.orders.filter((o) => o.business?.id === businessId && !hidden.includes(o.status)).slice(0, limit).map((o) => structuredClone(o));
   }
-  async updateIfStatus(id: string, expected: OrderStatus, changes: OrderChanges) {
+  async listAvailableForDrivers(limit: number) {
+    return this.orders.filter((o) => o.status === 'searching_driver' && !o.driverId).slice(0, limit).map((o) => structuredClone(o));
+  }
+  async listForDriver(driverId: string, limit: number) {
+    return this.orders.filter((o) => o.driverId === driverId).slice(0, limit).map((o) => structuredClone(o));
+  }
+  async countActiveForDriver(driverId: string) {
+    return this.orders.filter((o) => o.driverId === driverId && (o.status === 'driver_assigned' || o.status === 'on_the_way')).length;
+  }
+  async updateIfStatus(id: string, expected: OrderStatus, { note, ...changes }: OrderChanges) {
     const order = this.orders.find((o) => o.id === id);
     if (!order || order.status !== expected) return null;
+    if (changes.status !== expected) order.timeline.push({ status: changes.status, at: new Date().toISOString(), ...(note ? { note } : {}) });
     Object.assign(order, changes, { updatedAt: new Date() });
-    return { ...order };
+    return structuredClone(order);
+  }
+  async addFailedCodeAttempt(id: string) {
+    const order = this.orders.find((o) => o.id === id)!;
+    order.deliveryCodeAttempts += 1;
+    return order.deliveryCodeAttempts;
   }
 }
 

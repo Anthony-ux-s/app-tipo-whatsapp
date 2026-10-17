@@ -1,4 +1,4 @@
-import type { BusinessInfo, BusinessOrder, Order } from '@parla/types';
+import type { BusinessInfo, BusinessOrder } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
 
@@ -14,8 +14,10 @@ interface BusinessState {
   upsert: (order: BusinessOrder) => void;
   accept: (id: string) => Promise<void>;
   reject: (id: string) => Promise<void>;
-  /** Listo para recoger: el gateway despacha el motorizado de Rapidito. */
+  /** Listo para recoger: se ofrece a los repartidores de Rapidito. */
   ready: (id: string) => Promise<void>;
+  /** La tienda le entregó el pedido al repartidor. */
+  handoff: (id: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -60,11 +62,8 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   accept: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/accept`)),
   reject: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/reject`)),
 
-  ready: async (id) => {
-    // El gateway responde el pedido público; se vuelve a leer para tener el del negocio completo.
-    await http.post<Order>(`${path(id)}/ready`);
-    await get().loadOrder(id);
-  },
+  ready: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/ready`)),
+  handoff: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/handoff`)),
 
   reset: () => set({ business: undefined, orders: {}, status: 'idle' }),
 }));

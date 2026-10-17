@@ -8,6 +8,7 @@ import { InfraModule } from './infra/infra.module';
 import { CallsModule } from './modules/members/calls/calls.module';
 import { ChatsModule } from './modules/members/chats/chats.module';
 import { BusinessModule } from './modules/members/business/business.module';
+import { DriverModule } from './modules/members/driver/driver.module';
 import { OrdersModule } from './modules/members/orders/orders.module';
 import { PeopleModule } from './modules/members/people/people.module';
 import { PushModule } from './modules/members/push/push.module';
@@ -28,6 +29,7 @@ import { HealthController } from './health.controller';
     PushModule,
     OrdersModule,
     BusinessModule,
+    DriverModule,
     RealtimeBridgeModule,
     ServicesBridgeModule,
     CallsModule,

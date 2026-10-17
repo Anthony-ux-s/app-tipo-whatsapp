@@ -65,8 +65,9 @@ export interface OrderQuote {
 }
 
 /**
- * Pagado → el negocio lo acepta (preparing) o lo rechaza (rejected) → listo: Rapidito busca motorizado
- * (searching_driver) → en camino → entregado.
+ * Pagado → el negocio lo acepta (preparing) o lo rechaza (rejected) → listo: se ofrece a los
+ * repartidores de Rapidito (searching_driver) → uno lo toma y va a la tienda (driver_assigned) → la
+ * tienda se lo entrega y va al cliente (on_the_way) → entregado con el código del cliente.
  */
 export type OrderStatus =
   | 'pending_payment'
@@ -74,6 +75,7 @@ export type OrderStatus =
   | 'preparing'
   | 'rejected'
   | 'searching_driver'
+  | 'driver_assigned'
   | 'on_the_way'
   | 'delivered'
   | 'payment_expired'
@@ -96,6 +98,14 @@ export interface OrderDelivery {
   updatedAt: string;
 }
 
+/** Cada paso del pedido con su hora: la constancia que ven el cliente y el negocio. */
+export interface OrderTimelineEntry {
+  status: OrderStatus;
+  at: string;
+  /** Detalle del paso (p. ej. «Confirmado con el código del cliente · Carlos Huamán»). */
+  note?: string;
+}
+
 /** Negocio que atiende un servicio (p. ej. la tienda del Mercado) y su dueño en Parla. */
 export interface BusinessInfo {
   id: string;
@@ -108,6 +118,8 @@ export interface OrderBusiness {
   name: string;
   /** Cuenta del dueño en Parla, para escribirle por chat. */
   ownerId: string;
+  /** Dónde recoge el repartidor. */
+  address: string;
 }
 
 export interface Order {
@@ -124,6 +136,12 @@ export interface Order {
   address: DeliveryAddress;
   payment: OrderPayment;
   delivery: OrderDelivery | null;
+  timeline: OrderTimelineEntry[];
+  /**
+   * Código de entrega (como el PIN de Rappi): solo lo recibe el cliente, y se lo dicta al repartidor al
+   * recibir el pedido. Sin él no se puede marcar como entregado.
+   */
+  deliveryCode?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -139,6 +157,44 @@ export interface OrderCustomer {
 export interface BusinessOrder extends Order {
   customer: OrderCustomer;
 }
+
+/** Repartidor de Rapidito (cuenta de Parla con su vehículo). */
+export interface DriverInfo {
+  vehicle: string;
+  plate: string;
+}
+
+/** Pedido tal como lo ve un repartidor: qué recoge, dónde, adónde lo lleva y cuánto gana. */
+export interface DriverOrder {
+  id: string;
+  status: OrderStatus;
+  business: { name: string; address: string };
+  /** Adónde lo lleva. */
+  address: DeliveryAddress;
+  customerName: string;
+  lines: OrderLine[];
+  /** Lo que gana el repartidor por la entrega (la tarifa de delivery). */
+  deliveryFeeCents: number;
+  /** Lo tiene este repartidor (si no, es una oferta disponible). */
+  mine: boolean;
+  timeline: OrderTimelineEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DriverOrders {
+  /** Listos para recoger, sin repartidor. */
+  available: DriverOrder[];
+  /** Los que tomó este repartidor (en curso y entregados). */
+  mine: DriverOrder[];
+}
+
+export interface DeliverOrderRequest {
+  code: string;
+}
+
+/** Con quién chatear sobre un pedido. */
+export type OrderContactRole = 'business' | 'customer' | 'driver';
 
 /** Respuesta al crear un pedido: el pedido y el QR para pagarlo. */
 export type CreateOrderRequest = QuoteRequest;

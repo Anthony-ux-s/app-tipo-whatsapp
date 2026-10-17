@@ -14,9 +14,8 @@ import (
 	"github.com/parla/gateway/internal/translators/rapidito"
 )
 
-// Recorrido completo contra los simuladores reales (services/providers). Solo corre si se indica
-// dónde están: PARLA_PROVIDERS_URL=http://localhost:4913 go test ./internal/orders -run Integracion
-// (conviene arrancarlos con RAPIDITO_STEP_MS=200 para no esperar).
+// Recorrido contra los simuladores reales (services/providers): buscar, cotizar, cobrar y pagar. Solo
+// corre si se indica dónde están: PARLA_PROVIDERS_URL=http://localhost:4913 go test ./internal/orders -run Integracion
 func TestIntegracionPedidoCompletoContraLosSimuladores(t *testing.T) {
 	base := os.Getenv("PARLA_PROVIDERS_URL")
 	if base == "" {
@@ -30,10 +29,9 @@ func TestIntegracionPedidoCompletoContraLosSimuladores(t *testing.T) {
 		Payments: pagaya.Client{BaseURL: base, HTTP: client},
 		Core:     core,
 	}
-	hooks := &HTTP{Orch: orch, PagayaSecret: "pagaya-dev-secret", RapiditoSecret: "rapidito-dev-secret"}
+	hooks := &HTTP{Orch: orch, PagayaSecret: "pagaya-dev-secret"}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /hooks/pagaya", hooks.PagayaHook)
-	mux.HandleFunc("POST /hooks/rapidito", hooks.RapiditoHook)
 	gw := httptest.NewServer(mux)
 	defer gw.Close()
 	orch.PublicURL = gw.URL
@@ -64,32 +62,12 @@ func TestIntegracionPedidoCompletoContraLosSimuladores(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// El negocio acepta (en el core) y avisa que está listo: sale el motorizado.
+	// El aviso firmado de la billetera llega al gateway: el pedido queda pagado, esperando al negocio
+	// (desde ahí lo siguen el core, el negocio y los repartidores de Parla).
 	waitStatus(t, core, order.ID, services.Paid)
-	if _, err := core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{ExpectStatus: services.Paid, Status: services.Preparing}); err != nil {
-		t.Fatal(err)
+	if current, _ := core.GetOrder(ctx, order.ID); current.Payment.PaidAt == nil || current.DeliveryQuoteID == "" {
+		t.Fatalf("pedido pagado sin datos completos: %+v", current)
 	}
-	if _, err := orch.Ready(ctx, owner, order.ID); err != nil {
-		t.Fatal(err)
-	}
-
-	deadline := time.Now().Add(20 * time.Second)
-	var seen []services.OrderStatus
-	for time.Now().Before(deadline) {
-		current, _ := core.GetOrder(ctx, order.ID)
-		if len(seen) == 0 || seen[len(seen)-1] != current.Status {
-			seen = append(seen, current.Status)
-		}
-		if current.Status == services.Delivered {
-			if current.Delivery == nil || current.Delivery.DriverName == nil || current.Payment.PaidAt == nil {
-				t.Fatalf("pedido entregado sin datos completos: %+v", current)
-			}
-			t.Logf("estados: %v · motorizado: %s", seen, *current.Delivery.DriverName)
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("el pedido no llegó a entregado; estados vistos: %v", seen)
 }
 
 func waitStatus(t *testing.T, core *fakeCore, id string, want services.OrderStatus) {

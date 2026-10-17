@@ -4,7 +4,7 @@ import { openSession, unique } from './helpers';
 const soles = (text: string | null) => Math.round(Number((text ?? '').replace(/[^\d.]/g, '')) * 100);
 
 test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito', () => {
-  test('Laura paga con QR, la tienda acepta y le escribe, Laura responde, y Rapidito lo entrega', async ({ browser }) => {
+  test('Laura paga con QR, la tienda acepta y le escribe, Carlos de Rapidito lo recoge y lo entrega con el código de Laura', async ({ browser }) => {
     test.setTimeout(200_000);
     const laura = await openSession(browser, 'laura');
     const page = laura.page;
@@ -90,18 +90,54 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     await page.getByLabel('Escribe un mensaje').press('Enter');
     await expect(elena.page.getByTestId('message').filter({ hasText: answer })).toBeVisible({ timeout: 15_000 });
 
-    // Listo: Elena llama a Rapidito y Laura sigue el delivery hasta la puerta
+    // Listo: Elena llama a Rapidito y el pedido se ofrece a los repartidores
     await elena.page.goto(elenaOrderUrl);
     await elena.page.getByTestId('ready-order').click();
-    await expect(elena.page.getByTestId('order-status')).toHaveAttribute('data-status', /searching_driver|on_the_way|delivered/);
+    await expect(elena.page.getByTestId('order-status')).toHaveAttribute('data-status', 'searching_driver');
+
+    // Carlos, repartidor de Rapidito, lo ve en «Para recoger» (con lo que gana) y lo toma
+    const carlos = await openSession(browser, 'repartidor');
+    await carlos.page.goto('/app/pedidos');
+    await carlos.page.getByTestId('my-rapidito').click();
+    await expect(carlos.page.getByRole('heading', { name: 'Rapidito' })).toBeVisible();
+    const offer = carlos.page.getByTestId('driver-order-item').filter({ hasText: 'Bodega MercaYa' }).filter({ hasText: 'Laura' }).first();
+    await expect(offer).toContainText(`Ganas S/ ${(deliveryCents / 100).toFixed(2)}`);
+    await offer.click();
+    await carlos.page.getByTestId('take-order').click();
+    await expect(carlos.page.getByTestId('order-status')).toHaveAttribute('data-status', 'driver_assigned');
+
+    // Laura ve a su repartidor y su código de entrega; la tienda ve que Carlos va por el pedido
     await page.goto(orderUrl);
-    await expect(page.getByTestId('delivery-card')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId('delivery-card')).toContainText('Rapidito');
-    await expect(page.getByTestId('order-status')).toHaveAttribute('data-status', 'delivered', { timeout: 60_000 });
-    await expect(page.getByTestId('delivery-card')).toContainText(/¡Entregado( por .+)?!/);
-    await expect(elena.page.getByTestId('order-status')).toHaveAttribute('data-status', 'delivered', { timeout: 15_000 });
+    await expect(page.getByTestId('delivery-card')).toContainText('Carlos Huamán va a recoger tu pedido');
+    const code = (await page.getByTestId('delivery-code').textContent())!.trim();
+    expect(code).toMatch(/^\d{4}$/);
+    await elena.page.goto(elenaOrderUrl);
+    await expect(elena.page.getByTestId('business-delivery')).toContainText('Carlos Huamán');
+    await expect(elena.page.getByText(code)).toHaveCount(0); // el código es solo del cliente
+
+    // La tienda le entrega el pedido a Carlos: recién ahí va en camino
+    await elena.page.getByTestId('handoff-order').click();
+    await expect(elena.page.getByTestId('order-status')).toHaveAttribute('data-status', 'on_the_way');
+    await expect(carlos.page.getByTestId('order-status')).toHaveAttribute('data-status', 'on_the_way', { timeout: 15_000 });
+
+    // Un código equivocado no entrega; con el de Laura, sí
+    await carlos.page.getByLabel('Código de entrega').fill(code === '0000' ? '1111' : '0000');
+    await carlos.page.getByTestId('deliver-order').click();
+    await expect(carlos.page.getByRole('alert')).toContainText('Código incorrecto');
+    await carlos.page.getByLabel('Código de entrega').fill(code);
+    await carlos.page.getByTestId('deliver-order').click();
+    await expect(carlos.page.getByTestId('delivery-proof')).toBeVisible();
+
+    // Todos lo ven entregado en vivo; la tienda, con la constancia del código
+    await expect(page.getByTestId('order-status')).toHaveAttribute('data-status', 'delivered', { timeout: 15_000 });
+    await expect(page.getByTestId('delivery-card')).toContainText('¡Entregado por Carlos Huamán!');
+    await expect(elena.page.getByTestId('delivery-proof')).toContainText('Confirmado con el código del cliente', { timeout: 15_000 });
+    await expect(elena.page.getByTestId('order-timeline')).toContainText('Recogido en la tienda');
     expect(elena.consoleErrors).toEqual([]);
+    // El único error esperado es el 400 del código equivocado que se probó a propósito.
+    expect(carlos.consoleErrors.filter((e) => !e.includes('status of 400'))).toEqual([]);
     await elena.context.close();
+    await carlos.context.close();
 
     // Queda en «Mis pedidos»
     await page.goto('/app/pedidos');

@@ -90,10 +90,7 @@ func New(opts Options) http.Handler {
 		mux.HandleFunc("GET /api/services/mercado/products", authed(svc.Products))
 		mux.HandleFunc("POST /api/services/mercado/quote", authed(svc.Quote))
 		mux.HandleFunc("POST /api/services/mercado/orders", authed(svc.Create))
-		// Aceptar o rechazar lo resuelve el core; «listo» pasa por aquí porque despacha a Rapidito.
-		mux.HandleFunc("POST /api/business/orders/{id}/ready", authed(svc.Ready))
 		mux.HandleFunc("POST /hooks/pagaya", svc.PagayaHook)
-		mux.HandleFunc("POST /hooks/rapidito", svc.RapiditoHook)
 	}
 	mux.HandleFunc("/api/", limited(proxy.ServeHTTP))
 	mux.Handle("/", proxy)

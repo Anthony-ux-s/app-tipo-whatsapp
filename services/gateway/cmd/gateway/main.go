@@ -64,8 +64,7 @@ func main() {
 			Core:      orders.HTTPCore{BaseURL: cfg.CoreURL, Token: cfg.InternalToken, HTTP: client},
 			PublicURL: cfg.PublicURL,
 		},
-		PagayaSecret:   cfg.PagayaSecret,
-		RapiditoSecret: cfg.RapiditoSecret,
+		PagayaSecret: cfg.PagayaSecret,
 	}
 
 	server := &http.Server{

@@ -42,12 +42,13 @@ console.log(`
 \x1b[32m✔ Parla está listo\x1b[0m
   Abre http://localhost:${ports.web} en el navegador (o en tu celular, en la misma red, para instalarla).
   Usuarios de prueba (contraseña: Parla2026!):
-    laura              la más activa: grupos, tareas y pedidos
+    laura              la más activa: grupos, chats y pedidos
     andres             para chatear o llamar a Laura
-    tienda             Elena, dueña de Bodega MercaYa: acepta pedidos y llama a Rapidito
+    tienda             Elena, dueña de Bodega MercaYa: acepta, alista y entrega al repartidor
+    repartidor         Carlos, repartidor de Rapidito (también: repartidora, Lucía)
     camila             creó el grupo «Diseño tienda en línea»
     +57 300 123 4567   Sofía (entra con su teléfono)
-  Servicios → Mercado: busca «un kilo de azúcar, arroz», paga con el QR; con «tienda» acéptalo en
-  Delivery → Mi negocio, llama a Rapidito y sigue el delivery.
+  Servicios → Mercado: busca «un kilo de azúcar, arroz» y paga con el QR. Con «tienda» acéptalo en
+  Delivery → Mi negocio; con «repartidor» tómalo en Delivery → Rapidito y entrégalo con el código del cliente.
   Ctrl + C para detener.
 `);

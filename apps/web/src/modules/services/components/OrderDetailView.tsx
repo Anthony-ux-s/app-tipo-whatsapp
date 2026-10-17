@@ -1,4 +1,4 @@
-import { Bike, Check, ChefHat, ExternalLink, MapPin, MessageCircle, PackageCheck, ShoppingBasket, Smartphone, Store } from 'lucide-react';
+import { Bike, Check, ChefHat, ExternalLink, KeyRound, MapPin, MessageCircle, PackageCheck, ShoppingBasket, Smartphone, Store } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { QrCode } from '@shared/ui/QrCode';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
@@ -6,11 +6,12 @@ import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { ORDER_STEPS } from '../const/services.const';
 import { useOrderChat } from '../hooks/use-order-chat.hook';
 import { useOrderDetail } from '../hooks/use-orders.hook';
-import { AmountRow, OrderStatusBadge, PageHeader, ServicePage } from './ServicesUi';
+import { AmountRow, OrderStatusBadge, OrderTimeline, PageHeader, ServicePage } from './ServicesUi';
 
 /**
- * Un pedido: QR para pagar mientras espera; luego el negocio lo acepta y lo prepara, y Rapidito lo
- * lleva, todo en vivo. Desde aquí se le escribe al negocio.
+ * Un pedido: QR para pagar mientras espera; luego la tienda lo acepta y lo prepara, un repartidor de
+ * Rapidito lo recoge y lo trae, todo en vivo. Al recibirlo, el cliente le dicta su código de entrega.
+ * Desde aquí se le escribe a la tienda o al repartidor.
  */
 export function OrderDetailView() {
   const d = useOrderDetail();
@@ -97,34 +98,53 @@ export function OrderDetailView() {
                     : businessName}
             </p>
             <p className="text-sm text-ink-soft">
-              {order.status === 'paid' ? 'Te avisamos apenas lo acepte.' : order.status === 'preparing' ? 'Rapidito lo recogerá cuando esté listo.' : '¿Dudas sobre tu pedido? Escríbele.'}
+              {order.status === 'paid' ? 'Te avisamos apenas lo acepte.' : order.status === 'preparing' ? 'Un repartidor de Rapidito lo recogerá cuando esté listo.' : '¿Dudas sobre tu pedido? Escríbele.'}
             </p>
           </div>
-          <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={chat.open} loading={chat.opening} data-testid="chat-business">
+          <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={() => chat.open('business')} loading={chat.opening === 'business'} data-testid="chat-business">
             Escribir
           </Button>
         </section>
       )}
 
-      {order.delivery && (
+      {order.deliveryCode && order.status !== 'delivered' && (
+        <section className="flex items-center gap-4 rounded-2xl border-2 border-dashed border-teal-300 bg-teal-50 p-4 md:p-5 dark:border-teal-800 dark:bg-teal-950/40" aria-label="Código de entrega">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand text-white">
+            <KeyRound className="size-6" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-ink-soft">Tu código de entrega</p>
+            <p className="font-mono text-3xl font-extrabold tracking-[0.3em] text-ink" data-testid="delivery-code">{order.deliveryCode}</p>
+            <p className="text-xs text-ink-soft">Dáselo al repartidor solo cuando tengas tu pedido en la mano.</p>
+          </div>
+        </section>
+      )}
+
+      {(order.status === 'searching_driver' || order.delivery) && (
         <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Delivery" data-testid="delivery-card">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-600 to-cyan-700 text-white">
             {order.status === 'delivered' ? <PackageCheck className="size-6" /> : <Bike className="size-6" />}
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="font-bold text-ink">
               {order.status === 'delivered'
-                ? `¡Entregado${order.delivery.driverName ? ` por ${order.delivery.driverName}` : ''}!`
-                : order.delivery.driverName
-                  ? `${order.delivery.driverName} lleva tu pedido`
-                  : 'Buscando un motorizado cerca…'}
+                ? `¡Entregado${order.delivery?.driverName ? ` por ${order.delivery.driverName}` : ''}!`
+                : order.status === 'searching_driver'
+                  ? 'Buscando un repartidor de Rapidito…'
+                  : order.status === 'driver_assigned'
+                    ? `${order.delivery?.driverName ?? 'Tu repartidor'} va a recoger tu pedido`
+                    : `${order.delivery?.driverName ?? 'Tu repartidor'} lleva tu pedido`}
             </p>
             <p className="text-sm text-ink-soft">
-              {order.delivery.provider}
-              {order.delivery.vehicle ? ` · ${order.delivery.vehicle}` : ''}
-              {order.delivery.etaMinutes && order.status !== 'delivered' ? ` · llega en ~${order.delivery.etaMinutes} min` : ''}
+              Rapidito
+              {order.delivery?.vehicle ? ` · ${order.delivery.vehicle}` : ''}
             </p>
           </div>
+          {order.delivery && order.status !== 'delivered' && (
+            <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={() => chat.open('driver')} loading={chat.opening === 'driver'} data-testid="chat-driver">
+              Escribir
+            </Button>
+          )}
         </section>
       )}
 
@@ -166,6 +186,8 @@ export function OrderDetailView() {
           {order.address.reference ? ` · ${order.address.reference}` : ''}
         </p>
       </section>
+
+      {order.timeline.length > 1 && <OrderTimeline entries={order.timeline} />}
     </ServicePage>
   );
 }

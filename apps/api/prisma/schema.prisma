@@ -49,6 +49,8 @@ model User {
   orders            Order[]
   /// Negocio del que es dueño (atiende pedidos de un servicio); null para los clientes.
   business          Business?
+  /// Perfil de repartidor de Rapidito; null si no reparte.
+  driver            Driver?
 }
 
 model Conversation {
@@ -179,41 +181,52 @@ model StoredFile {
 /// precios de la tienda y la tarifa del delivery; el core lo guarda y avisa cada cambio al cliente y al negocio.
 model Order {
   /// Id generado por el gateway ("ord_…").
-  id               String   @id
-  userId           String
+  id                   String   @id
+  userId               String
   /// ServiceId: mercado | salud
-  service          String
-  /// OrderStatus: pending_payment | paid | preparing | rejected | searching_driver | on_the_way | delivered | payment_expired | cancelled
-  status           String
+  service              String
+  /// OrderStatus: pending_payment | paid | preparing | rejected | searching_driver | driver_assigned | on_the_way | delivered | payment_expired | cancelled
+  status               String
   /// JSON OrderLine[]
-  lines            String
-  subtotalCents    Int
-  deliveryFeeCents Int
-  totalCents       Int
-  currency         String
+  lines                String
+  subtotalCents        Int
+  deliveryFeeCents     Int
+  totalCents           Int
+  currency             String
   /// JSON DeliveryAddress
-  address          String
+  address              String
   /// JSON OrderPayment (QR, URL de pago, vencimiento, fecha de pago)
-  payment          String
-  /// Cotización de Rapidito que se despacha cuando el negocio marca el pedido como listo.
-  deliveryQuoteId  String
-  /// JSON OrderDelivery (motorizado, vehículo, tiempo estimado); null hasta despacharlo.
-  delivery         String?
+  payment              String
+  /// Cotización de Rapidito con la que se calculó la tarifa de delivery.
+  deliveryQuoteId      String
+  /// JSON OrderDelivery (repartidor, vehículo, tiempo estimado); null hasta que un repartidor lo toma.
+  delivery             String?
   /// Negocio que prepara el pedido; null en pedidos sin negocio asignado.
-  businessId       String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  businessId           String?
+  /// Repartidor de Rapidito que lo tomó; null mientras nadie lo toma.
+  driverId             String?
+  /// Código de entrega de 4 dígitos (solo lo ve el cliente); el repartidor lo pide al entregar.
+  deliveryCode         String
+  /// Intentos fallidos del código: al quinto se bloquea la entrega con código.
+  deliveryCodeAttempts Int      @default(0)
+  /// JSON OrderTimelineEntry[]: cada paso con su hora (constancia para cliente y negocio).
+  timeline             String   @default("[]")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  driver   Driver?   @relation(fields: [driverId], references: [userId], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([businessId, createdAt])
+  @@index([driverId, createdAt])
+  @@index([status, createdAt])
 }
 
 /**
  * Negocio que atiende los pedidos de un servicio (hoy, la tienda del Mercado) y su dueño en Parla.
- * El dueño acepta cada pedido, lo prepara y avisa a Rapidito cuando está listo.
+ * El dueño acepta cada pedido, lo prepara, avisa cuando está listo y se lo entrega al repartidor.
  */
 model Business {
   id        String   @id @default(cuid())
@@ -221,9 +234,24 @@ model Business {
   /// ServiceId que atiende: mercado | salud (uno por servicio).
   service   String   @unique
   ownerId   String   @unique
+  /// Dirección donde el repartidor recoge los pedidos.
+  address   String
   createdAt DateTime @default(now())
 
   owner  User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  orders Order[]
+}
+
+/// Repartidor de Rapidito: una cuenta de Parla con su vehículo. Toma los pedidos listos, los recoge
+/// en la tienda y los entrega con el código del cliente.
+model Driver {
+  userId    String   @id
+  /// Tipo de vehículo («Moto», «Bicicleta»…).
+  vehicle   String
+  plate     String
+  createdAt DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders Order[]
 }
 

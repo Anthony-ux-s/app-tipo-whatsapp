@@ -1,17 +1,20 @@
 import type { OrderLine, OrderStatus, PushPayload } from '@parla/types';
+import { randomInt } from 'node:crypto';
 import { ConflictError, ValidationError } from './domain-error';
 
 /**
  * Estados de un pedido y transiciones válidas. Un pedido nunca retrocede: un aviso repetido o
- * desordenado de la pasarela o del delivery no puede «despagar» ni «desentregar» nada.
- * Pagado, el negocio lo acepta (preparing) o lo rechaza; al estar listo sale el motorizado de Rapidito.
+ * desordenado no puede «despagar» ni «desentregar» nada. Pagado, el negocio lo acepta (preparing) o
+ * lo rechaza; listo, se ofrece a los repartidores; uno lo toma (driver_assigned), la tienda se lo
+ * entrega (on_the_way) y el repartidor lo entrega con el código del cliente (delivered).
  */
 const NEXT: Record<OrderStatus, readonly OrderStatus[]> = {
   pending_payment: ['paid', 'payment_expired', 'cancelled'],
   paid: ['preparing', 'rejected', 'cancelled'],
   preparing: ['searching_driver', 'cancelled'],
   rejected: [],
-  searching_driver: ['on_the_way', 'delivered', 'cancelled'],
+  searching_driver: ['driver_assigned', 'cancelled'],
+  driver_assigned: ['on_the_way', 'cancelled'],
   on_the_way: ['delivered'],
   delivered: [],
   payment_expired: [],
@@ -60,9 +63,11 @@ export function orderPush(orderId: string, status: OrderStatus, totalCents: numb
     case 'rejected':
       return { title: 'Tu pedido no fue aceptado', body: `${business} no puede atender tu pedido. Escríbele desde el pedido.`, url, tag };
     case 'searching_driver':
-      return { title: 'Tu pedido está listo', body: 'Rapidito está asignando un motorizado.', url, tag };
+      return { title: 'Tu pedido está listo', body: 'Buscando un repartidor de Rapidito.', url, tag };
+    case 'driver_assigned':
+      return { title: 'Ya tienes repartidor', body: `${driverName ?? 'Un repartidor'} va a recoger tu pedido. Ten a mano tu código de entrega.`, url, tag };
     case 'on_the_way':
-      return { title: 'Tu pedido va en camino', body: driverName ? `${driverName} lleva tu pedido.` : 'Un motorizado lleva tu pedido.', url, tag };
+      return { title: 'Tu pedido va en camino', body: driverName ? `${driverName} lleva tu pedido.` : 'Un repartidor lleva tu pedido.', url, tag };
     case 'delivered':
       return { title: 'Pedido entregado', body: '¡Que lo disfrutes! Gracias por comprar con Parla.', url, tag };
     case 'payment_expired':
@@ -82,3 +87,34 @@ export function businessOrderPush(orderId: string, status: OrderStatus, totalCen
     tag: `business-order-${orderId}`,
   };
 }
+
+/** Aviso push al dueño cuando el repartidor llega por el pedido y cuando se entregó al cliente. */
+export function businessDeliveryPush(orderId: string, status: OrderStatus, driverName: string | null, customerName: string): PushPayload | null {
+  const url = `/app/negocio/pedidos/${orderId}`;
+  const tag = `business-order-${orderId}`;
+  if (status === 'driver_assigned') {
+    return { title: 'Repartidor en camino', body: `${driverName ?? 'Un repartidor'} va a tu tienda a recoger el pedido de ${customerName}.`, url, tag };
+  }
+  if (status === 'delivered') {
+    return { title: 'Pedido entregado', body: `${customerName} recibió su pedido (confirmado con su código).`, url, tag };
+  }
+  return null;
+}
+
+/** Aviso push a los repartidores: hay un pedido listo para recoger. */
+export function driverOfferPush(orderId: string, businessName: string, feeCents: number): PushPayload {
+  return {
+    title: 'Pedido para recoger',
+    body: `${businessName} tiene un pedido listo. Ganas ${formatSoles(feeCents)}.`,
+    url: `/app/rapidito/pedidos/${orderId}`,
+    tag: `driver-offer-${orderId}`,
+  };
+}
+
+/** Código de entrega de 4 dígitos (como el PIN de Rappi o el código de PedidosYa). */
+export function newDeliveryCode(): string {
+  return String(randomInt(0, 10_000)).padStart(4, '0');
+}
+
+/** Intentos con un código equivocado antes de bloquear la entrega (para que no se adivine). */
+export const MAX_DELIVERY_CODE_ATTEMPTS = 5;

@@ -42,9 +42,9 @@ export function useBusinessOrders() {
   };
 }
 
-type Action = 'accept' | 'reject' | 'ready';
+type Action = 'accept' | 'reject' | 'ready' | 'handoff';
 
-/** Un pedido del negocio: aceptarlo, rechazarlo o avisar que está listo para Rapidito. */
+/** Un pedido del negocio: aceptarlo o rechazarlo, avisar que está listo y entregarlo al repartidor. */
 export function useBusinessOrderDetail() {
   const { orderId = '' } = useParams();
   const navigate = useNavigate();
@@ -79,7 +79,8 @@ export function useBusinessOrderDetail() {
     busy,
     retry,
     accept: () => run('accept', 'Pedido aceptado. ¡A prepararlo!'),
-    ready: () => run('ready', 'Listo. Rapidito está asignando un motorizado.'),
+    ready: () => run('ready', 'Listo. Avisamos a los repartidores de Rapidito.'),
+    handoff: () => run('handoff', 'Entregado al repartidor. Va en camino al cliente.'),
     confirmReject,
     askReject: () => setConfirmReject(true),
     cancelReject: () => setConfirmReject(false),

@@ -28,14 +28,13 @@ el tiempo real (Elixir), y levanta cinco procesos:
 | Servicio | URL | Quién lo ve |
 | --- | --- | --- |
 | Web (PWA) | http://localhost:3100 | el navegador |
-| **Gateway** (Go) | http://localhost:4100 — `/api`, `/ws`, `/hooks`, salud en `/gateway/health` | la única puerta del backend |
+| **Gateway** (Go) | http://localhost:4100 — `/api`, `/ws`, `/hooks/pagaya`, salud en `/gateway/health` | la única puerta del backend |
 | Core (NestJS) | http://localhost:4101/api | solo el gateway y el tiempo real |
 | Tiempo real (Elixir) | http://localhost:4102 | solo el gateway y el core |
 | APIs externas simuladas | http://localhost:4103 — MercaYa (tienda), Rapidito (delivery), PagaYa (billetera) | el gateway, y la página de pago que abre el QR |
 
 Los puertos se pueden cambiar con `PARLA_WEB_PORT`, `PARLA_GATEWAY_PORT`, `PARLA_CORE_PORT`,
-`PARLA_REALTIME_PORT` y `PARLA_PROVIDERS_PORT`. `RAPIDITO_STEP_MS` (4000 por defecto) controla cuánto
-tarda el delivery simulado en cada paso.
+`PARLA_REALTIME_PORT` y `PARLA_PROVIDERS_PORT`.
 
 Para instalarla en el celular, abre la web desde el navegador del teléfono y elige «Agregar a la
 pantalla de inicio». La cámara, el micrófono y las notificaciones push exigen HTTPS fuera de
@@ -63,7 +62,9 @@ Contraseña para todos: **`Parla2026!`**
 | `laura` | Laura Méndez | La más activa: grupos, chats y pedidos |
 | `andres` | Andrés Rojas | Para chatear o llamar a Laura |
 | `camila` | Camila Torres | Creó (y administra) el grupo «Diseño tienda en línea» |
-| `tienda` | Elena Condori | **Dueña de Bodega MercaYa**: recibe los pedidos del Mercado, los acepta y llama a Rapidito |
+| `tienda` | Elena Condori | **Dueña de Bodega MercaYa**: recibe los pedidos del Mercado, los acepta, los alista y se los entrega al repartidor |
+| `repartidor` | Carlos Huamán | **Repartidor de Rapidito** (moto B7K-482): toma pedidos listos, los recoge y los entrega con el código del cliente |
+| `repartidora` | Lucía Ramos | **Repartidora de Rapidito** (moto D5T-663): para ver que el primero que toma un pedido se lo queda |
 | `+57 300 123 4567` | Sofía Ramírez | Entra con su **teléfono** |
 
 Todas las cuentas de ejemplo tienen el teléfono verificado (Andrés `+57 300 555 0101`, Camila `…0102`,
@@ -79,10 +80,16 @@ pones tu nombre, un usuario opcional y la contraseña.
   pulsa el botón de video o de teléfono en su chat.
 - **Compra**: *Servicios → Mercado*, busca «un kilo de azúcar, arroz», agrega, escribe la dirección y
   pulsa *Pagar con QR*. Escanea el QR con el celular (en la misma red) o pulsa *Pagar desde este
-  celular*: se abre la billetera simulada. Al pagar, el pedido le llega a la tienda: entra con
-  `tienda` en otra ventana, *Delivery → Mi negocio*, acepta el pedido y pulsa *Listo · llamar a
-  Rapidito*; el cliente lo ve pasar a «Preparando», «Motorizado», «En camino» y «Entregado». Desde el
-  pedido, cliente y tienda se escriben por el chat (en los dos sentidos).
+  celular*: se abre la billetera simulada.
+- **Delivery con los tres roles** (una ventana privada para cada uno):
+  1. `tienda`: *Delivery → Mi negocio*, abre el pedido, *Aceptar pedido* y luego *Listo · llamar a Rapidito*.
+  2. `repartidor`: *Delivery → Rapidito · Repartidor*, el pedido aparece en «Para recoger» con lo que
+     ganas; ábrelo y *Tomar este pedido*.
+  3. `tienda`: cuando el repartidor llega, *Le entregué el pedido a Carlos Huamán*.
+  4. El cliente ve su **código de entrega** en el pedido; el repartidor se lo pide y lo escribe en
+     *Confirmar entrega*. Sin el código correcto no se puede marcar como entregado.
+  Todos lo ven en vivo, con el historial de cada paso, y cualquiera se escribe con los otros desde el
+  pedido (cliente ↔ tienda, cliente ↔ repartidor, tienda ↔ repartidor).
 
 ## Qué tiene esta versión
 
@@ -100,14 +107,22 @@ pones tu nombre, un usuario opcional y la contraseña.
   *Productos + Delivery = Total* antes de pagar. Nunca usa los precios que mande el navegador.
 - **Pago con QR tipo Yape** (billetera PagaYa): QR en pantalla, cuenta regresiva del cobro y botón para
   pagar desde el mismo celular. El aviso de pago llega firmado al gateway.
-- **Delivery Rapidito**, para los dos lados:
-  - **Cliente**: el pedido avanza en vivo (*Pago → Preparando → Motorizado → En camino → Entregado*)
-    con el nombre del motorizado y el tiempo estimado, y te llega un push si no tienes Parla abierta.
+- **Delivery Rapidito** (tu propia flota, al estilo de PedidosYa y Rappi), para los tres lados:
+  - **Cliente**: el pedido avanza en vivo (*Pago → Preparando → Repartidor → En camino → Entregado*)
+    con el nombre y la moto del repartidor, un **código de entrega de 4 dígitos** (como el PIN de
+    Rappi) y el historial con la hora de cada paso. Le llega un push en cada etapa.
   - **Dueño del negocio** (*Delivery → Mi negocio*): le llegan los pedidos pagados (con push), los
-    acepta o rechaza, y cuando están listos pulsa *Listo · llamar a Rapidito*: recién ahí el gateway
-    pide la moto. Pestañas Nuevos · Preparando · Con Rapidito · Terminados.
-  - **Chat del pedido**: cliente y dueño se escriben desde el pedido, en los dos sentidos, con el
-    chat cifrado de siempre. El core solo le dice a cada uno quién es la otra parte, y solo a ellos.
+    acepta o rechaza, avisa cuando están listos, ve qué repartidor viene y **confirma que se lo
+    entregó** (como «Despachado» en PedidosYa). Al final ve la **constancia**: entregado a quién, a qué
+    hora y confirmado con el código del cliente. Pestañas Nuevos · Preparando · Con Rapidito · Terminados.
+  - **Repartidor** (*Delivery → Rapidito · Repartidor*): ve los pedidos listos con la tienda, el destino
+    y lo que gana; el primero que lo toma se lo queda (una entrega a la vez). Recoge en la tienda y
+    entrega **solo con el código del cliente**: con 5 códigos equivocados se bloquea, para que no se
+    pueda adivinar.
+  - **Chat del pedido**: cliente, tienda y repartidor se escriben entre ellos desde el pedido, en los
+    dos sentidos, con el chat cifrado de siempre. El core solo dice quién es la otra parte, y solo a
+    quienes participan en ese pedido.
+  - El código lo ve solo el cliente: ni la tienda ni el repartidor lo reciben del servidor.
 - **Mis pedidos**: historial con el estado de cada uno.
 - **Salud**: aparece como «Próximamente». La arquitectura ya permite sumarlo con su propio traductor.
 
@@ -172,8 +187,8 @@ pones tu nombre, un usuario opcional y la contraseña.
  navegador ── HTTPS /api ────►│   gateway  Go    │                                 ▲  │ /internal/publish
             ── WSS  /ws  ────►│     (4100)       │── WebSocket /link ─────────► tiempo real Elixir (4102)
                               │  traductores +   │── traductor mercaya ───────► MercaYa  (tienda)    ┐
- billetera / delivery ─/hooks►│  orquestador     │── traductor rapidito  ───────► Rapidito   (delivery)  ├ 4103
-   (avisos firmados)          └──────────────────┘── traductor pagaya  ───────► PagaYa   (billetera) ┘
+   billetera ─/hooks/pagaya ─►│  orquestador     │── traductor rapidito  ───────► Rapidito (tarifa)    ├ 4103
+   (aviso firmado)            └──────────────────┘── traductor pagaya  ───────► PagaYa   (billetera) ┘
 ```
 
 - **Gateway (Go)**: única puerta pública. Valida el JWT y limita peticiones.
@@ -224,7 +239,7 @@ si no los defines, y el gateway sirve todo en el puerto `PORT` (4100).
 
 En producción ningún servicio arranca con secretos de desarrollo:
 - `JWT_SECRET` debe tener 32+ caracteres;
-- `INTERNAL_TOKEN`, `PAGAYA_WEBHOOK_SECRET` y `RAPIDITO_WEBHOOK_SECRET`, 24+.
+- `INTERNAL_TOKEN` y `PAGAYA_WEBHOOK_SECRET`, 24+.
 
 El core además envía cabeceras de seguridad con helmet (CSP estricta, HSTS, `nosniff`,
 `frame-ancestors 'none'`).
@@ -242,9 +257,8 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 - **Gateway (Go, 36)**:
   - JWT, límite de peticiones y traductor del chat;
   - traductores de tienda, delivery y billetera: respuestas inválidas, firmas válidas y falsificadas;
-  - orquestador: suma correcta que ignora precios del navegador, el pago espera al negocio, solo el
-    dueño marca «listo» y eso despacha a Rapidito una sola vez (y se puede reintentar si falla), aviso
-    repetido sin efecto, cobro vencido;
+  - orquestador: suma correcta que ignora precios del navegador (con la tarifa de Rapidito), el pago
+    espera al negocio, aviso repetido sin efecto, cobro vencido;
   - rutas sin sesión → 401.
 - **Simuladores (Go, 11)**: búsqueda, stock, cobros con vencimiento, pago idempotente y avisos firmados.
 - **Tiempo real (Elixir, 17)**: llamadas y el enlace con el gateway.
@@ -254,7 +268,7 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
   - menciones, hilos y push;
   - **registro con código por SMS**, foto, correo verificado y **contactos del teléfono** (libreta simulada): encuentra a Laura y conversan;
   - **recupera la cuenta con el correo**: claves nuevas, chat bloqueado hasta que Andrés se lo vuelve a compartir, y lee de nuevo el historial;
-  - **compra completa con los dos roles**: busca, carrito, total, QR, pago en PagaYa; la tienda acepta, se escriben por el chat del pedido en los dos sentidos, llama a Rapidito y el delivery llega hasta «Entregado», en vivo;
+  - **compra completa con los tres roles**: busca, carrito, total, QR, pago en PagaYa; la tienda acepta y se escriben por el chat del pedido en los dos sentidos; la tienda lo alista, el repartidor lo toma, la tienda se lo entrega, un código equivocado no entrega y el de la clienta sí; todos lo ven en vivo y la tienda queda con la constancia;
   - el gateway rechaza precios manipulados;
   - legal, exportar y eliminar la cuenta;
   - vista de celular.

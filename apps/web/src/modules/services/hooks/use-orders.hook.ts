@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { countNewOrders, useBusinessStore } from '@shared/stores/business.store';
+import { availableOrders, useDriverStore } from '@shared/stores/driver.store';
 import { sortOrders, useOrdersStore } from '@shared/stores/orders.store';
 import { errorMessage } from '@shared/utils/http';
 import { isFinalStatus, minutesLeft, orderStepIndex } from '../utils/services.utils';
@@ -13,6 +14,8 @@ export function useOrders() {
   const loadOrders = useOrdersStore((s) => s.loadOrders);
   const business = useBusinessStore((s) => s.business);
   const newBusinessOrders = useBusinessStore((s) => countNewOrders(s.orders));
+  const driver = useDriverStore((s) => s.driver);
+  const driverOffers = useDriverStore((s) => availableOrders(s.orders).length);
   const [error, setError] = useState<string | null>(null);
 
   const reload = () => {
@@ -29,6 +32,9 @@ export function useOrders() {
     /** Si soy dueña de un negocio: su nombre y cuántos pedidos esperan que los acepte. */
     business: business ?? null,
     newBusinessOrders,
+    /** Si reparto para Rapidito: mi vehículo y cuántos pedidos hay para recoger. */
+    driver: driver ?? null,
+    driverOffers,
     open: (id: string) => navigate(`/app/pedidos/${id}`),
     back: () => navigate('/app/servicios'),
   };

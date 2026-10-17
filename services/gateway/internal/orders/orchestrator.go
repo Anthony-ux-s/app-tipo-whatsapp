@@ -1,6 +1,7 @@
-// Package orders orquesta un pedido entre sistemas externos: precios y reserva en la tienda,
-// cotización y despacho del delivery (Rapidito), cobro con QR, y el registro en el core. Entre el
-// pago y el delivery está el negocio: acepta el pedido, lo prepara y avisa cuando está listo.
+// Package orders orquesta un pedido entre sistemas externos: precios y reserva en la tienda, la
+// tarifa del delivery (cotización de Rapidito), cobro con QR, y el registro en el core. Desde el pago,
+// el pedido sigue en el core: el negocio lo acepta y lo prepara, y lo reparten los repartidores de
+// Parla (la flota de Rapidito).
 package orders
 
 import (
@@ -34,10 +35,9 @@ type Commerce interface {
 	Reserve(ctx context.Context, reference string, items []services.CartItem) error
 }
 
-// Delivery: lo que necesita del delivery.
+// Delivery: la tarifa y el tiempo estimado del delivery.
 type Delivery interface {
 	Quote(ctx context.Context, address services.Address) (rapidito.Quote, error)
-	Dispatch(ctx context.Context, quoteID, reference, callbackURL string) (string, error)
 }
 
 // Payments: lo que necesita de la billetera.
@@ -76,7 +76,7 @@ type Orchestrator struct {
 // Catalog: los servicios que ofrece Parla.
 func Catalog() []services.ServiceInfo {
 	return []services.ServiceInfo{
-		{ID: services.Mercado, Name: "Mercado", Description: "Abarrotes, frutas y productos del día. Pagas con QR y te lo lleva un motorizado.", Provider: "MercaYa · delivery Rapidito · pago PagaYa", Available: true},
+		{ID: services.Mercado, Name: "Mercado", Description: "Abarrotes, frutas y productos del día. Pagas con QR y te lo lleva un repartidor de Rapidito.", Provider: "MercaYa · delivery Rapidito · pago PagaYa", Available: true},
 		{ID: services.Salud, Name: "Salud", Description: "Citas médicas, farmacia y resultados en un solo lugar.", Provider: "Próximamente", Available: false},
 	}
 }
@@ -143,7 +143,7 @@ func validateRequest(req services.QuoteRequest) (services.QuoteRequest, error) {
 }
 
 // quote calcula el pedido con los precios vigentes de la tienda (nunca los del navegador) y la
-// tarifa del delivery, y devuelve también la cotización del delivery para despacharla después.
+// tarifa del delivery, y devuelve también la cotización del delivery (el core la guarda con el pedido).
 func (o *Orchestrator) quote(ctx context.Context, req services.QuoteRequest) (services.OrderQuote, services.QuoteRequest, rapidito.Quote, error) {
 	req, err := validateRequest(req)
 	if err != nil {
@@ -278,84 +278,6 @@ func (o *Orchestrator) PaymentEvent(ctx context.Context, ev pagaya.Event) error 
 	_, err = o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{
 		ExpectStatus: services.PendingPayment, Status: services.Paid, PaidAt: paidAt.UTC().Format(time.RFC3339),
 	})
-	if errors.Is(err, ErrConflict) {
-		return nil
-	}
-	return err
-}
-
-// Ready: el dueño del negocio avisa que el pedido está listo y Rapidito sale a recogerlo. Solo lo
-// puede hacer el dueño, y solo con el pedido en preparación; si el delivery falla, el pedido sigue
-// en preparación y el dueño puede volver a intentarlo. Repetirlo no despacha dos motorizados.
-func (o *Orchestrator) Ready(ctx context.Context, userID, orderID string) (services.Order, error) {
-	order, err := o.Core.GetOrder(ctx, orderID)
-	if errors.Is(err, ErrNotFound) || (err == nil && (order.BusinessOwnerID == nil || *order.BusinessOwnerID != userID)) {
-		// También 404 si el pedido es de otro negocio: no se revela que existe.
-		return services.Order{}, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Pedido no encontrado"}
-	}
-	if err != nil {
-		slog.Error("no se pudo leer el pedido en el core", "pedido", orderID, "error", err)
-		return services.Order{}, unavailable("Parla")
-	}
-	switch order.Status {
-	case services.SearchingDriver, services.OnTheWay, services.Delivered:
-		return order.Order, nil
-	case services.Preparing:
-	default:
-		return services.Order{}, &Error{Status: http.StatusConflict, Code: "conflict", Message: "Primero acepta el pedido para prepararlo"}
-	}
-	if _, err := o.Delivery.Dispatch(ctx, order.DeliveryQuoteID, order.ID, o.PublicURL+"/hooks/rapidito"); err != nil {
-		slog.Error("no se pudo despachar el delivery", "pedido", order.ID, "error", err)
-		return services.Order{}, unavailable("Rapidito")
-	}
-	updated, err := o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{
-		ExpectStatus: services.Preparing, Status: services.SearchingDriver,
-		Delivery: &services.OrderDelivery{Provider: rapidito.Provider, UpdatedAt: o.now().UTC().Format(time.RFC3339)},
-	})
-	if errors.Is(err, ErrConflict) {
-		if updated, err = o.Core.GetOrder(ctx, order.ID); err == nil {
-			return updated.Order, nil
-		}
-	}
-	if err != nil {
-		slog.Error("no se pudo guardar el despacho en el core", "pedido", order.ID, "error", err)
-		return services.Order{}, unavailable("Parla")
-	}
-	return updated.Order, nil
-}
-
-// DeliveryEvent aplica un aviso del delivery (motorizado asignado, entregado).
-func (o *Orchestrator) DeliveryEvent(ctx context.Context, ev rapidito.Event) error {
-	order, err := o.Core.GetOrder(ctx, ev.Reference)
-	if errors.Is(err, ErrNotFound) {
-		slog.Warn("aviso de delivery de un pedido desconocido", "pedido", ev.Reference)
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	allowed := map[services.OrderStatus][]services.OrderStatus{
-		services.OnTheWay:  {services.SearchingDriver},
-		services.Delivered: {services.SearchingDriver, services.OnTheWay},
-	}
-	ok := false
-	for _, from := range allowed[ev.Status] {
-		ok = ok || order.Status == from
-	}
-	if !ok {
-		return nil // aviso repetido o fuera de orden
-	}
-	delivery := services.OrderDelivery{Provider: rapidito.Provider, ETAMinutes: ev.ETAMinutes, UpdatedAt: o.now().UTC().Format(time.RFC3339)}
-	if order.Delivery != nil {
-		delivery.DriverName, delivery.Vehicle = order.Delivery.DriverName, order.Delivery.Vehicle
-	}
-	if ev.DriverName != "" {
-		delivery.DriverName = &ev.DriverName
-	}
-	if ev.Vehicle != "" {
-		delivery.Vehicle = &ev.Vehicle
-	}
-	_, err = o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{ExpectStatus: order.Status, Status: ev.Status, Delivery: &delivery})
 	if errors.Is(err, ErrConflict) {
 		return nil
 	}

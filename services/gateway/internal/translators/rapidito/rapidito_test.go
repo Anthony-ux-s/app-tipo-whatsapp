@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/parla/gateway/internal/services"
-	"github.com/parla/gateway/internal/webhook"
 )
 
 func TestMontoEnTextoACentimosSinFloat(t *testing.T) {
@@ -50,25 +49,5 @@ func TestCotizacionValidaYAbsurda(t *testing.T) {
 		if _, err := quoteServer(t, body).Quote(ctx, address); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s debía rechazarse, obtuve %v", body, err)
 		}
-	}
-}
-
-const secret = "rapidito-test-secret"
-
-func TestAvisoFirmadoSeTraduce(t *testing.T) {
-	body := []byte(`{"delivery_id":"dlv_1","reference":"ord_1","status":"DRIVER_ASSIGNED","driver":{"name":"Rosa Quispe","vehicle":"Moto · C3M-915"},"eta_minutes":20}`)
-	ev, err := ParseWebhook(body, webhook.Sign(secret, body), secret)
-	if err != nil || ev.Status != services.OnTheWay || ev.DriverName != "Rosa Quispe" || ev.Reference != "ord_1" || *ev.ETAMinutes != 20 {
-		t.Fatalf("aviso inesperado: %+v %v", ev, err)
-	}
-	if _, err := ParseWebhook(body, webhook.Sign("otro-secreto", body), secret); !errors.Is(err, webhook.ErrSignature) {
-		t.Fatalf("una firma ajena debe rechazarse, obtuve %v", err)
-	}
-	if _, err := ParseWebhook(body, "", secret); !errors.Is(err, webhook.ErrSignature) {
-		t.Fatalf("sin firma debe rechazarse, obtuve %v", err)
-	}
-	unknown := []byte(`{"delivery_id":"dlv_1","reference":"ord_1","status":"PICKED_UP"}`)
-	if _, err := ParseWebhook(unknown, webhook.Sign(secret, unknown), secret); !errors.Is(err, ErrUnknownStatus) {
-		t.Fatalf("estado desconocido, obtuve %v", err)
 	}
 }

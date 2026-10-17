@@ -9,7 +9,6 @@ import (
 
 	"github.com/parla/gateway/internal/services"
 	"github.com/parla/gateway/internal/translators/pagaya"
-	"github.com/parla/gateway/internal/translators/rapidito"
 )
 
 const (
@@ -17,11 +16,10 @@ const (
 	maxWebhookBody = 64 << 10
 )
 
-// HTTP expone el orquestador: rutas de servicios (con sesión) y avisos de los proveedores.
+// HTTP expone el orquestador: rutas de servicios (con sesión) y el aviso de la billetera.
 type HTTP struct {
-	Orch           *Orchestrator
-	PagayaSecret   string
-	RapiditoSecret string
+	Orch         *Orchestrator
+	PagayaSecret string
 }
 
 // UserHandler recibe la persona autenticada (el id sale del JWT, nunca del cuerpo).
@@ -66,16 +64,6 @@ func (h *HTTP) Create(w http.ResponseWriter, r *http.Request, userID string) {
 	WriteJSON(w, http.StatusCreated, order)
 }
 
-// Ready: el dueño del negocio marca el pedido como listo y sale el motorizado de Rapidito.
-func (h *HTTP) Ready(w http.ResponseWriter, r *http.Request, userID string) {
-	order, err := h.Orch.Ready(r.Context(), userID, r.PathValue("id"))
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	WriteJSON(w, http.StatusOK, order)
-}
-
 // PagayaHook: aviso firmado de la billetera.
 func (h *HTTP) PagayaHook(w http.ResponseWriter, r *http.Request) {
 	body, ok := readWebhook(w, r)
@@ -89,27 +77,14 @@ func (h *HTTP) PagayaHook(w http.ResponseWriter, r *http.Request) {
 	h.finish(w, h.Orch.PaymentEvent(r.Context(), ev), "pagaya")
 }
 
-// RapiditoHook: aviso firmado del delivery.
-func (h *HTTP) RapiditoHook(w http.ResponseWriter, r *http.Request) {
-	body, ok := readWebhook(w, r)
-	if !ok {
-		return
-	}
-	ev, err := rapidito.ParseWebhook(body, r.Header.Get("x-rapidito-signature"), h.RapiditoSecret)
-	if !h.accept(w, err, "rapidito") {
-		return
-	}
-	h.finish(w, h.Orch.DeliveryEvent(r.Context(), ev), "rapidito")
-}
-
 func (h *HTTP) accept(w http.ResponseWriter, err error, provider string) bool {
 	switch {
 	case err == nil:
 		return true
-	case errors.Is(err, pagaya.ErrUnknownStatus), errors.Is(err, rapidito.ErrUnknownStatus):
+	case errors.Is(err, pagaya.ErrUnknownStatus):
 		// Estados que no nos interesan: se confirman para que el proveedor no reintente.
 		w.WriteHeader(http.StatusNoContent)
-	case errors.Is(err, pagaya.ErrInvalid), errors.Is(err, rapidito.ErrInvalid):
+	case errors.Is(err, pagaya.ErrInvalid):
 		WriteJSON(w, http.StatusBadRequest, errorBody(http.StatusBadRequest, "bad_request", "Aviso inválido"))
 	default:
 		slog.Warn("aviso con firma inválida", "proveedor", provider)

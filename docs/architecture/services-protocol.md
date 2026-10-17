@@ -8,9 +8,9 @@ arma el pedido completo.
 
 ```
 navegador ─► gateway Go ─┬─ traductor mercaya ──► MercaYa  (tienda)      ┐
-                         ├─ traductor rapidito  ──► Rapidito   (delivery)    ├ simuladores: services/providers (4103)
+                         ├─ traductor rapidito  ──► Rapidito   (tarifa)      ├ simuladores: services/providers (4103)
                          ├─ traductor pagaya  ──► PagaYa   (QR tipo Yape)┘
-                         └─ HTTP interno ──────► core NestJS (guarda pedidos) ─► Elixir ─► navegador (order:updated)
+                         └─ HTTP interno ──────► core NestJS (pedidos, negocio y repartidores) ─► Elixir ─► navegador (order:updated)
 ```
 
 ## Flujo de una compra
@@ -30,11 +30,11 @@ navegador ─► gateway Go ─┬─ traductor mercaya ──► MercaYa  (tien
 7. El dueño lo acepta o lo rechaza en el core: `POST /api/business/orders/:id/accept` → `preparing`,
    `.../reject` → `rejected`. Solo el dueño, solo con el pedido `paid`; repetir la misma decisión no
    cambia nada.
-8. Cuando está listo, el dueño llama `POST /api/business/orders/:id/ready` (**gateway**): comprueba que
-   es el dueño y que está `preparing`, **despacha el delivery** en Rapidito con la cotización guardada
-   → `searching_driver`. Si Rapidito falla, el pedido sigue en `preparing` y se puede reintentar.
-9. Rapidito avisa cada cambio: `POST /hooks/rapidito` con firma en `x-rapidito-signature`
-   (`DRIVER_ASSIGNED` → `on_the_way` con nombre del motorizado; `DELIVERED` → `delivered`).
+8. Cuando está listo, el dueño llama `POST /api/business/orders/:id/ready` (core): → `searching_driver`.
+   Desde ahí el **core reparte con los repartidores de Parla** (la flota de Rapidito, cuentas de Parla):
+   un repartidor toma el pedido (`driver_assigned`), lo recoge en el negocio (`on_the_way`) y lo
+   entrega (`delivered`). El gateway ya no despacha ni recibe avisos del delivery.
+9. Rapidito solo da la **tarifa y el tiempo estimado** (cotización), que el gateway suma al total.
 10. Cada cambio de estado lo publica el core por tiempo real: al cliente `order:updated` y, desde que
     se paga, al dueño `business-order:updated` (con el cliente).
 11. `GET /api/orders` y `GET /api/orders/:id` (core) → historial «Mis pedidos»; `GET /api/business/orders`
@@ -60,16 +60,14 @@ Formatos distintos a propósito: así es en la vida real y es lo que justifica l
 - `GET /mercaya/v1/catalogo?buscar=texto` → `{"resultados":[{"sku","nombre","presentacion","precio_centimos","stock","categoria","imagen"}]}`
 - `POST /mercaya/v1/pedidos` `{"referencia","lineas":[{"sku","cantidad"}]}` → `{"numero_pedido","estado":"RESERVADO","total_centimos"}`; 409 `{"error":"SIN_STOCK","sku"}` si falta stock.
 
-**Rapidito** (delivery, inglés, montos en texto decimal):
-- `POST /rapidito/api/quotes` `{"dropoff":{"address","notes"}}` → `{"quote_id","fee":{"amount":"6.50","currency":"PEN"},"eta_minutes"}`
-- `POST /rapidito/api/deliveries` `{"quote_id","reference","callback_url"}` → `{"delivery_id","status":"SEARCHING_DRIVER"}`; luego avisa a `callback_url`:
-  `{"delivery_id","reference","status":"DRIVER_ASSIGNED"|"DELIVERED","driver":{"name","vehicle"},"eta_minutes"}`
+**Rapidito** (tarifa del delivery, inglés, montos en texto decimal):
+- `POST /rapidito/api/quotes` `{"dropoff":{"address","notes"}}` → `{"quote_id","fee":{"amount":"6.50","currency":"PEN"},"eta_minutes","expires_at"}`
 
 **PagaYa** (cobros con QR tipo Yape, montos en soles con decimales):
 - `POST /pagaya/cobros` `{"monto":23.40,"moneda":"PEN","concepto","referencia","notificar_a"}` → `{"id_cobro","qr_texto","url_pago","expira_en"}`
 - `GET /pagaya/pagar/{id}` → página para pagar (simula la app del banco); `POST` la confirma y avisa a `notificar_a`:
   `{"id_cobro","referencia","estado":"PAGADO"|"EXPIRADO","pagado_en"}`
 
-Las firmas de los avisos son `hex(HMAC-SHA256(secreto, cuerpo))`. Secretos por variable de entorno
-(`PAGAYA_WEBHOOK_SECRET`, `RAPIDITO_WEBHOOK_SECRET`); en desarrollo hay valores por defecto y en
+La firma de los avisos de PagaYa es `hex(HMAC-SHA256(secreto, cuerpo))`. Secreto por variable de entorno
+(`PAGAYA_WEBHOOK_SECRET`); en desarrollo hay un valor por defecto y en
 producción el gateway no arranca sin secretos propios.

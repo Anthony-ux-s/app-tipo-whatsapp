@@ -51,10 +51,19 @@ const USERS: SeedUser[] = [
   { key: 'valentina', username: 'valentina', phone: '+573005550105', displayName: 'Valentina Castro', about: 'Calidad y tostión', avatarColor: 'emerald' },
   // Dueña de la tienda del Mercado: recibe los pedidos, los acepta y llama a Rapidito.
   { key: 'tienda', username: 'tienda', phone: '+573005550106', displayName: 'Elena Condori', about: 'Dueña de Bodega MercaYa 🛒', avatarColor: 'cyan' },
+  // Repartidores de Rapidito: toman los pedidos listos, los recogen en la tienda y los entregan.
+  { key: 'repartidor', username: 'repartidor', phone: '+573005550107', displayName: 'Carlos Huamán', about: 'Repartidor de Rapidito 🛵', avatarColor: 'emerald-dark' },
+  { key: 'repartidora', username: 'repartidora', phone: '+573005550108', displayName: 'Lucía Ramos', about: 'Repartidora de Rapidito 🛵', avatarColor: 'teal-dark' },
 ];
 
 /** Negocio de ejemplo: atiende los pedidos del Mercado con delivery Rapidito. */
-const BUSINESS = { owner: 'tienda', name: 'Bodega MercaYa', service: 'mercado' } as const;
+const BUSINESS = { owner: 'tienda', name: 'Bodega MercaYa', service: 'mercado', address: 'Av. Benavides 1180, Miraflores' } as const;
+
+/** Repartidores de Rapidito con su vehículo. */
+const DRIVERS = [
+  { user: 'repartidor', vehicle: 'Moto', plate: 'B7K-482' },
+  { user: 'repartidora', vehicle: 'Moto', plate: 'D5T-663' },
+] as const;
 
 type Media = { kind: 'image' | 'audio'; file: 'packaging' | 'route' | 'wireframe' | 'voice' };
 /** Hilo (índice del mensaje al que responde) y personas mencionadas con @. */
@@ -256,8 +265,11 @@ async function main(): Promise<void> {
   }
   const person = (key: string) => people.get(key)!;
 
-  console.log('Creando el negocio del Mercado…');
-  await prisma.business.create({ data: { name: BUSINESS.name, service: BUSINESS.service, ownerId: person(BUSINESS.owner).id } });
+  console.log('Creando el negocio del Mercado y los repartidores de Rapidito…');
+  await prisma.business.create({ data: { name: BUSINESS.name, service: BUSINESS.service, address: BUSINESS.address, ownerId: person(BUSINESS.owner).id } });
+  for (const d of DRIVERS) {
+    await prisma.driver.create({ data: { userId: person(d.user).id, vehicle: d.vehicle, plate: d.plate } });
+  }
 
   console.log('Cifrando conversaciones y mensajes…');
   for (const conv of CONVERSATIONS) {
@@ -365,7 +377,9 @@ async function main(): Promise<void> {
     { usuario: 'laura', quién: 'Laura Méndez · la más activa: grupos, chats y pedidos' },
     { usuario: 'camila', quién: 'Camila Torres · creó el grupo «Diseño tienda en línea»' },
     { usuario: 'andres', quién: 'Andrés Rojas' },
-    { usuario: 'tienda', quién: 'Elena Condori · dueña de Bodega MercaYa: acepta pedidos y llama a Rapidito' },
+    { usuario: 'tienda', quién: 'Elena Condori · dueña de Bodega MercaYa: acepta, prepara y entrega al repartidor' },
+    { usuario: 'repartidor', quién: 'Carlos Huamán · repartidor de Rapidito (moto B7K-482)' },
+    { usuario: 'repartidora', quién: 'Lucía Ramos · repartidora de Rapidito (moto D5T-663)' },
     { usuario: '+57 300 123 4567', quién: 'Sofía Ramírez (entra con su teléfono)' },
   ]);
 }

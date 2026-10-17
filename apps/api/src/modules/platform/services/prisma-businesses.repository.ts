@@ -5,7 +5,7 @@ import { PrismaService } from '../../../infra/prisma/prisma.service';
 import type { BusinessesRepository, BusinessRecord } from './businesses.repository';
 
 function toBusinessRecord(row: BusinessRow): BusinessRecord {
-  return { id: row.id, name: row.name, service: row.service as ServiceId, ownerId: row.ownerId };
+  return { id: row.id, name: row.name, service: row.service as ServiceId, ownerId: row.ownerId, address: row.address };
 }
 
 @Injectable()

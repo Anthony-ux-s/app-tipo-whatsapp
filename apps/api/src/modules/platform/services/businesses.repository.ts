@@ -3,6 +3,8 @@ import type { BusinessInfo, ServiceId } from '@parla/types';
 /** Negocio tal como lo ven los casos de uso: atiende un servicio y tiene un dueño en Parla. */
 export interface BusinessRecord extends BusinessInfo {
   ownerId: string;
+  /** Dónde recoge el repartidor. */
+  address: string;
 }
 
 export interface BusinessesRepository {

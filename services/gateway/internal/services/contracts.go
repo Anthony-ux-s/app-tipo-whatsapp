@@ -79,6 +79,7 @@ const (
 	Preparing       OrderStatus = "preparing"
 	Rejected        OrderStatus = "rejected"
 	SearchingDriver OrderStatus = "searching_driver"
+	DriverAssigned  OrderStatus = "driver_assigned"
 	OnTheWay        OrderStatus = "on_the_way"
 	Delivered       OrderStatus = "delivered"
 	PaymentExpired  OrderStatus = "payment_expired"
@@ -101,20 +102,37 @@ type OrderDelivery struct {
 	UpdatedAt  string  `json:"updatedAt"`
 }
 
+// OrderBusiness: negocio que prepara el pedido (lo asigna el core).
+type OrderBusiness struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	OwnerID string `json:"ownerId"`
+	Address string `json:"address"`
+}
+
+// OrderTimelineEntry: un paso del pedido con su hora (lo lleva el core).
+type OrderTimelineEntry struct {
+	Status OrderStatus `json:"status"`
+	At     string      `json:"at"`
+	Note   string      `json:"note,omitempty"`
+}
+
 type Order struct {
-	ID               string         `json:"id"`
-	Service          ServiceID      `json:"service"`
-	Status           OrderStatus    `json:"status"`
-	Lines            []OrderLine    `json:"lines"`
-	SubtotalCents    int            `json:"subtotalCents"`
-	DeliveryFeeCents int            `json:"deliveryFeeCents"`
-	TotalCents       int            `json:"totalCents"`
-	Currency         string         `json:"currency"`
-	Address          Address        `json:"address"`
-	Payment          OrderPayment   `json:"payment"`
-	Delivery         *OrderDelivery `json:"delivery"`
-	CreatedAt        string         `json:"createdAt"`
-	UpdatedAt        string         `json:"updatedAt"`
+	ID               string               `json:"id"`
+	Service          ServiceID            `json:"service"`
+	Business         *OrderBusiness       `json:"business"`
+	Status           OrderStatus          `json:"status"`
+	Lines            []OrderLine          `json:"lines"`
+	SubtotalCents    int                  `json:"subtotalCents"`
+	DeliveryFeeCents int                  `json:"deliveryFeeCents"`
+	TotalCents       int                  `json:"totalCents"`
+	Currency         string               `json:"currency"`
+	Address          Address              `json:"address"`
+	Payment          OrderPayment         `json:"payment"`
+	Delivery         *OrderDelivery       `json:"delivery"`
+	Timeline         []OrderTimelineEntry `json:"timeline"`
+	CreatedAt        string               `json:"createdAt"`
+	UpdatedAt        string               `json:"updatedAt"`
 }
 
 // ── Contratos internos gateway ↔ core ─────────────────────────────────────────

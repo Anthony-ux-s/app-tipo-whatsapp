@@ -34,12 +34,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET (32+ caracteres)}
       WEB_ORIGIN: ${PUBLIC_URL}
       PROVIDERS_URL: http://providers:4103
-      # Los avisos de pago y delivery viajan por la red interna de Docker
+      # Los avisos de pago viajan por la red interna de Docker
       GATEWAY_PUBLIC_URL: http://gateway:4100
       PAGAYA_WEBHOOK_SECRET: ${PAGAYA_WEBHOOK_SECRET:?Define PAGAYA_WEBHOOK_SECRET (24+ caracteres)}
-      RAPIDITO_WEBHOOK_SECRET: ${RAPIDITO_WEBHOOK_SECRET:?Define RAPIDITO_WEBHOOK_SECRET (24+ caracteres)}
 
-  # Simuladores de tienda (MercaYa), delivery (Rapidito) y billetera con QR (PagaYa). Para producción
+  # Simuladores de tienda (MercaYa), tarifa del delivery (Rapidito) y billetera con QR (PagaYa). Para producción
   # real se reemplazan por los proveedores verdaderos y solo cambian los traductores del gateway.
   providers:
     build: services/providers
@@ -49,7 +48,6 @@ services:
     environment:
       PROVIDERS_PUBLIC_URL: ${PROVIDERS_PUBLIC_URL:?Define PROVIDERS_PUBLIC_URL}
       PAGAYA_WEBHOOK_SECRET: ${PAGAYA_WEBHOOK_SECRET}
-      RAPIDITO_WEBHOOK_SECRET: ${RAPIDITO_WEBHOOK_SECRET}
 
   realtime:
     build: services/realtime

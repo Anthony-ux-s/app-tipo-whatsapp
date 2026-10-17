@@ -1,15 +1,19 @@
-import { Bike, Check, MapPin, MessageCircle, PackageCheck, X } from 'lucide-react';
+import { Bike, Check, MapPin, MessageCircle, PackageCheck, ShieldCheck, X } from 'lucide-react';
 import { Avatar } from '@shared/ui/Avatar';
 import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
+import { formatTime } from '@shared/utils/date';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
-import { AmountRow, OrderStatusBadge, PageHeader, ServicePage } from '../../services/components/ServicesUi';
+import { AmountRow, OrderStatusBadge, OrderTimeline, PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { useOrderChat } from '../../services/hooks/use-order-chat.hook';
 import { BUSINESS_STATUS_HINTS } from '../const/business.const';
 import { useBusinessOrderDetail } from '../hooks/use-business.hook';
 
-/** Un pedido del negocio: quién lo pidió, qué lleva, adónde va, y la acción que toca ahora. */
+/**
+ * Un pedido del negocio: quién lo pidió, qué lleva, adónde va, la acción que toca ahora y la
+ * constancia de cada paso (hasta la entrega confirmada con el código del cliente).
+ */
 export function BusinessOrderDetailView() {
   const d = useBusinessOrderDetail();
   const order = d.order;
@@ -24,6 +28,8 @@ export function BusinessOrderDetailView() {
     );
   }
 
+  const driverName = order.delivery?.driverName ?? 'el repartidor';
+  const delivered = order.timeline.find((t) => t.status === 'delivered');
   return (
     <ServicePage>
       <PageHeader
@@ -32,6 +38,18 @@ export function BusinessOrderDetailView() {
         onBack={d.back}
         action={<OrderStatusBadge status={order.status} />}
       />
+
+      {delivered && (
+        <section className="flex items-center gap-4 rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200 md:p-5 dark:bg-emerald-950/40 dark:ring-emerald-900" aria-label="Entrega confirmada" data-testid="delivery-proof">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white">
+            <ShieldCheck className="size-6" />
+          </span>
+          <div className="min-w-0">
+            <p className="font-bold text-ink">Entregado a {order.customer.displayName} · {formatTime(delivered.at)}</p>
+            <p className="text-sm text-ink-soft">{delivered.note ?? 'Confirmado con el código del cliente'}</p>
+          </div>
+        </section>
+      )}
 
       <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Cliente">
         <Avatar name={order.customer.displayName} color={order.customer.avatarColor} photo={order.customer.avatarUrl} size="md" />
@@ -45,37 +63,48 @@ export function BusinessOrderDetailView() {
             </span>
           </p>
         </div>
-        <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={chat.open} loading={chat.opening} data-testid="chat-customer">
+        <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={() => chat.open('customer')} loading={chat.opening === 'customer'} data-testid="chat-customer">
           Escribir
         </Button>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Qué toca ahora">
-        <p className="text-sm text-ink-soft">{BUSINESS_STATUS_HINTS[order.status]}</p>
-        {order.status === 'paid' && (
-          <div className="flex flex-wrap gap-2">
-            <Button icon={<Check className="size-4" />} onClick={d.accept} loading={d.busy === 'accept'} disabled={!!d.busy} data-testid="accept-order">
-              Aceptar pedido
+      {!delivered && (
+        <section className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Qué toca ahora">
+          <p className="text-sm text-ink-soft">{BUSINESS_STATUS_HINTS[order.status]}</p>
+          {order.status === 'paid' && (
+            <div className="flex flex-wrap gap-2">
+              <Button icon={<Check className="size-4" />} onClick={d.accept} loading={d.busy === 'accept'} disabled={!!d.busy} data-testid="accept-order">
+                Aceptar pedido
+              </Button>
+              <Button variant="ghost" icon={<X className="size-4" />} onClick={d.askReject} disabled={!!d.busy}>
+                Rechazar
+              </Button>
+            </div>
+          )}
+          {order.status === 'preparing' && (
+            <Button icon={<PackageCheck className="size-4" />} onClick={d.ready} loading={d.busy === 'ready'} data-testid="ready-order" className="self-start">
+              Listo · llamar a Rapidito
             </Button>
-            <Button variant="ghost" icon={<X className="size-4" />} onClick={d.askReject} disabled={!!d.busy}>
-              Rechazar
+          )}
+          {order.delivery && (
+            <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-3" data-testid="business-delivery">
+              <Bike className="size-5 shrink-0 text-brand" />
+              <span className="min-w-0 flex-1 text-sm">
+                <span className="block font-semibold text-ink">{order.delivery.driverName}</span>
+                <span className="block text-ink-soft">{order.delivery.vehicle}</span>
+              </span>
+              <Button variant="ghost" size="sm" icon={<MessageCircle className="size-4" />} onClick={() => chat.open('driver')} loading={chat.opening === 'driver'} data-testid="chat-driver">
+                Escribir
+              </Button>
+            </div>
+          )}
+          {order.status === 'driver_assigned' && (
+            <Button icon={<PackageCheck className="size-4" />} onClick={d.handoff} loading={d.busy === 'handoff'} data-testid="handoff-order" className="self-start">
+              Le entregué el pedido a {driverName}
             </Button>
-          </div>
-        )}
-        {order.status === 'preparing' && (
-          <Button icon={<PackageCheck className="size-4" />} onClick={d.ready} loading={d.busy === 'ready'} data-testid="ready-order" className="self-start">
-            Listo · llamar a Rapidito
-          </Button>
-        )}
-        {order.delivery && (
-          <p className="flex items-center gap-2 text-sm font-semibold text-ink" data-testid="business-delivery">
-            <Bike className="size-4 text-brand" />
-            {order.delivery.driverName
-              ? `${order.delivery.driverName}${order.delivery.vehicle ? ` · ${order.delivery.vehicle}` : ''}`
-              : 'Rapidito está asignando un motorizado…'}
-          </p>
-        )}
-      </section>
+          )}
+        </section>
+      )}
 
       <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Productos">
         {order.lines.map((line) => (
@@ -91,6 +120,8 @@ export function BusinessOrderDetailView() {
         <AmountRow label="Delivery Rapidito" value={formatSoles(order.deliveryFeeCents)} />
         <AmountRow label="Cobrado al cliente" value={formatSoles(order.totalCents)} strong />
       </section>
+
+      <OrderTimeline entries={order.timeline} />
 
       <Modal
         open={d.confirmReject}
