@@ -5,7 +5,9 @@ import { PresenceRegistry } from '../../../infra/realtime/presence.registry';
 import {
   InMemoryAuthRepository,
   InMemoryBusinessesRepository,
+  InMemoryAddresses,
   InMemoryClaims,
+  InMemoryCoupons,
   InMemoryDriverLedger,
   InMemoryPhotos,
   makeDriver,
@@ -31,6 +33,9 @@ import {
   SettleClaimRefundUseCase,
 } from './use-cases/claims.use-cases';
 import { GetOrderPhotoUseCase } from './use-cases/photos.use-cases';
+import { CreateCouponUseCase, ListCouponsUseCase, QuoteCouponUseCase, SetCouponActiveUseCase } from './use-cases/coupons.use-cases';
+import { DeleteAddressUseCase, LabelAddressUseCase, ListMyAddressesUseCase } from './use-cases/addresses.use-cases';
+import { IsAdminUseCase, ListAdminOrdersUseCase } from './use-cases/admin-orders.use-cases';
 import {
   DuePayoutsUseCase,
   GetDriverWalletUseCase,
@@ -95,6 +100,8 @@ describe('pedidos de Servicios (core)', () => {
   /** Ofertas por cercanía por defecto: 3, 6 y 12 km, cada 2 minutos. */
   const dispatchPolicy = new DispatchPolicy({ dispatch: DEFAULT_DISPATCH });
   let photos: InMemoryPhotos;
+  let coupons: InMemoryCoupons;
+  let addresses: InMemoryAddresses;
   let claims: InMemoryClaims;
   let create: CreateOrderUseCase;
   let update: UpdateOrderUseCase;
@@ -150,7 +157,9 @@ describe('pedidos de Servicios (core)', () => {
     push = new RecordingPushSender();
     dispatcher = new NotificationDispatcher(subs, push, new PresenceRegistry());
     events = new OrderEvents(realtime, users, drivers, dispatcher, payPolicy, dispatchPolicy);
-    create = new CreateOrderUseCase(orders, users, businesses, events);
+    coupons = new InMemoryCoupons(orders);
+    addresses = new InMemoryAddresses();
+    create = new CreateOrderUseCase(orders, users, businesses, events, coupons, addresses);
     update = new UpdateOrderUseCase(orders, events);
     decide = new DecideBusinessOrderUseCase(orders, users, events, dispatchPolicy);
     take = new AcceptDeliveryUseCase(drivers, orders, users, events, payPolicy, dispatchPolicy);
@@ -791,5 +800,78 @@ describe('pedidos de Servicios (core)', () => {
       for (const viewer of [ana, rosa, soporte]) expect(await photo.execute(viewer.id, ID, opened.id)).toBe(evidence);
       await expect(photo.execute(carlos.id, ID, opened.id)).rejects.toThrow(NotFoundError);
     });
+  });
+  describe('cupones', () => {
+    const newCoupon = (input: Parameters<CreateCouponUseCase['execute']>[1]) => new CreateCouponUseCase(users, coupons).execute(soporte.id, input);
+
+    it('soporte los crea; el gateway cotiza el descuento y el core lo vuelve a validar al crear', async () => {
+      await expect(new CreateCouponUseCase(users, coupons).execute(ana.id, { code: 'X10', description: 'x', kind: 'amount', value: 100 })).rejects.toThrow(ForbiddenError);
+      await expect(newCoupon({ code: 'no vale!', description: 'x', kind: 'amount', value: 100 })).rejects.toThrow(ValidationError);
+      expect(await newCoupon({ code: ' parla5 ', description: 'S/ 5 de descuento', kind: 'amount', value: 500, minSubtotalCents: 1000 })).toMatchObject({ code: 'PARLA5', uses: 0, active: true });
+      await expect(newCoupon({ code: 'PARLA5', description: 'otra', kind: 'amount', value: 100 })).rejects.toThrow('Ya existe');
+      const quote = new QuoteCouponUseCase(coupons);
+      expect(await quote.execute({ code: 'parla5', userId: ana.id, subtotalCents: 1420, deliveryFeeCents: 650 })).toEqual({ code: 'PARLA5', description: 'S/ 5 de descuento', kind: 'amount', discountCents: 500 });
+      await expect(quote.execute({ code: 'NOEXISTE', userId: ana.id, subtotalCents: 1420, deliveryFeeCents: 650 })).rejects.toThrow(NotFoundError);
+      await expect(quote.execute({ code: 'PARLA5', userId: ana.id, subtotalCents: 900, deliveryFeeCents: 650 })).rejects.toThrow('desde S/ 10.00');
+
+      // Crear con un descuento que no cuadra, o sin cupón, no pasa
+      await expect(create.execute(newOrder({ couponCode: 'PARLA5', discountCents: 400, totalCents: 1670 }))).rejects.toThrow('cambió');
+      await expect(create.execute(newOrder({ discountCents: 500, totalCents: 1570 }))).rejects.toThrow('necesita un cupón');
+      await expect(create.execute(newOrder({ couponCode: 'PARLA5', discountCents: 500, totalCents: 2070 }))).rejects.toThrow('total');
+      const order = await create.execute(newOrder({ couponCode: 'parla5', discountCents: 500, totalCents: 1570 }));
+      expect(order).toMatchObject({ discountCents: 500, couponCode: 'PARLA5', totalCents: 1570 });
+      // Ya lo usó (una vez por persona); si el pedido se cancela, vuelve a quedar libre
+      await expect(quote.execute({ code: 'PARLA5', userId: ana.id, subtotalCents: 1420, deliveryFeeCents: 650 })).rejects.toThrow('Ya usaste');
+      expect((await new ListCouponsUseCase(users, coupons).execute(soporte.id))[0].uses).toBe(1);
+      await update.execute(ID, { expectStatus: 'pending_payment', status: 'cancelled' });
+      expect((await quote.execute({ code: 'PARLA5', userId: ana.id, subtotalCents: 1420, deliveryFeeCents: 650 })).discountCents).toBe(500);
+      // Pausado no vale
+      await new SetCouponActiveUseCase(users, coupons).execute(soporte.id, 'parla5', false);
+      await expect(quote.execute({ code: 'PARLA5', userId: ana.id, subtotalCents: 1420, deliveryFeeCents: 650 })).rejects.toThrow('no está activo');
+    });
+
+    it('envío gratis solo en el primer pedido; el repartidor igual gana su tarifa', async () => {
+      await newCoupon({ code: 'BIENVENIDA', description: 'Envío gratis en tu primer pedido', kind: 'free_delivery', firstOrderOnly: true });
+      const quote = new QuoteCouponUseCase(coupons);
+      expect((await quote.execute({ code: 'BIENVENIDA', userId: ana.id, subtotalCents: 1420, deliveryFeeCents: 650 })).discountCents).toBe(650);
+      await create.execute(newOrder({ couponCode: 'BIENVENIDA', discountCents: 650, totalCents: 1420 }));
+      await pay();
+      await decide.execute(rosa.id, ID, 'accept');
+      await decide.execute(rosa.id, ID, 'ready');
+      expect((await new ListDriverOrdersUseCase(drivers, orders, users, payPolicy, dispatchPolicy).execute(carlos.id)).available[0]).toMatchObject({ deliveryFeeCents: 650, earningsCents: 617 });
+      // Ya no es su primer pedido
+      await expect(quote.execute({ code: 'BIENVENIDA', userId: ana.id, subtotalCents: 1420, deliveryFeeCents: 650 })).rejects.toThrow();
+      expect((await quote.execute({ code: 'BIENVENIDA', userId: beto.id, subtotalCents: 1420, deliveryFeeCents: 650 })).discountCents).toBe(650);
+    });
+  });
+
+  it('las direcciones se recuerdan al pedir; se les pone nombre o se borran', async () => {
+    await create.execute(newOrder());
+    await create.execute(newOrder({ id: 'ord_second12', address: { line: 'Jr. Cusco 450, Lima', reference: '', location: { lat: -12.05, lng: -77.03 } } }));
+    await new Promise((r) => setTimeout(r, 5));
+    await create.execute(newOrder({ id: 'ord_third123', address: { line: 'Av. Larco 123, Miraflores', reference: 'Puerta azul' } }));
+    const list = new ListMyAddressesUseCase(addresses);
+    const mine = await list.execute(ana.id);
+    expect(mine.map((a) => [a.line, a.reference])).toEqual([['Av. Larco 123, Miraflores', 'Puerta azul'], ['Jr. Cusco 450, Lima', '']]);
+    expect(mine[1].location).toEqual({ lat: -12.05, lng: -77.03 });
+    expect(await list.execute(beto.id)).toEqual([]);
+    expect(await new LabelAddressUseCase(addresses).execute(ana.id, mine[0].id, '  Casa ')).toMatchObject({ label: 'Casa' });
+    await expect(new LabelAddressUseCase(addresses).execute(beto.id, mine[0].id, 'Mía')).rejects.toThrow(NotFoundError);
+    await expect(new DeleteAddressUseCase(addresses).execute(beto.id, mine[1].id)).rejects.toThrow(NotFoundError);
+    await new DeleteAddressUseCase(addresses).execute(ana.id, mine[1].id);
+    expect((await list.execute(ana.id)).map((a) => a.label)).toEqual(['Casa']);
+  });
+
+  it('soporte ve todos los pedidos por pestaña y busca por id', async () => {
+    await create.execute(newOrder());
+    await create.execute(newOrder({ id: 'ord_other123' }));
+    await update.execute('ord_other123', { expectStatus: 'pending_payment', status: 'cancelled' });
+    const admin = new ListAdminOrdersUseCase(users, orders);
+    await expect(admin.execute(ana.id, 'all')).rejects.toThrow(ForbiddenError);
+    expect((await admin.execute(soporte.id, 'active')).map((o) => o.id)).toEqual([ID]);
+    expect((await admin.execute(soporte.id, 'closed')).map((o) => o.id)).toEqual(['ord_other123']);
+    expect(await admin.execute(soporte.id, 'all', 'other')).toMatchObject([{ id: 'ord_other123', customerName: 'Ana Pérez', status: 'cancelled' }]);
+    expect(await new IsAdminUseCase(users).execute(soporte.id)).toEqual({ isAdmin: true });
+    expect(await new IsAdminUseCase(users).execute(ana.id)).toEqual({ isAdmin: false });
   });
 });

@@ -65,7 +65,7 @@ Contraseña para todos: **`Parla2026!`**
 | `tienda` | Elena Condori | **Dueña de Bodega MercaYa**: recibe los pedidos del Mercado, los acepta, los alista y se los entrega al repartidor |
 | `repartidor` | Carlos Huamán | **Repartidor de Rapidito** (moto B7K-482): toma pedidos listos, los recoge y los entrega con el código del cliente |
 | `repartidora` | Lucía Ramos | **Repartidora de Rapidito** (moto D5T-663): para ver que el primero que toma un pedido se lo queda |
-| `soporte` | Soporte Parla | **Soporte**: en *Ajustes → Soporte Parla* aprueba o rechaza repartidores nuevos y resuelve reclamos con devolución |
+| `soporte` | Soporte Parla | **Soporte**: en *Ajustes → Soporte Parla* ve todos los pedidos (y cancela los trabados), aprueba repartidores, resuelve reclamos y crea cupones |
 | `+57 300 123 4567` | Sofía Ramírez | Entra con su **teléfono** |
 | `diego`, `mateo`, `valentina` | Resto de contactos | |
 
@@ -147,9 +147,28 @@ pones tu nombre, un usuario opcional y la contraseña.
     y cuántos (la devolución sugerida es lo que costaron), con comentario y foto. Soporte decide el
     monto y **PagaYa devuelve esa parte** del cobro (con referencia única, nunca dos veces ni más de
     lo pagado), o lo cierra con un motivo. El cliente ve el estado en el pedido y la tienda, el reclamo.
-  - **Panel de soporte** (*Ajustes → Soporte Parla*, solo cuentas de soporte): repartidores por
-    revisar con su DNI, licencia y foto del documento para **aprobar o rechazar**, y la bandeja de
-    **reclamos** con las fotos del cliente y de la entrega para devolver o rechazar.
+  - **Panel de soporte** (*Ajustes → Soporte Parla*, solo cuentas de soporte):
+    - **Pedidos**: todos, por pestaña (en curso, entregados, cancelados) y buscando por id, nombre o
+      teléfono del cliente, con su historial. Un pedido trabado se **cancela con devolución** (o se
+      anula el cobro si no se pagó), hasta antes de que salga de la tienda.
+    - **Repartidores** por revisar con su DNI, licencia y foto del documento para **aprobar o rechazar**.
+    - **Reclamos** con las fotos del cliente y de la entrega para devolver o rechazar.
+    - **Cupones**: crearlos y pausarlos, con cuántas veces se usó cada uno.
+  - **Cupones y envío gratis**: en el carrito el cliente escribe un código. Hay de **% en productos**
+    (con tope), de **monto fijo** y de **envío gratis**, con compra mínima, solo para el primer pedido,
+    usos por persona, límite total y fecha de vencimiento. El core decide si vale (y dice por qué no:
+    «Ya usaste este cupón», «es para compras desde S/ 20.00»…) y lo vuelve a validar al crear el pedido.
+    El descuento lo asume Parla: la tienda cobra sus productos y el repartidor su tarifa completa, y
+    la propina nunca se descuenta. Si el pedido se cancela o vence, el cupón vuelve a quedar libre.
+    Vienen dos de ejemplo: `BIENVENIDA` (envío gratis en el primer pedido) y `PARLA10` (10 % desde S/ 20,
+    hasta S/ 10).
+  - **Direcciones guardadas y «Volver a pedir»**: cada dirección con la que pide se guarda sola (las 8
+    más recientes); en el carrito aparece para elegirla de un toque, ponerle nombre («Casa»,
+    «Trabajo») o borrarla. Desde un pedido anterior, *Volver a pedir* arma el carrito con los mismos
+    productos y la misma dirección, con los precios y el stock de ahora.
+  - **Stock que vuelve a la tienda**: si un pedido se cancela, se rechaza o vence sin pagar, el gateway
+    anula la reserva en la tienda y el stock vuelve. Si el core falla justo después de cobrar, el
+    gateway anula el cobro y devuelve el stock (y si igual lo pagaron, ese pago se devuelve solo).
   - **Propina**: en el carrito el cliente elige S/ 1, 2, 3, 5 u otro monto; se cobra en el mismo QR
     y va completa al repartidor (que la ve en la oferta y en sus ganancias).
   - **Ganancias del repartidor y comisión automática**: el repartidor gana el **95 % de la tarifa de
@@ -193,7 +212,7 @@ pones tu nombre, un usuario opcional y la contraseña.
   - **Si el repartidor no puede**: lo suelta antes de recogerlo («No puedo llevarlo») o la tienda pide
     otro («No llega · buscar otro»); el pedido vuelve a ofrecerse a los demás repartidores.
   - **Hora estimada de llegada** con el tiempo que cotiza Rapidito, que se ajusta al recoger el pedido.
-- **Mis pedidos**: historial con el estado de cada uno.
+- **Mis pedidos**: historial con el estado de cada uno, y *Volver a pedir*.
 - **Salud**: aparece como «Próximamente». La arquitectura ya permite sumarlo con su propio traductor.
 
 **Registro con el teléfono verificado (como WhatsApp)**

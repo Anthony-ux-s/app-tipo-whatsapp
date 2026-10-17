@@ -3,6 +3,13 @@ import { AuthModule } from '../identity/auth/auth.module';
 import { PushEngineModule } from '../messaging/push/push-engine.module';
 import { BUSINESSES_REPOSITORY } from './businesses.repository';
 import { CLAIMS_REPOSITORY } from './claims.repository';
+import { ADDRESSES_REPOSITORY } from './addresses.repository';
+import { COUPONS_REPOSITORY } from './coupons.repository';
+import { PrismaAddressesRepository } from './prisma-addresses.repository';
+import { PrismaCouponsRepository } from './prisma-coupons.repository';
+import { DeleteAddressUseCase, LabelAddressUseCase, ListMyAddressesUseCase } from './use-cases/addresses.use-cases';
+import { GetAdminOrderUseCase, IsAdminUseCase, ListAdminOrdersUseCase } from './use-cases/admin-orders.use-cases';
+import { CreateCouponUseCase, ListCouponsUseCase, QuoteCouponUseCase, SetCouponActiveUseCase } from './use-cases/coupons.use-cases';
 import { DispatchPolicy } from './dispatch.policy';
 import { DRIVER_LEDGER_REPOSITORY } from './driver-ledger.repository';
 import { PHOTOS_REPOSITORY } from './photos.repository';
@@ -73,6 +80,16 @@ import {
 } from './use-cases/driver-wallet.use-cases';
 
 const USE_CASES = [
+  ListMyAddressesUseCase,
+  LabelAddressUseCase,
+  DeleteAddressUseCase,
+  ListAdminOrdersUseCase,
+  GetAdminOrderUseCase,
+  IsAdminUseCase,
+  QuoteCouponUseCase,
+  ListCouponsUseCase,
+  CreateCouponUseCase,
+  SetCouponActiveUseCase,
   CreateOrderUseCase,
   GetInternalOrderUseCase,
   UpdateOrderUseCase,
@@ -131,6 +148,8 @@ const USE_CASES = [
     { provide: DRIVER_LEDGER_REPOSITORY, useClass: PrismaDriverLedgerRepository },
     { provide: CLAIMS_REPOSITORY, useClass: PrismaClaimsRepository },
     { provide: PHOTOS_REPOSITORY, useClass: PrismaPhotosRepository },
+    { provide: COUPONS_REPOSITORY, useClass: PrismaCouponsRepository },
+    { provide: ADDRESSES_REPOSITORY, useClass: PrismaAddressesRepository },
     DriverPayPolicy,
     DispatchPolicy,
     OrderEvents,

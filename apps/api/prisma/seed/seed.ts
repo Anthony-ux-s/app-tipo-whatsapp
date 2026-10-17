@@ -269,6 +269,14 @@ async function main(): Promise<void> {
   }
   const person = (key: string) => people.get(key)!;
 
+  console.log('Creando cupones de ejemplo…');
+  await prisma.coupon.createMany({
+    data: [
+      { code: 'BIENVENIDA', description: 'Envío gratis en tu primer pedido', kind: 'free_delivery', firstOrderOnly: true },
+      { code: 'PARLA10', description: '10 % de descuento en productos (hasta S/ 10)', kind: 'percent', value: 10, maxDiscountCents: 1000, minSubtotalCents: 2000, perUserLimit: 3 },
+    ],
+  });
+
   console.log('Creando el negocio del Mercado y los repartidores de Rapidito…');
   await prisma.business.create({
     data: { name: BUSINESS.name, service: BUSINESS.service, address: BUSINESS.address, lat: BUSINESS.lat, lng: BUSINESS.lng, opensAt: BUSINESS.opensAt, closesAt: BUSINESS.closesAt, ownerId: person(BUSINESS.owner).id },

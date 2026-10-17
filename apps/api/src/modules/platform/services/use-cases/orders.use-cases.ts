@@ -35,6 +35,10 @@ import { DispatchPolicy } from '../dispatch.policy';
 import { DriverPayPolicy } from '../driver-pay.policy';
 import { DRIVERS_REPOSITORY, type DriversRepository } from '../drivers.repository';
 import { ORDERS_REPOSITORY, type OrderChanges, type OrderRecord, type OrdersRepository } from '../orders.repository';
+import { ADDRESSES_REPOSITORY, type AddressesRepository } from '../addresses.repository';
+import { COUPONS_REPOSITORY, type CouponsRepository } from '../coupons.repository';
+import { SAVED_ADDRESSES_LIMIT } from './addresses.use-cases';
+import { evaluateCoupon } from './coupon-evaluation';
 
 const HISTORY_LIMIT = 50;
 
@@ -58,6 +62,8 @@ export function toOrder(order: OrderRecord, forCustomer = false): Order {
     subtotalCents: order.subtotalCents,
     deliveryFeeCents: order.deliveryFeeCents,
     tipCents: order.tipCents,
+    discountCents: order.discountCents,
+    couponCode: order.couponCode,
     totalCents: order.totalCents,
     currency: order.currency,
     address: order.address,
@@ -224,13 +230,25 @@ export class CreateOrderUseCase {
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
     @Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository,
     private readonly events: OrderEvents,
+    @Inject(COUPONS_REPOSITORY) private readonly coupons: CouponsRepository,
+    @Inject(ADDRESSES_REPOSITORY) private readonly addresses: AddressesRepository,
   ) {}
 
   async execute(input: InternalCreateOrder): Promise<InternalOrder> {
     const [customer] = await this.users.findActiveByIds([input.userId]);
     if (!customer) throw new NotFoundError('Esa cuenta no existe');
-    assertOrderTotals(input.lines, input.subtotalCents, input.deliveryFeeCents, input.totalCents, input.tipCents ?? 0);
+    const discountCents = input.discountCents ?? 0;
+    assertOrderTotals(input.lines, input.subtotalCents, input.deliveryFeeCents, input.totalCents, input.tipCents ?? 0, discountCents);
     if (await this.orders.findById(input.id)) throw new ConflictError('Ese pedido ya existe');
+    // El cupón se vuelve a validar aquí (pudo vencer o agotarse desde la cotización).
+    let couponCode: string | null = null;
+    if (input.couponCode) {
+      const applied = await evaluateCoupon(this.coupons, { code: input.couponCode, userId: input.userId, subtotalCents: input.subtotalCents, deliveryFeeCents: input.deliveryFeeCents });
+      if (applied.discountCents !== discountCents) throw new ConflictError('El descuento del cupón cambió; vuelve a revisar tu carrito');
+      couponCode = applied.code;
+    } else if (discountCents !== 0) {
+      throw new ValidationError('Un descuento necesita un cupón');
+    }
 
     // El negocio que atiende el servicio recibe el pedido cuando se pague.
     const business = await this.businesses.findByService(input.service);
@@ -241,8 +259,12 @@ export class CreateOrderUseCase {
       deliveryCode: newDeliveryCode(),
       etaMinutes: input.etaMinutes,
       tipCents: input.tipCents ?? 0,
+      discountCents,
+      couponCode,
     });
     this.events.changed(order);
+    // Se recuerda la dirección para el próximo pedido (si falla, el pedido sigue igual).
+    await this.addresses.remember(input.userId, input.address, new Date(), SAVED_ADDRESSES_LIMIT).catch(() => undefined);
     return toInternalOrder(order);
   }
 }

@@ -27,6 +27,9 @@ export interface OrderRecord {
   deliveryFeeCents: number;
   /** Propina para el repartidor (incluida en el total). */
   tipCents: number;
+  /** Descuento del cupón (ya restado del total) y su código; al crear se registra su uso. */
+  discountCents: number;
+  couponCode: string | null;
   totalCents: number;
   currency: Currency;
   address: DeliveryAddress;
@@ -78,6 +81,13 @@ export interface OrderChanges {
   note?: string;
 }
 
+/** Búsqueda de soporte: por estado y por id del pedido o nombre del cliente. */
+export interface AdminOrderFilter {
+  statuses?: OrderStatus[];
+  query?: string;
+  limit: number;
+}
+
 export interface OrdersRepository {
   create(order: NewOrder): Promise<OrderRecord>;
   findById(id: string): Promise<OrderRecord | null>;
@@ -106,6 +116,8 @@ export interface OrdersRepository {
   widenOffer(id: string, radiusKm: number | null, at: Date): Promise<OrderRecord | null>;
   /** Guarda la calificación (solo si aún no tenía). Devuelve null si ya estaba calificado. */
   rate(id: string, rating: Omit<OrderRating, 'at'>, at: Date): Promise<OrderRecord | null>;
+  /** Para soporte: todos los pedidos (los más recientes primero), con filtro. */
+  search(filter: AdminOrderFilter): Promise<OrderRecord[]>;
   /** Promedio de estrellas de un repartidor o de una tienda. */
   ratingSummary(of: { driverId: string } | { businessId: string }): Promise<RatingSummary>;
 }

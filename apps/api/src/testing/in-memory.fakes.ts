@@ -22,7 +22,10 @@ import type { ClaimChanges, ClaimRecord, ClaimsRepository, NewClaim } from '../m
 import type { DriverLedgerRepository, LedgerEntryRecord } from '../modules/platform/services/driver-ledger.repository';
 import type { PhotosRepository } from '../modules/platform/services/photos.repository';
 import type { DriverChanges, DriverRecord, DriverRegistration, DriversRepository } from '../modules/platform/services/drivers.repository';
-import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
+import type { AdminOrderFilter, NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
+import type { CouponRecord, CouponsRepository, NewCoupon } from '../modules/platform/services/coupons.repository';
+import type { AddressesRepository } from '../modules/platform/services/addresses.repository';
+import type { DeliveryAddress as AddressInput, SavedAddress } from '@parla/types';
 import type { AppEnv } from '../config/env.validation';
 import type { VerificationSender } from '../infra/messaging/verification-sender.port';
 import type { NewVerification, VerificationCodesRepository, VerificationRecord } from '../modules/platform/identity/verification/verification-codes.repository';
@@ -392,6 +395,14 @@ export class InMemoryOrdersRepository implements OrdersRepository {
   async listByStatus(statuses: OrderStatus[], limit: number) {
     return this.orders.filter((o) => statuses.includes(o.status)).slice(0, limit).map((o) => this.withLocation(o));
   }
+  async search({ statuses, query, limit }: AdminOrderFilter) {
+    const q = query?.trim();
+    return [...this.orders]
+      .reverse()
+      .filter((o) => (!statuses?.length || statuses.includes(o.status)) && (!q || o.id.includes(q)))
+      .slice(0, limit)
+      .map((o) => this.withLocation(o));
+  }
   async rate(id: string, rating: Omit<OrderRating, 'at'>, at: Date) {
     const order = this.orders.find((o) => o.id === id);
     if (!order || order.rating) return null;
@@ -600,5 +611,66 @@ export class InMemoryPhotos implements PhotosRepository {
   }
   async uploaderOf(id: string) {
     return this.owners.get(id) ?? null;
+  }
+}
+
+/** Cupones: los usos salen de los pedidos con ese cupón que siguen vivos (como el join de Prisma). */
+export class InMemoryCoupons implements CouponsRepository {
+  coupons: CouponRecord[] = [];
+  constructor(private readonly orders: InMemoryOrdersRepository) {}
+  private static readonly FREED: OrderStatus[] = ['cancelled', 'rejected', 'payment_expired'];
+  async findByCode(code: string) {
+    const c = this.coupons.find((x) => x.code === code);
+    return c ? { ...c } : null;
+  }
+  async create(c: NewCoupon) {
+    const record: CouponRecord = { ...c, active: true, startsAt: null, createdAt: new Date() };
+    this.coupons.push(record);
+    return { ...record };
+  }
+  async setActive(code: string, active: boolean) {
+    const c = this.coupons.find((x) => x.code === code);
+    if (!c) return null;
+    c.active = active;
+    return { ...c };
+  }
+  async list(limit: number) {
+    return [...this.coupons].reverse().slice(0, limit).map((c) => ({ ...c }));
+  }
+  async countUses(code: string, userId?: string) {
+    return this.orders.orders.filter((o) => o.couponCode === code && (!userId || o.userId === userId) && !InMemoryCoupons.FREED.includes(o.status)).length;
+  }
+  async countLiveOrders(userId: string) {
+    return this.orders.orders.filter((o) => o.userId === userId && !InMemoryCoupons.FREED.includes(o.status)).length;
+  }
+}
+
+export class InMemoryAddresses implements AddressesRepository {
+  addresses: (SavedAddress & { userId: string })[] = [];
+  async list(userId: string, limit: number) {
+    return this.addresses
+      .filter((a) => a.userId === userId)
+      .sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt))
+      .slice(0, limit)
+      .map(({ userId: _, ...a }) => a);
+  }
+  async remember(userId: string, address: AddressInput, at: Date, keep: number) {
+    const found = this.addresses.find((a) => a.userId === userId && a.line === address.line);
+    if (found) Object.assign(found, { reference: address.reference, lastUsedAt: at.toISOString(), ...(address.location ? { location: address.location } : {}) });
+    else this.addresses.push({ id: nextId('ad'), userId, label: '', line: address.line, reference: address.reference, location: address.location ?? null, lastUsedAt: at.toISOString() });
+    const mine = (await this.list(userId, 1000)).map((a) => a.id);
+    this.addresses = this.addresses.filter((a) => a.userId !== userId || mine.indexOf(a.id) < keep);
+  }
+  async setLabel(userId: string, id: string, label: string) {
+    const a = this.addresses.find((x) => x.id === id && x.userId === userId);
+    if (!a) return null;
+    a.label = label;
+    const { userId: _, ...rest } = a;
+    return rest;
+  }
+  async delete(userId: string, id: string) {
+    const before = this.addresses.length;
+    this.addresses = this.addresses.filter((a) => !(a.id === id && a.userId === userId));
+    return this.addresses.length < before;
   }
 }

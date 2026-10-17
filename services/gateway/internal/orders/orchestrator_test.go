@@ -21,6 +21,7 @@ import (
 type fakeCommerce struct {
 	products map[string]services.Product
 	reserved map[string][]services.CartItem
+	released []string
 	outOf    string
 	patches  []mercaya.ProductPatch
 	// updateErr simula que la tienda rechaza o no responde un cambio del catálogo.
@@ -72,6 +73,11 @@ func (f *fakeCommerce) Reserve(_ context.Context, ref string, items []services.C
 		return mercaya.OutOfStockError{ProductID: f.outOf}
 	}
 	f.reserved[ref] = items
+	return nil
+}
+
+func (f *fakeCommerce) Release(_ context.Context, ref string) error {
+	f.released = append(f.released, ref)
 	return nil
 }
 
@@ -130,6 +136,30 @@ type fakeCore struct {
 	// business: el negocio del Mercado (nil = ninguno); businessErr simula que el core no responde.
 	business    *services.Business
 	businessErr error
+	// createErr simula que el core falla al guardar un pedido nuevo.
+	createErr error
+	// coupons: los cupones válidos y su descuento; admins: cuentas de soporte.
+	coupons map[string]services.AppliedCoupon
+	admins  map[string]bool
+	created []services.InternalCreateOrder
+}
+
+func (f *fakeCore) QuoteCoupon(_ context.Context, q services.CouponQuote) (services.AppliedCoupon, error) {
+	if q.Code == "USADO" {
+		return services.AppliedCoupon{}, &ConflictError{Message: "Ya usaste este cupón"}
+	}
+	c, ok := f.coupons[strings.ToUpper(q.Code)]
+	if !ok {
+		return services.AppliedCoupon{}, ErrNotFound
+	}
+	if c.Kind == "free_delivery" {
+		c.DiscountCents = q.DeliveryFeeCents
+	}
+	return c, nil
+}
+
+func (f *fakeCore) IsAdmin(_ context.Context, userID string) (bool, error) {
+	return f.admins[userID], nil
 }
 
 func (f *fakeCore) BusinessByService(_ context.Context, service services.ServiceID) (services.Business, error) {
@@ -155,6 +185,10 @@ func (f *fakeCore) BusinessByOwner(_ context.Context, userID string) (services.B
 func (f *fakeCore) CreateOrder(_ context.Context, in services.InternalCreateOrder) (services.InternalOrder, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.createErr != nil {
+		return services.InternalOrder{}, f.createErr
+	}
+	f.created = append(f.created, in)
 	o := services.InternalOrder{
 		Order: services.Order{
 			ID: in.ID, Service: in.Service, Status: services.PendingPayment, Lines: in.Lines,
@@ -247,7 +281,7 @@ func status(err error) int {
 // ── Pruebas ───────────────────────────────────────────────────────────────────
 
 func TestCotizaConPreciosDeLaTiendaYSumaElDelivery(t *testing.T) {
-	q, err := newWorld().orch.Quote(context.Background(), cart)
+	q, err := newWorld().orch.Quote(context.Background(), "u", cart)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,12 +307,12 @@ func TestValidaElCarritoYElStock(t *testing.T) {
 		"muchísimos": {Items: make([]services.CartItem, 31), Address: cart.Address},
 	}
 	for name, req := range cases {
-		if _, err := o.Quote(ctx, req); status(err) != http.StatusBadRequest {
+		if _, err := o.Quote(ctx, "u", req); status(err) != http.StatusBadRequest {
 			t.Errorf("%s: esperaba 400, obtuve %v", name, err)
 		}
 	}
 	tooMany := services.QuoteRequest{Items: []services.CartItem{{ProductID: "ARR-EXT-1K", Quantity: 3}}, Address: cart.Address}
-	if _, err := o.Quote(ctx, tooMany); status(err) != http.StatusConflict || err.Error() != "Solo quedan 2 de «Arroz extra»" {
+	if _, err := o.Quote(ctx, "u", tooMany); status(err) != http.StatusConflict || err.Error() != "Solo quedan 2 de «Arroz extra»" {
 		t.Fatalf("esperaba 409 por stock, obtuve %v", err)
 	}
 }
@@ -309,7 +343,7 @@ func TestLaPropinaSeSumaAlTotalYAlCobro(t *testing.T) {
 	ctx := context.Background()
 	req := cart
 	req.TipCents = 300
-	q, err := w.orch.Quote(ctx, req)
+	q, err := w.orch.Quote(ctx, "u", req)
 	if err != nil || q.TipCents != 300 || q.TotalCents != q.SubtotalCents+q.DeliveryFeeCents+300 {
 		t.Fatalf("la propina debía sumarse al total: %+v %v", q, err)
 	}
@@ -326,7 +360,7 @@ func TestLaPropinaSeSumaAlTotalYAlCobro(t *testing.T) {
 	for _, tip := range []int{-1, 10_001} {
 		bad := cart
 		bad.TipCents = tip
-		if _, err := w.orch.Quote(ctx, bad); status(err) != http.StatusBadRequest {
+		if _, err := w.orch.Quote(ctx, "u", bad); status(err) != http.StatusBadRequest {
 			t.Fatalf("propina %d: esperaba 400, obtuve %v", tip, err)
 		}
 	}
@@ -570,7 +604,7 @@ func TestTiendaCerradaNoCotizaNiVende(t *testing.T) {
 	w := newWorld()
 	ctx := context.Background()
 	w.core.business = store(false)
-	if _, err := w.orch.Quote(ctx, cart); status(err) != http.StatusConflict || err.Error() != "Bodega MercaYa abre a las 08:00" {
+	if _, err := w.orch.Quote(ctx, "u", cart); status(err) != http.StatusConflict || err.Error() != "Bodega MercaYa abre a las 08:00" {
 		t.Fatalf("cerrada no cotiza, obtuve %v", err)
 	}
 	if _, err := w.orch.Create(ctx, "u", cart); status(err) != http.StatusConflict {
@@ -581,11 +615,11 @@ func TestTiendaCerradaNoCotizaNiVende(t *testing.T) {
 	}
 	// Sin mensaje del core, uno genérico.
 	w.core.business.ClosedMessage = nil
-	if _, err := w.orch.Quote(ctx, cart); err == nil || err.Error() != "La tienda está cerrada ahora" {
+	if _, err := w.orch.Quote(ctx, "u", cart); err == nil || err.Error() != "La tienda está cerrada ahora" {
 		t.Fatalf("mensaje genérico esperado, obtuve %v", err)
 	}
 	w.core.business = store(true)
-	if _, err := w.orch.Quote(ctx, cart); err != nil {
+	if _, err := w.orch.Quote(ctx, "u", cart); err != nil {
 		t.Fatalf("abierta cotiza: %v", err)
 	}
 }
@@ -593,11 +627,11 @@ func TestTiendaCerradaNoCotizaNiVende(t *testing.T) {
 func TestSinNegocioSeVendeYSiElCoreFallaEs502(t *testing.T) {
 	w := newWorld()
 	ctx := context.Background()
-	if _, err := w.orch.Quote(ctx, cart); err != nil {
+	if _, err := w.orch.Quote(ctx, "u", cart); err != nil {
 		t.Fatalf("sin negocio la tienda atiende igual: %v", err)
 	}
 	w.core.businessErr = errors.New("core caído")
-	if _, err := w.orch.Quote(ctx, cart); status(err) != http.StatusBadGateway {
+	if _, err := w.orch.Quote(ctx, "u", cart); status(err) != http.StatusBadGateway {
 		t.Fatalf("si no se sabe el horario, 502; obtuve %v", err)
 	}
 }
@@ -725,7 +759,7 @@ func TestLaUbicacionDelMapaLlegaAlCoreYSeValida(t *testing.T) {
 	}
 	bad := cart
 	bad.Address.Location = &services.GeoPoint{Lat: 120, Lng: 0}
-	if _, err := w.orch.Quote(ctx, bad); status(err) != http.StatusBadRequest {
+	if _, err := w.orch.Quote(ctx, "u", bad); status(err) != http.StatusBadRequest {
 		t.Fatalf("un punto fuera del mapa debía rechazarse, obtuve %v", err)
 	}
 }
@@ -737,21 +771,148 @@ func TestLaTarifaSaleDeLaDistanciaDeLaTiendaAlPuntoDeEntrega(t *testing.T) {
 	w.core.business = &services.Business{ID: "biz_1", Name: "Bodega", Service: services.Mercado, OwnerID: "dueña", Open: true, Location: store}
 
 	// Sin punto en el mapa: tarifa de referencia y sin distancia.
-	q, err := w.orch.Quote(ctx, cart)
+	q, err := w.orch.Quote(ctx, "u", cart)
 	if err != nil || q.DeliveryFeeCents != 650 || q.DistanceKm != nil || w.delivery.pickup == nil || *w.delivery.pickup != *store {
 		t.Fatalf("sin punto de entrega: %+v %v (recojo %v)", q, err, w.delivery.pickup)
 	}
 	// Con el punto marcado: por distancia, y el total la suma.
 	req := cart
 	req.Address.Location = &services.GeoPoint{Lat: -12.1191, Lng: -77.0349}
-	q, err = w.orch.Quote(ctx, req)
+	q, err = w.orch.Quote(ctx, "u", req)
 	if err != nil || q.DeliveryFeeCents != 600 || q.DistanceKm == nil || *q.DistanceKm != 2.5 || q.ETAMinutes != 18 ||
 		q.TotalCents != q.SubtotalCents+600 {
 		t.Fatalf("con punto de entrega: %+v %v", q, err)
 	}
 	// Sin ubicación de la tienda en el core, no se manda recojo.
 	w.core.business.Location = nil
-	if q, _ := w.orch.Quote(ctx, req); q.DistanceKm != nil || w.delivery.pickup != nil {
+	if q, _ := w.orch.Quote(ctx, "u", req); q.DistanceKm != nil || w.delivery.pickup != nil {
 		t.Fatalf("sin tienda en el mapa no hay distancia: %+v", q)
+	}
+}
+
+func TestCancelarRechazarOVencerDevuelveElStockALaTienda(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	if _, err := w.orch.CancelByCustomer(ctx, "u", "ord_1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.commerce.released) != 1 || w.commerce.released[0] != "ord_1" {
+		t.Fatalf("cancelar devuelve el stock: %v", w.commerce.released)
+	}
+
+	w = newWorld()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	if err := w.orch.PaymentEvent(ctx, pagaya.Event{Reference: "ord_1", Status: services.PaymentExpired}); err != nil {
+		t.Fatal(err)
+	}
+	// El aviso repetido no vuelve a pedirlo
+	_ = w.orch.PaymentEvent(ctx, pagaya.Event{Reference: "ord_1", Status: services.PaymentExpired})
+	if len(w.commerce.released) != 1 {
+		t.Fatalf("el cobro vencido devuelve el stock una vez: %v", w.commerce.released)
+	}
+
+	w = newWorld()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	_ = w.orch.PaymentEvent(ctx, paidEvent())
+	if _, err := w.orch.RejectByOwner(ctx, owner, "ord_1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.commerce.released) != 1 {
+		t.Fatalf("rechazar devuelve el stock: %v", w.commerce.released)
+	}
+}
+
+func TestSiElCoreFallaAlCrearSeAnulaElCobroYSeDevuelveElStock(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld()
+	w.core.createErr = errors.New("core caído")
+	if _, err := w.orch.Create(ctx, "u", cart); status(err) != http.StatusBadGateway {
+		t.Fatalf("esperaba 502, obtuve %v", err)
+	}
+	if len(w.payments.cancelled) != 1 || w.payments.cancelled[0] != "cob_1" {
+		t.Fatalf("el cobro queda anulado: %+v", w.payments)
+	}
+	if len(w.commerce.released) != 1 || w.commerce.released[0] != "ord_1" {
+		t.Fatalf("el stock vuelve a la tienda: %v", w.commerce.released)
+	}
+	// Si igual lo pagaron (carrera), el aviso de pago de un pedido que no existe se devuelve
+	if err := w.orch.PaymentEvent(ctx, pagaya.Event{Reference: "ord_1", ChargeID: "cob_1", Status: services.Paid}); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.payments.refunded) != 1 || w.payments.refunded[0] != "cob_1" {
+		t.Fatalf("se devuelve el pago huérfano: %+v", w.payments)
+	}
+}
+
+func TestElCuponDescuentaDelTotalYLlegaAlCore(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld()
+	w.core.coupons = map[string]services.AppliedCoupon{
+		"PARLA5":     {Code: "PARLA5", Description: "S/ 5 menos", Kind: "amount", DiscountCents: 500},
+		"BIENVENIDA": {Code: "BIENVENIDA", Description: "Envío gratis", Kind: "free_delivery"},
+	}
+	req := cart
+	req.TipCents = 200
+	req.CouponCode = " parla5 "
+	q, err := w.orch.Quote(ctx, "u", req)
+	if err != nil || q.DiscountCents != 500 || q.Coupon == nil || q.TotalCents != q.SubtotalCents+q.DeliveryFeeCents+200-500 {
+		t.Fatalf("cotización con cupón: %+v %v", q, err)
+	}
+	req.CouponCode = "bienvenida"
+	if q, _ := w.orch.Quote(ctx, "u", req); q.DiscountCents != q.DeliveryFeeCents || q.TotalCents != q.SubtotalCents+200 {
+		t.Fatalf("envío gratis descuenta el delivery: %+v", q)
+	}
+	req.CouponCode = "NOEXISTE"
+	if _, err := w.orch.Quote(ctx, "u", req); status(err) != http.StatusUnprocessableEntity || err.Error() != "Ese cupón no existe" {
+		t.Fatalf("cupón desconocido: %v", err)
+	}
+	req.CouponCode = "USADO"
+	if _, err := w.orch.Quote(ctx, "u", req); status(err) != http.StatusUnprocessableEntity || err.Error() != "Ya usaste este cupón" {
+		t.Fatalf("el motivo del core llega tal cual: %v", err)
+	}
+
+	req.CouponCode = "PARLA5"
+	if _, err := w.orch.Create(ctx, "u", req); err != nil {
+		t.Fatal(err)
+	}
+	got := w.core.created[0]
+	if got.DiscountCents != 500 || got.CouponCode != "PARLA5" || got.TotalCents != got.SubtotalCents+got.DeliveryFeeCents+200-500 {
+		t.Fatalf("el core recibe el descuento: %+v", got)
+	}
+	if w.payments.last.AmountCents != got.TotalCents || !strings.Contains(w.payments.last.Concept, "cupón PARLA5") {
+		t.Fatalf("se cobra el total con descuento: %+v", w.payments.last)
+	}
+}
+
+func TestSoporteCancelaUnPedidoTrabadoYDevuelve(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld()
+	w.core.admins = map[string]bool{"soporte": true}
+	_, _ = w.orch.Create(ctx, "u", cart)
+	_ = w.orch.PaymentEvent(ctx, paidEvent())
+	o := w.core.orders["ord_1"]
+	o.Status = services.SearchingDriver
+	w.core.orders["ord_1"] = o
+	if _, err := w.orch.CancelBySupport(ctx, "u", "ord_1"); status(err) != http.StatusForbidden {
+		t.Fatalf("solo soporte: %v", err)
+	}
+	order, err := w.orch.CancelBySupport(ctx, "soporte", "ord_1")
+	if err != nil || order.Status != services.Cancelled || len(w.payments.refunded) != 1 || len(w.commerce.released) != 1 {
+		t.Fatalf("soporte cancela con devolución: %+v %v %+v", order, err, w.payments)
+	}
+	if last := w.core.updates[len(w.core.updates)-1]; last.Note != "Cancelado por soporte · pago devuelto" {
+		t.Fatalf("nota: %+v", last)
+	}
+}
+
+func TestVolverAPedirTraeLosProductosDeAhora(t *testing.T) {
+	w := newWorld()
+	got, err := w.orch.ProductsByID(context.Background(), []string{"AZU-RUB-1K", "NO-EXISTE"})
+	if err != nil || len(got) != 1 || got[0].ID != "AZU-RUB-1K" {
+		t.Fatalf("solo los que existen: %+v %v", got, err)
+	}
+	if _, err := w.orch.ProductsByID(context.Background(), []string{"../x"}); status(err) != http.StatusBadRequest {
+		t.Fatalf("id raro: %v", err)
 	}
 }

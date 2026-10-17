@@ -49,6 +49,7 @@ model User {
   mentions          MessageMention[]
   pushSubscriptions PushSubscription[]
   orders            Order[]
+  savedAddresses    SavedAddress[]
   /// Negocio del que es dueño (atiende pedidos de un servicio); null para los clientes.
   business          Business?
   /// Perfil de repartidor de Rapidito; null si no reparte.
@@ -195,6 +196,9 @@ model Order {
   deliveryFeeCents     Int
   /// Propina para el repartidor (incluida en totalCents).
   tipCents             Int       @default(0)
+  /// Descuento del cupón (ya restado de totalCents) y su código.
+  discountCents        Int       @default(0)
+  couponCode           String?
   totalCents           Int
   currency             String
   /// JSON DeliveryAddress
@@ -232,10 +236,11 @@ model Order {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business?         @relation(fields: [businessId], references: [id], onDelete: SetNull)
   claims   Claim[]
-  driver   Driver?   @relation(fields: [driverId], references: [userId], onDelete: SetNull)
+  driver   Driver?           @relation(fields: [driverId], references: [userId], onDelete: SetNull)
+  coupon   CouponRedemption?
 
   @@index([userId, createdAt])
   @@index([businessId, createdAt])
@@ -395,4 +400,67 @@ model Claim {
 
   @@index([status, createdAt])
   @@index([orderId])
+}
+
+/// Dirección de entrega guardada (como «Casa» o «Trabajo» en Rappi). Se recuerda sola al pedir; la
+/// persona le pone nombre o la borra.
+model SavedAddress {
+  id         String   @id @default(cuid())
+  userId     String
+  /// Nombre opcional: «Casa», «Trabajo»…
+  label      String   @default("")
+  line       String
+  reference  String   @default("")
+  lat        Float?
+  lng        Float?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, line])
+  @@index([userId, lastUsedAt])
+}
+
+/// Cupón de descuento o envío gratis (lo crea soporte). Los usos que cuentan son los de pedidos que
+/// siguen vivos o se entregaron: si el pedido se cancela o vence, el cupón vuelve a quedar libre.
+model Coupon {
+  /// El código que escribe el cliente, en mayúsculas («BIENVENIDA»).
+  code             String    @id
+  description      String
+  /// percent | amount | free_delivery
+  kind             String
+  /// Porcentaje (1 a 100) o céntimos de descuento; 0 en envío gratis.
+  value            Int       @default(0)
+  /// Tope del descuento en porcentaje (null = sin tope).
+  maxDiscountCents Int?
+  /// Compra mínima en productos.
+  minSubtotalCents Int       @default(0)
+  /// Solo para el primer pedido de la persona.
+  firstOrderOnly   Boolean   @default(false)
+  /// Usos por persona y en total (null = sin límite total).
+  perUserLimit     Int       @default(1)
+  maxUses          Int?
+  startsAt         DateTime?
+  endsAt           DateTime?
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+
+  redemptions CouponRedemption[]
+}
+
+/// Un cupón usado en un pedido (uno por pedido).
+model CouponRedemption {
+  id            String   @id @default(cuid())
+  couponCode    String
+  userId        String
+  orderId       String   @unique
+  discountCents Int
+  createdAt     DateTime @default(now())
+
+  coupon Coupon @relation(fields: [couponCode], references: [code], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([couponCode])
+  @@index([userId])
 }

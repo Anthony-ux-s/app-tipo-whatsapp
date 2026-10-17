@@ -41,6 +41,7 @@ func (shopFake) Product(_ context.Context, id string) (services.Product, error) 
 	return services.Product{ID: id, Name: "Azúcar rubia", Unit: "1 kg", PriceCents: 450, Stock: 9, Currency: "PEN"}, nil
 }
 func (shopFake) Reserve(context.Context, string, []services.CartItem) error { return nil }
+func (shopFake) Release(context.Context, string) error                      { return nil }
 func (shopFake) Update(_ context.Context, id string, _ mercaya.ProductPatch) (services.Product, error) {
 	return services.Product{ID: id, Name: "Azúcar rubia", PriceCents: 450, Stock: 9, Currency: "PEN"}, nil
 }
@@ -70,6 +71,10 @@ func (c *coreFake) BusinessByService(context.Context, services.ServiceID) (servi
 func (c *coreFake) BusinessByOwner(context.Context, string) (services.Business, error) {
 	return services.Business{}, orders.ErrNotFound
 }
+func (c *coreFake) QuoteCoupon(context.Context, services.CouponQuote) (services.AppliedCoupon, error) {
+	return services.AppliedCoupon{}, orders.ErrNotFound
+}
+func (c *coreFake) IsAdmin(context.Context, string) (bool, error) { return false, nil }
 
 type payFake struct{}
 

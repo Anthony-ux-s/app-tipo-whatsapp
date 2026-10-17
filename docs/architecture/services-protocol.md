@@ -51,6 +51,22 @@ navegador ─► gateway Go ─┬─ traductor mercaya ──► MercaYa  (tien
 
 Si el cobro vence sin pagarse, PagaYa avisa `EXPIRADO` → `payment_expired`.
 
+**Cupón** (`couponCode` en el paso 3 y 4): el gateway le pide al core cuánto descuenta
+(`POST /api/internal/coupons/quote` `{code, userId, subtotalCents, deliveryFeeCents}` →
+`{code, description, kind, discountCents}`; 404 si no existe, 409 con el motivo si no vale, que el
+gateway responde como 422 `{"code":"coupon"}`). `OrderQuote` trae `discountCents` y `coupon`, y
+`totalCents = subtotalCents + deliveryFeeCents + tipCents − discountCents`. Al crear, el core vuelve a
+evaluar el cupón: si el descuento cambió responde 409 y no guarda nada; si vale, guarda el pedido y el
+uso del cupón en la misma escritura.
+
+**Stock y pedidos que no siguen**: al cancelar, rechazar o vencer un pedido el gateway anula la
+reserva en la tienda (`DELETE /mercaya/v1/pedidos/{referencia}`, idempotente). Si el core falla al
+guardar un pedido recién cobrado, el gateway anula el cobro y devuelve el stock; si ese cobro igual se
+paga, el aviso de pago de un pedido desconocido se devuelve.
+
+**Volver a pedir**: `GET /api/services/mercado/products?ids=A,B` trae esos productos con su precio y
+stock de ahora (los que ya no existen no vienen).
+
 ## Cancelar y devolver (gateway)
 
 Cancelar y rechazar mueven dinero en la billetera, así que los resuelve el gateway. Las tres rutas
@@ -164,6 +180,13 @@ Si la devolución salió pero cerrar en el core falla, responde 502 «Devolució
 confirmarla». Reintentar es seguro: el core entrega la misma `refundRef` pendiente y PagaYa responde la
 misma devolución sin devolver de nuevo.
 
+## Soporte cancela un pedido (gateway)
+
+`POST /api/admin/orders/{id}/cancel` (sesión de una cuenta de soporte; el gateway lo comprueba con
+`GET /api/internal/users/{id}/admin`): cancela un pedido trabado desde `pending_payment` hasta
+`driver_assigned`, con las mismas reglas que «Cancelar y devolver» (anula el cobro sin pagar o
+devuelve el pago, y devuelve el stock). Nota: «Cancelado por soporte · pago devuelto».
+
 ## Rutas internas del core (token entre servicios, nunca expuestas)
 
 | Ruta | Para qué |
@@ -178,6 +201,8 @@ misma devolución sin devolver de nuevo.
 | `GET /api/internal/payouts/stuck?olderThanMinutes=N` | Retiros pendientes hace más de N minutos, para conciliarlos → `[{"payoutId","amountCents","destination"}]` |
 | `POST /api/internal/claims/:id/refund-reservations` `{"adminUserId","amountCents"}` | Aparta la devolución de un reclamo → 201 `{"refundRef","chargeId","amountCents"}`; 403 / 404 / 409 con mensaje; repetirla devuelve la misma referencia pendiente |
 | `PATCH /api/internal/claims/:id/refund` `{"status":"refunded"\|"failed","providerRefundId"?,"failureReason"?}` | Cierra la devolución (idempotente) → el reclamo |
+| `POST /api/internal/coupons/quote` `{"code","userId","subtotalCents","deliveryFeeCents"}` | Descuento del cupón → `{"code","description","kind","discountCents"}`; 404 si no existe, 409 con el motivo |
+| `GET /api/internal/users/:id/admin` | `{"isAdmin"}`: si la cuenta es de soporte |
 | `PATCH /api/internal/orders/:id` `InternalUpdateOrder` | Cambia estado/pago/delivery (`paidAt`, `refundedAt`, `note` para la línea de tiempo). Con `expectStatus`, si el estado actual no coincide responde **409** sin cambiar nada. Acepta el mismo estado (p. ej. la devolución de un pago tardío). Publica `order:updated` al dueño. |
 
 ## APIs externas (simuladas en `services/providers`, puerto 4103)
@@ -187,6 +212,7 @@ Formatos distintos a propósito: así es en la vida real y es lo que justifica l
 **MercaYa** (tienda, español, precios en céntimos):
 - `GET /mercaya/v1/catalogo?buscar=texto` → `{"resultados":[{"sku","nombre","presentacion","precio_centimos","stock","categoria","imagen"}]}`
 - `POST /mercaya/v1/pedidos` `{"referencia","lineas":[{"sku","cantidad"}]}` → `{"numero_pedido","estado":"RESERVADO","total_centimos"}`; 409 `{"error":"SIN_STOCK","sku"}` si falta stock.
+- `DELETE /mercaya/v1/pedidos/{referencia}` → `{"estado":"ANULADO"}` y el stock vuelve (una sola vez); 404 si no existe.
 - Administración, con la clave en `x-mercaya-clave` (`MERCAYA_ADMIN_KEY`): `PATCH /mercaya/v1/productos/{sku}`
   `{"precio_centimos"?, "precio_antes_centimos"?: int|null, "stock"?}` → el `Producto` actualizado.
   `precio_antes_centimos: null` quita la oferta y si no viene no cambia. 400 `{"error":"DATOS_INVALIDOS"}`

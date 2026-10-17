@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/parla/gateway/internal/services"
 	"github.com/parla/gateway/internal/translators/pagaya"
@@ -31,7 +32,16 @@ func (h *HTTP) Catalog(w http.ResponseWriter, _ *http.Request, _ string) {
 }
 
 func (h *HTTP) Products(w http.ResponseWriter, r *http.Request, _ string) {
-	products, err := h.Orch.Products(r.Context(), r.URL.Query().Get("q"))
+	var (
+		products []services.Product
+		err      error
+	)
+	// ?ids=A,B trae esos productos (para «Volver a pedir»); si no, busca con ?q=.
+	if ids := r.URL.Query().Get("ids"); ids != "" {
+		products, err = h.Orch.ProductsByID(r.Context(), strings.Split(ids, ","))
+	} else {
+		products, err = h.Orch.Products(r.Context(), r.URL.Query().Get("q"))
+	}
 	if err != nil {
 		writeError(w, err)
 		return
@@ -39,12 +49,12 @@ func (h *HTTP) Products(w http.ResponseWriter, r *http.Request, _ string) {
 	WriteJSON(w, http.StatusOK, products)
 }
 
-func (h *HTTP) Quote(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *HTTP) Quote(w http.ResponseWriter, r *http.Request, userID string) {
 	req, ok := decodeRequest(w, r)
 	if !ok {
 		return
 	}
-	quote, err := h.Orch.Quote(r.Context(), req)
+	quote, err := h.Orch.Quote(r.Context(), userID, req)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -145,6 +155,11 @@ func (h *HTTP) Payout(w http.ResponseWriter, r *http.Request, userID string) {
 }
 
 // RefundClaim: soporte aprueba un reclamo y devuelve parte del pedido en la billetera del cliente.
+// CancelBySupport: soporte cancela un pedido trabado (con devolución del pago).
+func (h *HTTP) CancelBySupport(w http.ResponseWriter, r *http.Request, userID string) {
+	h.respond(w)(h.Orch.CancelBySupport(r.Context(), userID, r.PathValue("id")))
+}
+
 func (h *HTTP) RefundClaim(w http.ResponseWriter, r *http.Request, userID string) {
 	var body struct {
 		AmountCents *int `json:"amountCents"`

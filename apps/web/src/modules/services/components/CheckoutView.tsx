@@ -1,4 +1,4 @@
-import { Bike, HandCoins, LocateFixed, MapPin, Minus, Plus, QrCode, ShoppingBasket, Trash2 } from 'lucide-react';
+import { Bike, HandCoins, LocateFixed, MapPin, Minus, Plus, QrCode, ShoppingBasket, Tag, Trash2, X } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { Field, FieldError } from '@shared/ui/Field';
 import { LazyDeliveryMap } from '@shared/ui/LazyDeliveryMap';
@@ -9,6 +9,7 @@ import { formatSoles } from '@shared/utils/money';
 import { useCheckout } from '../hooks/use-checkout.hook';
 import { useStoreStatus } from '../hooks/use-store-status.hook';
 import { AmountRow, PageHeader, ServicePage, StoreClosedBanner } from './ServicesUi';
+import { SavedAddresses } from './SavedAddresses';
 
 /** Carrito → dirección → total (productos + delivery) → pagar con QR. */
 export function CheckoutView() {
@@ -62,6 +63,7 @@ export function CheckoutView() {
         <h2 className="flex items-center gap-2 text-base font-bold text-ink">
           <MapPin className="size-5 text-brand dark:text-teal-300" /> ¿A dónde lo llevamos?
         </h2>
+        <SavedAddresses current={c.address} onPick={c.pickAddress} />
         <Field label="Dirección" placeholder="ej. Av. Larco 123, Miraflores" value={c.address.line} maxLength={200} onChange={(e) => c.onAddressChange(e.target.value)} />
         <Field label="Referencia" placeholder="ej. Puerta verde, 3er piso" value={c.address.reference} maxLength={200} onChange={(e) => c.onReferenceChange(e.target.value)} />
         <div className="flex flex-col gap-2">
@@ -111,6 +113,35 @@ export function CheckoutView() {
         </div>
       </section>
 
+      <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Cupón">
+        <h2 className="flex items-center gap-2 text-base font-bold text-ink">
+          <Tag className="size-5 text-brand dark:text-teal-300" /> ¿Tienes un cupón?
+        </h2>
+        {c.couponCode && c.quote?.coupon ? (
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-emerald-50 px-3 py-2.5 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:ring-emerald-900" data-testid="coupon-applied">
+            <p className="min-w-0 text-sm text-ink">
+              <span className="font-bold">{c.quote.coupon.code}</span> · {c.quote.coupon.description}
+            </p>
+            <button type="button" onClick={c.removeCoupon} aria-label="Quitar cupón" className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-soft hover:bg-white hover:text-ink dark:hover:bg-emerald-900">
+              <X className="size-4" />
+            </button>
+          </div>
+        ) : (
+          <form
+            className="flex items-start gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              c.applyCoupon();
+            }}
+          >
+            <Field label="Código" placeholder="ej. BIENVENIDA" value={c.couponDraft} onChange={(e) => c.onCouponDraft(e.target.value)} error={c.couponError} autoCapitalize="characters" className="flex-1" data-testid="coupon-input" />
+            <Button type="submit" variant="secondary" className="mt-7" loading={!!c.couponCode && c.quoting} data-testid="apply-coupon">
+              Aplicar
+            </Button>
+          </form>
+        )}
+      </section>
+
       <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Resumen" data-testid="quote">
         {!c.addressReady ? (
           <p className="text-sm text-ink-soft">Escribe la dirección para calcular el delivery y el total.</p>
@@ -123,6 +154,7 @@ export function CheckoutView() {
             <AmountRow label="Productos" value={formatSoles(c.quote.subtotalCents)} />
             <AmountRow label={c.quote.distanceKm ? `Delivery Rapidito · ${formatDistance(c.quote.distanceKm)}` : 'Delivery Rapidito'} value={formatSoles(c.quote.deliveryFeeCents)} />
             {c.quote.tipCents > 0 && <AmountRow label="Propina para el repartidor" value={formatSoles(c.quote.tipCents)} />}
+            {c.quote.discountCents > 0 && <AmountRow label={`Cupón ${c.quote.coupon?.code ?? ''}`} value={`− ${formatSoles(c.quote.discountCents)}`} />}
             <div className="my-1 border-t border-dashed border-line" />
             <AmountRow label="Total a pagar" value={formatSoles(c.quote.totalCents)} strong />
             <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-soft">

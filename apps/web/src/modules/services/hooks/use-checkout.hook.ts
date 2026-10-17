@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router';
 import { cartCount, useCartStore } from '@shared/stores/cart.store';
 import { useOrdersStore } from '@shared/stores/orders.store';
 import { toast } from '@shared/stores/toast.store';
-import { errorMessage, http } from '@shared/utils/http';
+import { ApiError, errorMessage, http } from '@shared/utils/http';
 
 const QUOTE_DEBOUNCE_MS = 400;
 const MIN_ADDRESS = 6;
@@ -30,6 +30,10 @@ export function useCheckout() {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [locating, setLocating] = useState(false);
+  /** Cupón: lo que escribe y el que quedó aplicado (si el gateway lo aceptó). */
+  const [couponDraft, setCouponDraft] = useState('');
+  const [couponCode, setCouponCode] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   const lines = Object.values(items);
   const request = useMemo<QuoteRequest>(
@@ -37,8 +41,9 @@ export function useCheckout() {
       items: Object.values(items).map((i) => ({ productId: i.product.id, quantity: i.quantity })),
       address: { line: address.line.trim(), reference: address.reference.trim(), location: address.location ?? null },
       tipCents,
+      ...(couponCode ? { couponCode } : {}),
     }),
-    [items, address, tipCents],
+    [items, address, tipCents, couponCode],
   );
   const addressReady = request.address.line.length >= MIN_ADDRESS;
 
@@ -53,7 +58,16 @@ export function useCheckout() {
       http
         .post<OrderQuote>('/services/mercado/quote', request)
         .then((q) => alive && setQuote(q))
-        .catch((err) => alive && setQuoteError(errorMessage(err)))
+        .catch((err) => {
+          if (!alive) return;
+          // Un cupón que no vale no frena la compra: se avisa y se cotiza sin él.
+          if (request.couponCode && err instanceof ApiError && err.status === 422) {
+            setCouponError(err.message);
+            setCouponCode(null);
+            return;
+          }
+          setQuoteError(errorMessage(err));
+        })
         .finally(() => alive && setQuoting(false));
     }, QUOTE_DEBOUNCE_MS);
     return () => {
@@ -76,6 +90,25 @@ export function useCheckout() {
     subtract: (product: Product) => change(product, -1),
     remove,
     onAddressChange: (line: string) => setAddress({ ...address, line }),
+    /** Elegir una dirección guardada. */
+    pickAddress: setAddress,
+    couponDraft,
+    couponCode,
+    couponError,
+    onCouponDraft: (value: string) => {
+      setCouponDraft(value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20));
+      setCouponError(null);
+    },
+    applyCoupon: () => {
+      if (couponDraft.length < 3) return setCouponError('Escribe el código del cupón');
+      setCouponError(null);
+      setCouponCode(couponDraft);
+    },
+    removeCoupon: () => {
+      setCouponCode(null);
+      setCouponDraft('');
+      setCouponError(null);
+    },
     onReferenceChange: (reference: string) => setAddress({ ...address, reference }),
     /** Propina como en Rappi: montos rápidos u «Otro». Va completa al repartidor. */
     tipCents,

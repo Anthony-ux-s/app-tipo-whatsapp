@@ -101,6 +101,8 @@ func New(opts Options) http.Handler {
 		mux.HandleFunc("POST /api/driver/payouts", authed(svc.Payout))
 		// Soporte aprueba un reclamo: el core decide cuánto y si puede; aquí se devuelve en PagaYa.
 		mux.HandleFunc("POST /api/admin/claims/{id}/refund", authed(svc.RefundClaim))
+		// Soporte destraba un pedido: cancelarlo devuelve el pago en PagaYa.
+		mux.HandleFunc("POST /api/admin/orders/{id}/cancel", authed(svc.CancelBySupport))
 		mux.HandleFunc("POST /hooks/pagaya", svc.PagayaHook)
 	}
 	mux.HandleFunc("/api/", limited(proxy.ServeHTTP))

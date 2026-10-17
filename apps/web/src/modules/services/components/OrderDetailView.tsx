@@ -1,4 +1,4 @@
-import { Bike, Check, ChefHat, Clock, ExternalLink, KeyRound, MapPin, MessageCircle, PackageCheck, RefreshCw, ShoppingBasket, Smartphone, Store, X } from 'lucide-react';
+import { Bike, Check, ChefHat, Clock, ExternalLink, KeyRound, MapPin, MessageCircle, PackageCheck, RefreshCw, RotateCcw, Smartphone, Store, X } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
 import { PrivatePhoto } from '@shared/ui/PrivatePhoto';
@@ -9,6 +9,7 @@ import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { ORDER_STEPS } from '../const/services.const';
 import { useOrderChat } from '../hooks/use-order-chat.hook';
 import { useOrderDetail } from '../hooks/use-orders.hook';
+import { useReorder } from '../hooks/use-reorder.hook';
 import { LiveTracking } from './LiveTracking';
 import { ClaimCard } from './ClaimCard';
 import { RateOrderCard } from './RateOrderCard';
@@ -23,6 +24,7 @@ export function OrderDetailView() {
   const d = useOrderDetail();
   const order = d.order;
   const chat = useOrderChat(order?.id);
+  const again = useReorder();
 
   if (!order) {
     return (
@@ -180,6 +182,11 @@ export function OrderDetailView() {
       <LiveTracking order={order} audience="customer" />
       <RateOrderCard order={order} />
       <ClaimCard order={order} />
+      {order.status === 'delivered' && (
+        <Button variant="secondary" className="self-center" icon={<RotateCcw className="size-4" />} onClick={() => void again.reorder(order)} loading={again.loading} data-testid="reorder">
+          Volver a pedir
+        </Button>
+      )}
 
       {d.canCancel && (
         <Button variant="ghost" className="self-center" icon={<X className="size-4" />} onClick={d.askCancel} data-testid="cancel-order">
@@ -208,8 +215,8 @@ export function OrderDetailView() {
               <p className="mt-1 text-sm text-ink-soft">No se te cobró nada. Puedes volver a hacer el pedido cuando quieras.</p>
             </>
           )}
-          <Button className="mt-4" icon={<ShoppingBasket className="size-4" />} onClick={d.shopAgain}>
-            Volver al Mercado
+          <Button className="mt-4" icon={<RotateCcw className="size-4" />} onClick={() => void again.reorder(order)} loading={again.loading} data-testid="reorder">
+            Volver a pedir
           </Button>
         </section>
       )}
@@ -227,6 +234,7 @@ export function OrderDetailView() {
         <AmountRow label="Productos" value={formatSoles(order.subtotalCents)} />
         <AmountRow label="Delivery" value={formatSoles(order.deliveryFeeCents)} />
         {order.tipCents > 0 && <AmountRow label="Propina para el repartidor" value={formatSoles(order.tipCents)} />}
+        {order.discountCents > 0 && <AmountRow label={`Cupón ${order.couponCode ?? ''}`} value={`− ${formatSoles(order.discountCents)}`} />}
         <AmountRow label="Total" value={formatSoles(order.totalCents)} strong />
         <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-soft">
           <MapPin className="mt-0.5 size-3.5 shrink-0" />

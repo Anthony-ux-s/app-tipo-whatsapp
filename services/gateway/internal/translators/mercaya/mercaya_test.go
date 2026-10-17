@@ -168,3 +168,29 @@ func TestUpdateTraduceRechazoYNoExiste(t *testing.T) {
 		t.Fatalf("esperaba ErrRejected, obtuve %v", err)
 	}
 }
+
+func TestReleaseAnulaLaReservaPorReferencia(t *testing.T) {
+	var method, path string
+	c := fake(t, func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.Path
+		if r.URL.Path == "/mercaya/v1/pedidos/ord_x" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.URL.Path == "/mercaya/v1/pedidos/caido" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = io.WriteString(w, `{"estado":"ANULADO"}`)
+	})
+	ctx := context.Background()
+	if err := c.Release(ctx, "ord_1"); err != nil || method != http.MethodDelete || path != "/mercaya/v1/pedidos/ord_1" {
+		t.Fatalf("esperaba DELETE de la reserva: %v %s %s", err, method, path)
+	}
+	if err := c.Release(ctx, "ord_x"); err != nil {
+		t.Fatalf("sin reserva no hay nada que devolver: %v", err)
+	}
+	if err := c.Release(ctx, "caido"); !errors.Is(err, providerapi.ErrUnavailable) {
+		t.Fatalf("esperaba ErrUnavailable, obtuve %v", err)
+	}
+}

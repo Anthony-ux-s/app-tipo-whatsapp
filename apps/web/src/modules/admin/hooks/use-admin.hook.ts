@@ -5,11 +5,11 @@ import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
 import { errorMessage, http } from '@shared/utils/http';
 
-export type AdminTab = 'repartidores' | 'reclamos';
+export type AdminTab = 'pedidos' | 'repartidores' | 'reclamos' | 'cupones';
 export type ClaimsView = 'open' | 'resolved';
 
 /** Lista del panel de soporte que se vuelve a pedir al cambiar el filtro (o tras una acción). */
-function useAdminList<T>(path: string) {
+export function useAdminList<T>(path: string) {
   const [items, setItems] = useState<T[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const reload = useCallback(() => {
@@ -30,7 +30,7 @@ function useAdminList<T>(path: string) {
 export function useAdmin() {
   const navigate = useNavigate();
   const isAdmin = useSessionStore((s) => !!s.user?.isAdmin);
-  const [tab, setTab] = useState<AdminTab>('repartidores');
+  const [tab, setTab] = useState<AdminTab>('pedidos');
   const [driverStatus, setDriverStatus] = useState<DriverStatus>('pending');
   const [claimsView, setClaimsView] = useState<ClaimsView>('open');
   const drivers = useAdminList<AdminDriver>(`/admin/drivers?status=${driverStatus}`);

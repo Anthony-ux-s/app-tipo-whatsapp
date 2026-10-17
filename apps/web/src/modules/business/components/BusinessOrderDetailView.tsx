@@ -170,6 +170,7 @@ export function BusinessOrderDetailView() {
         <AmountRow label="Productos" value={formatSoles(order.subtotalCents)} />
         <AmountRow label="Delivery Rapidito" value={formatSoles(order.deliveryFeeCents)} />
         {order.tipCents > 0 && <AmountRow label="Propina (para el repartidor)" value={formatSoles(order.tipCents)} />}
+        {order.discountCents > 0 && <AmountRow label={`Cupón ${order.couponCode ?? ''} (lo asume Parla)`} value={`− ${formatSoles(order.discountCents)}`} />}
         <AmountRow label="Cobrado al cliente" value={formatSoles(order.totalCents)} strong />
       </section>
 

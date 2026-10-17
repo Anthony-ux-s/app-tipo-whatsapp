@@ -45,6 +45,10 @@ type Core interface {
 	BusinessByService(ctx context.Context, service services.ServiceID) (services.Business, error)
 	// BusinessByOwner: el negocio de una persona (ErrNotFound si no es dueña de ninguno).
 	BusinessByOwner(ctx context.Context, userID string) (services.Business, error)
+	// QuoteCoupon: cuánto descuenta un cupón (ErrNotFound si no existe; ConflictError con el motivo si no vale).
+	QuoteCoupon(ctx context.Context, q services.CouponQuote) (services.AppliedCoupon, error)
+	// IsAdmin: si la cuenta es de soporte.
+	IsAdmin(ctx context.Context, userID string) (bool, error)
 }
 
 // PayoutCore: las ganancias de los repartidores, que lleva el core (saldo = 95 % del delivery +
@@ -91,6 +95,19 @@ func (c HTTPCore) BusinessByService(ctx context.Context, service services.Servic
 func (c HTTPCore) BusinessByOwner(ctx context.Context, userID string) (services.Business, error) {
 	var out services.Business
 	return out, c.call(ctx, http.MethodGet, "/api/internal/businesses/by-owner/"+url.PathEscape(userID), nil, &out)
+}
+
+func (c HTTPCore) QuoteCoupon(ctx context.Context, q services.CouponQuote) (services.AppliedCoupon, error) {
+	var out services.AppliedCoupon
+	return out, c.call(ctx, http.MethodPost, "/api/internal/coupons/quote", q, &out)
+}
+
+func (c HTTPCore) IsAdmin(ctx context.Context, userID string) (bool, error) {
+	var out struct {
+		IsAdmin bool `json:"isAdmin"`
+	}
+	err := c.call(ctx, http.MethodGet, "/api/internal/users/"+url.PathEscape(userID)+"/admin", nil, &out)
+	return out.IsAdmin, err
 }
 
 func (c HTTPCore) ReservePayout(ctx context.Context, userID, reason string) (services.PayoutReservation, error) {

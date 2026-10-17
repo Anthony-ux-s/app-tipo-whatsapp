@@ -12,6 +12,8 @@ import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { CLAIM_REASON_LABEL, CLAIM_STATUS_LABEL } from '../../services/const/services.const';
 import { useAdmin, type ClaimsView } from '../hooks/use-admin.hook';
+import { AdminCoupons } from './AdminCoupons';
+import { AdminOrders } from './AdminOrders';
 
 const DRIVER_FILTERS: { id: DriverStatus; label: string }[] = [
   { id: 'pending', label: 'Por revisar' },
@@ -29,25 +31,30 @@ export function AdminView() {
   const [rejecting, setRejecting] = useState<{ kind: 'driver' | 'claim'; id: string; name: string } | null>(null);
   if (!a.isAdmin) return <Navigate to="/app/ajustes" replace />;
   const list = a.tab === 'repartidores' ? a.drivers : a.claims;
+  const ownList = a.tab === 'repartidores' || a.tab === 'reclamos';
 
   return (
     <ServicePage>
       <PageHeader
         title="Soporte Parla"
-        subtitle="Repartidores de Rapidito y reclamos"
+        subtitle="Pedidos, repartidores, reclamos y cupones"
         onBack={a.back}
         action={
-          <IconButton label="Actualizar" onClick={list.reload}>
-            <RefreshCw className="size-5" />
-          </IconButton>
+          ownList ? (
+            <IconButton label="Actualizar" onClick={list.reload}>
+              <RefreshCw className="size-5" />
+            </IconButton>
+          ) : undefined
         }
       />
 
-      <div className="flex gap-1.5" role="tablist" aria-label="Panel de soporte">
+      <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Panel de soporte">
         {(
           [
+            ['pedidos', 'Pedidos'],
             ['repartidores', 'Repartidores'],
             ['reclamos', 'Reclamos'],
+            ['cupones', 'Cupones'],
           ] as const
         ).map(([id, label]) => (
           <Chip key={id} on={a.tab === id} onClick={() => a.selectTab(id)} role="tab" testId={`admin-tab-${id}`}>
@@ -56,6 +63,18 @@ export function AdminView() {
         ))}
       </div>
 
+      {a.tab === 'pedidos' && (
+        <AdminOrders
+          chip={(on, onClick, label) => (
+            <Chip key={label} small on={on} onClick={onClick}>
+              {label}
+            </Chip>
+          )}
+        />
+      )}
+      {a.tab === 'cupones' && <AdminCoupons />}
+
+      {ownList && (
       <div className="-mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Filtro">
         {a.tab === 'repartidores'
           ? DRIVER_FILTERS.map((f) => (
@@ -69,8 +88,9 @@ export function AdminView() {
               </Chip>
             ))}
       </div>
+      )}
 
-      {list.error && !list.items ? (
+      {!ownList ? null : list.error && !list.items ? (
         <ErrorState message={list.error} onRetry={list.reload} />
       ) : !list.items ? (
         <ListSkeleton rows={3} />

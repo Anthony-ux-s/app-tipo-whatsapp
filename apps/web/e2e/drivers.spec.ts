@@ -49,6 +49,7 @@ test.describe('Repartidores de Rapidito', () => {
     const soporte = await openSession(browser, 'soporte');
     await soporte.page.goto('/app/ajustes');
     await soporte.page.getByRole('link', { name: /Soporte Parla/ }).click();
+    await soporte.page.getByTestId('admin-tab-repartidores').click();
     const card = soporte.page.getByTestId('admin-driver').filter({ hasText: name });
     await expect(card).toContainText('45678912');
     await expect(card).toContainText('Q12345678');

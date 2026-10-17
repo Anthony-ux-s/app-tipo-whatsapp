@@ -30,6 +30,8 @@ interface CartState {
   tipCents: number;
   setTip: (cents: number) => void;
   clear: () => void;
+  /** «Volver a pedir»: el carrito queda con estos productos (hasta el stock de ahora). */
+  refill: (lines: { product: Product; quantity: number }[]) => number;
 }
 
 /**
@@ -67,6 +69,15 @@ export const useCartStore = create<CartState>((set, get) => ({
   tipCents: 0,
   setTip: (cents) => set({ tipCents: Math.max(0, Math.min(10_000, Math.round(cents))) }),
   clear: () => set({ items: {}, tipCents: 0 }),
+  refill: (lines) => {
+    const items: Record<string, CartItem> = {};
+    for (const { product, quantity } of lines) {
+      const q = Math.min(MAX_QUANTITY, product.stock, quantity);
+      if (q > 0) items[product.id] = { product, quantity: q };
+    }
+    set({ items });
+    return Object.keys(items).length;
+  },
 }));
 
 export function cartCount(items: Record<string, CartItem>): number {

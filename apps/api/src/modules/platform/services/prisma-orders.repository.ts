@@ -3,7 +3,7 @@ import type { Currency, OrderRating, OrderStatus, OrderTimelineEntry, RatingSumm
 import type { Business as BusinessRow, Claim as ClaimRow, Order as OrderRow } from '@prisma/client';
 import { toClaimRecord } from './prisma-claims.repository';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
-import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from './orders.repository';
+import type { AdminOrderFilter, NewOrder, OrderChanges, OrderRecord, OrdersRepository } from './orders.repository';
 
 type OrderWithBusiness = OrderRow & {
   business: BusinessRow | null;
@@ -42,6 +42,8 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
     subtotalCents: row.subtotalCents,
     deliveryFeeCents: row.deliveryFeeCents,
     tipCents: row.tipCents,
+    discountCents: row.discountCents,
+    couponCode: row.couponCode,
     totalCents: row.totalCents,
     currency: row.currency as Currency,
     address: JSON.parse(row.address),
@@ -83,6 +85,8 @@ export class PrismaOrdersRepository implements OrdersRepository {
         address: JSON.stringify(order.address),
         payment: JSON.stringify(order.payment),
         timeline: JSON.stringify(timeline),
+        // El uso del cupón se guarda con el pedido, en la misma escritura.
+        ...(order.couponCode ? { coupon: { create: { couponCode: order.couponCode, userId: order.userId, discountCents: order.discountCents } } } : {}),
       },
       include: WITH_BUSINESS,
     });
@@ -141,6 +145,20 @@ export class PrismaOrdersRepository implements OrdersRepository {
   async widenOffer(id: string, radiusKm: number | null, at: Date): Promise<OrderRecord | null> {
     const { count } = await this.prisma.order.updateMany({ where: { id, status: 'searching_driver', driverId: null }, data: { offerRadiusKm: radiusKm, offerWaveAt: at } });
     return count === 1 ? this.findById(id) : null;
+  }
+
+  async search(filter: AdminOrderFilter): Promise<OrderRecord[]> {
+    const q = filter.query?.trim();
+    const rows = await this.prisma.order.findMany({
+      where: {
+        ...(filter.statuses?.length ? { status: { in: filter.statuses } } : {}),
+        ...(q ? { OR: [{ id: { contains: q } }, { user: { displayName: { contains: q } } }, { user: { phone: { contains: q } } }] } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: filter.limit,
+      include: WITH_BUSINESS,
+    });
+    return rows.map(toOrderRecord);
   }
 
   async rate(id: string, rating: Omit<OrderRating, 'at'>, at: Date): Promise<OrderRecord | null> {

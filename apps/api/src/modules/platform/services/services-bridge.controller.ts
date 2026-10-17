@@ -85,6 +85,8 @@ class CreateOrderDto implements InternalCreateOrder {
   @IsInt() @Min(0) @Max(MAX_CENTS) subtotalCents: number;
   @IsInt() @Min(0) @Max(MAX_CENTS) deliveryFeeCents: number;
   @IsInt() @Min(0) @Max(MAX_TIP_CENTS) tipCents: number;
+  @IsOptional() @IsInt() @Min(0) @Max(MAX_CENTS) discountCents?: number;
+  @IsOptional() @IsString() @MaxLength(20) couponCode?: string | null;
   @IsInt() @Min(1) @Max(MAX_CENTS) totalCents: number;
   @IsIn(['PEN']) currency: Currency;
   @ValidateNested() @Type(() => AddressDto) address: AddressDto;

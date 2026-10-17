@@ -156,3 +156,36 @@ func TestLaTiendaNoGuardaDatosInvalidos(t *testing.T) {
 		t.Fatalf("los intentos inválidos no debían cambiar nada: %v", p)
 	}
 }
+
+func TestAnularLaReservaDevuelveElStockUnaSolaVez(t *testing.T) {
+	srv := server(t)
+	url := srv.URL + "/mercaya/v1/pedidos"
+	if resp, _ := post(t, url, `{"referencia":"ord_1","lineas":[{"sku":"QUE-FRE-500","cantidad":30}]}`); resp.StatusCode != 201 {
+		t.Fatalf("reserva: %d", resp.StatusCode)
+	}
+	anular := func(ref string) int {
+		req, _ := http.NewRequest(http.MethodDelete, url+"/"+ref, nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.StatusCode
+	}
+	if anular("ord_1") != 200 || anular("ord_1") != 200 {
+		t.Fatal("anular es idempotente")
+	}
+	if anular("ord_x") != 404 {
+		t.Fatal("una referencia desconocida es 404")
+	}
+	// Volvieron los 30 (una sola vez): se pueden reservar 30, pero no 31
+	if resp, out := post(t, url, `{"referencia":"ord_2","lineas":[{"sku":"QUE-FRE-500","cantidad":31}]}`); resp.StatusCode != 409 {
+		t.Fatalf("no debía devolverse dos veces: %d %v", resp.StatusCode, out)
+	}
+	if resp, _ := post(t, url, `{"referencia":"ord_3","lineas":[{"sku":"QUE-FRE-500","cantidad":30}]}`); resp.StatusCode != 201 {
+		t.Fatalf("el stock volvió: %d", resp.StatusCode)
+	}
+	// Un pedido anulado no se puede reservar de nuevo con la misma referencia
+	if resp, _ := post(t, url, `{"referencia":"ord_1","lineas":[{"sku":"QUE-FRE-500","cantidad":1}]}`); resp.StatusCode != 409 {
+		t.Fatalf("referencia anulada: %d", resp.StatusCode)
+	}
+}

@@ -4,6 +4,8 @@
 //	GET  /mercaya/v1/productos/{sku}         → Producto | 404 {"error":"NO_EXISTE"}
 //	POST /mercaya/v1/pedidos                 → 201 {"numero_pedido","estado":"RESERVADO","total_centimos"}
 //	                                           409 {"error":"SIN_STOCK","sku"} si no alcanza
+//	DELETE /mercaya/v1/pedidos/{referencia}  → 200 {"estado":"ANULADO"} y devuelve el stock (repetirlo
+//	                                           no lo devuelve dos veces) | 404 {"error":"NO_EXISTE"}
 //
 // Administración (la usa la dueña de la tienda desde Parla, con la clave en x-mercaya-clave):
 //
@@ -39,6 +41,9 @@ type Store struct {
 type pedido struct {
 	Numero string
 	Total  int
+	// Lineas: lo apartado, para devolverlo al stock si se anula.
+	Lineas  map[string]int
+	Anulado bool
 }
 
 func NewStore() *Store {
@@ -50,6 +55,7 @@ func (s *Store) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /mercaya/v1/catalogo", s.catalogo)
 	mux.HandleFunc("GET /mercaya/v1/productos/{sku}", s.producto)
 	mux.HandleFunc("POST /mercaya/v1/pedidos", s.pedido)
+	mux.HandleFunc("DELETE /mercaya/v1/pedidos/{referencia}", s.anular)
 	mux.HandleFunc("PATCH /mercaya/v1/productos/{sku}", s.actualizar)
 }
 
@@ -156,6 +162,10 @@ func (s *Store) pedido(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if existing, ok := s.orders[req.Referencia]; ok {
+		if existing.Anulado {
+			notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": "PEDIDO_ANULADO"})
+			return
+		}
 		notify.WriteJSON(w, http.StatusCreated, map[string]any{"numero_pedido": existing.Numero, "estado": "RESERVADO", "total_centimos": existing.Total})
 		return
 	}
@@ -177,13 +187,36 @@ func (s *Store) pedido(w http.ResponseWriter, r *http.Request) {
 		}
 		total += p.PrecioCentimos * l.Cantidad
 	}
+	lineas := map[string]int{}
 	for _, l := range req.Lineas {
 		p, _ := s.find(l.SKU)
 		p.Stock -= l.Cantidad
+		lineas[l.SKU] += l.Cantidad
 	}
-	order := pedido{Numero: "MY-" + randomHex(4), Total: total}
+	order := pedido{Numero: "MY-" + randomHex(4), Total: total, Lineas: lineas}
 	s.orders[req.Referencia] = order
 	notify.WriteJSON(w, http.StatusCreated, map[string]any{"numero_pedido": order.Numero, "estado": "RESERVADO", "total_centimos": total})
+}
+
+// anular deshace una reserva (pedido cancelado, rechazado o sin pagar) y devuelve su stock una sola vez.
+func (s *Store) anular(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	order, ok := s.orders[r.PathValue("referencia")]
+	if !ok {
+		notify.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "NO_EXISTE"})
+		return
+	}
+	if !order.Anulado {
+		for sku, cantidad := range order.Lineas {
+			if p, ok := s.find(sku); ok {
+				p.Stock = min(maxStock, p.Stock+cantidad)
+			}
+		}
+		order.Anulado = true
+		s.orders[r.PathValue("referencia")] = order
+	}
+	notify.WriteJSON(w, http.StatusOK, map[string]string{"numero_pedido": order.Numero, "estado": "ANULADO"})
 }
 
 func (s *Store) find(sku string) (*Producto, bool) {

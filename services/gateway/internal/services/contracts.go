@@ -61,6 +61,24 @@ type QuoteRequest struct {
 	Address Address    `json:"address"`
 	// TipCents: propina para el repartidor (opcional, la elige el cliente).
 	TipCents int `json:"tipCents"`
+	// CouponCode: cupón de descuento o envío gratis (opcional).
+	CouponCode string `json:"couponCode,omitempty"`
+}
+
+// AppliedCoupon: el cupón que vale para este carrito y cuánto descuenta (lo decide el core).
+type AppliedCoupon struct {
+	Code          string `json:"code"`
+	Description   string `json:"description"`
+	Kind          string `json:"kind"`
+	DiscountCents int    `json:"discountCents"`
+}
+
+// CouponQuote: lo que el core necesita para evaluar un cupón.
+type CouponQuote struct {
+	Code             string `json:"code"`
+	UserID           string `json:"userId"`
+	SubtotalCents    int    `json:"subtotalCents"`
+	DeliveryFeeCents int    `json:"deliveryFeeCents"`
 }
 
 type OrderLine struct {
@@ -77,9 +95,12 @@ type OrderQuote struct {
 	SubtotalCents    int         `json:"subtotalCents"`
 	DeliveryFeeCents int         `json:"deliveryFeeCents"`
 	TipCents         int         `json:"tipCents"`
-	TotalCents       int         `json:"totalCents"`
-	Currency         string      `json:"currency"`
-	ETAMinutes       int         `json:"etaMinutes"`
+	// DiscountCents: lo que descuenta el cupón (ya restado del total).
+	DiscountCents int            `json:"discountCents"`
+	Coupon        *AppliedCoupon `json:"coupon"`
+	TotalCents    int            `json:"totalCents"`
+	Currency      string         `json:"currency"`
+	ETAMinutes    int            `json:"etaMinutes"`
 	// DistanceKm: distancia de la tienda al punto de entrega (si ambos se conocen), para mostrar «a 2.3 km».
 	DistanceKm *float64 `json:"distanceKm,omitempty"`
 }
@@ -142,6 +163,8 @@ type Order struct {
 	SubtotalCents    int                  `json:"subtotalCents"`
 	DeliveryFeeCents int                  `json:"deliveryFeeCents"`
 	TipCents         int                  `json:"tipCents"`
+	DiscountCents    int                  `json:"discountCents"`
+	CouponCode       *string              `json:"couponCode"`
 	TotalCents       int                  `json:"totalCents"`
 	Currency         string               `json:"currency"`
 	Address          Address              `json:"address"`
@@ -162,6 +185,8 @@ type InternalCreateOrder struct {
 	SubtotalCents    int          `json:"subtotalCents"`
 	DeliveryFeeCents int          `json:"deliveryFeeCents"`
 	TipCents         int          `json:"tipCents"`
+	DiscountCents    int          `json:"discountCents"`
+	CouponCode       string       `json:"couponCode,omitempty"`
 	TotalCents       int          `json:"totalCents"`
 	Currency         string       `json:"currency"`
 	Address          Address      `json:"address"`

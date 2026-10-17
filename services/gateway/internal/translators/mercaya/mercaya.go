@@ -171,6 +171,23 @@ func (c Client) Reserve(ctx context.Context, reference string, items []services.
 	}
 }
 
+// Release anula la reserva del pedido y la tienda devuelve su stock. Es idempotente; si la tienda no
+// conoce la referencia (nunca se reservó), no hay nada que devolver.
+func (c Client) Release(ctx context.Context, reference string) error {
+	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodDelete, c.BaseURL+"/mercaya/v1/pedidos/"+url.PathEscape(reference), nil)
+	if err != nil {
+		return err
+	}
+	if status == http.StatusOK || status == http.StatusNotFound {
+		return nil
+	}
+	var body struct {
+		Error string `json:"error"`
+	}
+	_ = providerapi.Decode(raw, &body)
+	return fmt.Errorf("%w: anular reserva respondió %d %s", providerapi.ErrUnavailable, status, body.Error)
+}
+
 // Update cambia precio, oferta o stock de un producto en la tienda y devuelve cómo quedó.
 func (c Client) Update(ctx context.Context, id string, patch ProductPatch) (services.Product, error) {
 	if !services.ValidID.MatchString(id) {

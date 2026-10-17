@@ -54,6 +54,8 @@ export interface QuoteRequest {
   address: DeliveryAddress;
   /** Propina para el repartidor (0 a S/ 100); se cobra con el pedido y va completa al repartidor. */
   tipCents?: number;
+  /** Cupón de descuento o envío gratis. */
+  couponCode?: string;
 }
 
 export interface OrderLine {
@@ -70,6 +72,9 @@ export interface OrderQuote {
   subtotalCents: number;
   deliveryFeeCents: number;
   tipCents: number;
+  /** Descuento del cupón (ya restado del total). */
+  discountCents: number;
+  coupon: AppliedCoupon | null;
   totalCents: number;
   currency: Currency;
   etaMinutes: number;
@@ -181,6 +186,9 @@ export interface Order {
   deliveryFeeCents: number;
   /** Propina para el repartidor (incluida en el total). */
   tipCents: number;
+  /** Descuento del cupón (ya restado del total) y su código. */
+  discountCents: number;
+  couponCode: string | null;
   totalCents: number;
   currency: Currency;
   address: DeliveryAddress;
@@ -449,6 +457,9 @@ export interface InternalCreateOrder {
   subtotalCents: number;
   deliveryFeeCents: number;
   tipCents: number;
+  /** Descuento del cupón; el core vuelve a validar el cupón y registra su uso. */
+  discountCents?: number;
+  couponCode?: string | null;
   totalCents: number;
   currency: Currency;
   address: DeliveryAddress;
@@ -476,4 +487,79 @@ export interface InternalOrder extends Order {
   deliveryQuoteId: string;
   /** Dueño del negocio: el gateway solo deja que él rechace o cancele el pedido. */
   businessOwnerId: string | null;
+}
+
+/** Dirección guardada (se recuerda sola al pedir; se le puede poner nombre). */
+export interface SavedAddress {
+  id: string;
+  label: string;
+  line: string;
+  reference: string;
+  location: GeoPoint | null;
+  lastUsedAt: string;
+}
+
+export interface UpdateSavedAddressRequest {
+  label: string;
+}
+
+/** percent: % de los productos (con tope opcional) · amount: monto fijo · free_delivery: envío gratis. */
+export type CouponKind = 'percent' | 'amount' | 'free_delivery';
+
+/** El cupón aplicado a una cotización. */
+export interface AppliedCoupon {
+  code: string;
+  description: string;
+  kind: CouponKind;
+  discountCents: number;
+}
+
+/** Para el gateway: ¿vale este cupón para esta persona y este carrito? */
+export interface InternalCouponQuote {
+  code: string;
+  userId: string;
+  subtotalCents: number;
+  deliveryFeeCents: number;
+}
+
+export interface CreateCouponRequest {
+  code: string;
+  description: string;
+  kind: CouponKind;
+  value?: number;
+  maxDiscountCents?: number | null;
+  minSubtotalCents?: number;
+  firstOrderOnly?: boolean;
+  perUserLimit?: number;
+  maxUses?: number | null;
+  endsAt?: string | null;
+}
+
+/** Cupón para soporte, con cuántas veces se usó. */
+export interface AdminCoupon extends Required<Omit<CreateCouponRequest, 'endsAt'>> {
+  endsAt: string | null;
+  active: boolean;
+  uses: number;
+  createdAt: string;
+}
+
+/** Un pedido para soporte: con las personas y en qué quedó. */
+export interface AdminOrder {
+  id: string;
+  status: OrderStatus;
+  customerName: string;
+  customerPhone: string | null;
+  businessName: string | null;
+  driverName: string | null;
+  totalCents: number;
+  discountCents: number;
+  couponCode: string | null;
+  address: DeliveryAddress;
+  lines: OrderLine[];
+  timeline: OrderTimelineEntry[];
+  paidAt: string | null;
+  refundedAt: string | null;
+  openClaims: number;
+  createdAt: string;
+  updatedAt: string;
 }
