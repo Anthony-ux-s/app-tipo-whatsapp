@@ -1,30 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import type { PresenceStatus } from '@parla/types';
 
-/** Cuántas conexiones abiertas tiene cada usuario (en memoria; en producción iría a Redis). */
+/**
+ * Quién está en línea. La fuente es el servicio de tiempo real (Elixir), que avisa al core cada vez
+ * que alguien abre su primera conexión o cierra la última. En memoria; con varias instancias del
+ * core iría a Redis.
+ */
 @Injectable()
 export class PresenceRegistry {
-  private readonly connections = new Map<string, number>();
+  private readonly online = new Set<string>();
 
-  /** Devuelve true si es la primera conexión del usuario (pasa a "en línea"). */
-  connect(userId: string): boolean {
-    const count = (this.connections.get(userId) ?? 0) + 1;
-    this.connections.set(userId, count);
-    return count === 1;
-  }
-
-  /** Devuelve true si era la última conexión (pasa a "desconectado"). */
-  disconnect(userId: string): boolean {
-    const count = (this.connections.get(userId) ?? 1) - 1;
-    if (count <= 0) {
-      this.connections.delete(userId);
-      return true;
-    }
-    this.connections.set(userId, count);
-    return false;
+  set(userId: string, status: PresenceStatus): void {
+    if (status === 'online') this.online.add(userId);
+    else this.online.delete(userId);
   }
 
   statusOf(userId: string): PresenceStatus {
-    return this.connections.has(userId) ? 'online' : 'offline';
+    return this.online.has(userId) ? 'online' : 'offline';
   }
 }

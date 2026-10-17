@@ -13,8 +13,7 @@ import { PUSH_SENDER } from './push/push-sender.port';
 import { WebPushSender } from './push/web-push-sender.adapter';
 import { PresenceRegistry } from './realtime/presence.registry';
 import { REALTIME_PUBLISHER } from './realtime/realtime-publisher.port';
-import { SocketIoRealtimePublisher } from './realtime/socket-io-realtime-publisher.adapter';
-import { SocketServerHolder } from './realtime/socket-server.holder';
+import { ElixirRealtimePublisher } from './realtime/elixir-realtime-publisher.adapter';
 import { FILE_STORAGE } from './storage/file-storage.port';
 import { LocalDiskFileStorage } from './storage/local-disk-file-storage.adapter';
 
@@ -27,12 +26,12 @@ const env = loadEnv();
   providers: [
     { provide: APP_ENV, useValue: env satisfies AppEnv },
     PrismaService,
-    SocketServerHolder,
     PresenceRegistry,
     { provide: PASSWORD_HASHER, useClass: BcryptPasswordHasher },
     { provide: TOKEN_SERVICE, useClass: JwtTokenService },
     { provide: FILE_STORAGE, useClass: LocalDiskFileStorage },
-    { provide: REALTIME_PUBLISHER, useClass: SocketIoRealtimePublisher },
+    // El tiempo real vive en el servicio de Elixir (services/realtime).
+    { provide: REALTIME_PUBLISHER, useClass: ElixirRealtimePublisher },
     { provide: PUSH_SENDER, useClass: WebPushSender },
     // Pasarela de pago según PAYMENT_PROVIDER: sandbox (por defecto, no cobra) o mercadopago.
     { provide: PAYMENT_GATEWAY, useClass: env.paymentProvider === 'mercadopago' ? MercadoPagoPaymentGateway : SandboxPaymentGateway },
@@ -40,7 +39,6 @@ const env = loadEnv();
   exports: [
     APP_ENV,
     PrismaService,
-    SocketServerHolder,
     PresenceRegistry,
     PASSWORD_HASHER,
     TOKEN_SERVICE,

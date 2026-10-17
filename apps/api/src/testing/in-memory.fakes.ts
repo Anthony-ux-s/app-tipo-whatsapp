@@ -96,9 +96,6 @@ export class RecordingRealtime implements RealtimePublisher {
   toUsers<E extends keyof ServerToClientEvents>(userIds: readonly string[], event: E, ...payload: Parameters<ServerToClientEvents[E]>) {
     this.emitted.push({ userIds, event, payload: payload[0] });
   }
-  toSockets<E extends keyof ServerToClientEvents>(socketIds: readonly string[], event: E, ...payload: Parameters<ServerToClientEvents[E]>) {
-    this.emitted.push({ userIds: socketIds.map((s) => `socket:${s}`), event, payload: payload[0] });
-  }
   events(event: keyof ServerToClientEvents) {
     return this.emitted.filter((e) => e.event === event);
   }

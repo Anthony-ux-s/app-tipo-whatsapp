@@ -113,7 +113,7 @@ describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
 
   describe('notificaciones push', () => {
     it('solo reciben push quienes no tienen la app abierta, y la mención se nota en el aviso', async () => {
-      presence.connect(sofia.id); // Sofía está en línea: el socket ya le entrega el mensaje
+      presence.set(sofia.id, 'online'); // Sofía está en línea: el socket ya le entrega el mensaje
       await send.execute(laura.id, 'c1', { clientId: 'p', kind: 'text', body, media: null, mentions: [andres.id] });
       await flush();
       expect(sender.sent.map((s) => s.target.endpoint)).toEqual([`https://push.example/${andres.id}`]);

@@ -202,7 +202,7 @@ export const useCallStore = create<CallState>((set, get) => {
         set({ local, cameraOff: false, muted: false });
         const socket = getSocket();
         if (!socket) throw new Error('Sin conexión. Inténtalo de nuevo en un momento.');
-        await joinWith(await socket.timeout(10_000).emitWithAck('call:start', { conversationId: conversation.id, kind }));
+        await joinWith(await socket.request('call:start', { conversationId: conversation.id, kind }));
       } catch (error) {
         fail(error);
       }
@@ -217,7 +217,7 @@ export const useCallStore = create<CallState>((set, get) => {
         set({ local });
         const socket = getSocket();
         if (!socket) throw new Error('Sin conexión');
-        await joinWith(await socket.timeout(10_000).emitWithAck('call:join', { callId: call.callId }));
+        await joinWith(await socket.request('call:join', { callId: call.callId }));
         set({ phase: 'connecting' });
       } catch (error) {
         getSocket()?.emit('call:decline', { callId: call.callId });

@@ -26,7 +26,7 @@ un puerto. Cambiar a Supabase más adelante es un adaptador nuevo y una línea d
 | Base de datos (desarrollo) | **SQLite embebida** (archivo en `apps/api/prisma/dev.db`) | Arranca en esta PC sin instalar servicios; solo los adaptadores Prisma la conocen. |
 | Base de datos (producción) | **PostgreSQL** (Supabase, Neon o propio) | `npm run db:postgres-schema -w @parla/api` genera `schema.postgres.prisma` con el proveedor cambiado; basta `DATABASE_URL`. |
 | Inicio de sesión | **Propio: teléfono o nombre de usuario + contraseña**, hash con **bcryptjs** y **JWT** | Gratis y sin servicios externos. Puerto `PasswordHasher`/`TokenService` en `infra/identity`, intercambiable por Supabase Auth. |
-| Tiempo real | **Socket.IO** (gateway de Nest) detrás del puerto `RealtimePublisher` | Entrega instantánea, confirmaciones de entregado/leído, “escribiendo…” y presencia. Es lo que proponía el Stack 1 y no depende de un proveedor. |
+| Tiempo real | **Elixir/OTP** (servicio propio) detrás del **gateway en Go**; el core publica por el puerto `RealtimePublisher` | Ver «Arquitectura de servicios» al final. (Hasta la Fase 4 era Socket.IO dentro de Nest.) |
 | Cifrado de extremo a extremo | **WebCrypto** (ECDH P-256 + HKDF + AES-GCM 256), paquete `@parla/crypto` | Nativo del navegador y de Node, sin dependencias. El servidor solo guarda texto y archivos cifrados. Ver detalle abajo. |
 | Archivos (fotos, audio, vídeo) | **Disco local** (`apps/api/storage/`) detrás del puerto `FileStorage` | Gratis en desarrollo; en producción se cambia por S3/R2/Supabase Storage con un adaptador. Los archivos se suben ya cifrados. |
 | Notas de voz | **MediaRecorder** del navegador | Sin librerías; graba `audio/webm` y se cifra antes de subir. |
@@ -37,7 +37,8 @@ un puerto. Cambiar a Supabase más adelante es un adaptador nuevo y una línea d
 
 ## Puertos usados en esta versión
 
-`3100` para la web (Vite) y `4100` para la API. Los puertos 3000, 3005 y 4317 están ocupados en esta
+`3100` para la web (Vite), `4100` para el gateway (la única puerta del backend), `4101` para el core
+(NestJS) y `4102` para el tiempo real (Elixir). Los puertos 3000, 3005 y 4317 están ocupados en esta
 PC y no se usan.
 
 ## El cifrado de extremo a extremo
@@ -124,3 +125,21 @@ navegador, nunca en el servidor.
 | Eliminación de cuenta | **Anonimizar** en vez de borrar la fila | Los demás necesitan la clave pública de quien envolvió la clave de la conversación para seguir leyendo sus chats. |
 | Producción | **Un solo proceso**: la API sirve la PWA compilada; **Docker + PostgreSQL** con docker-compose | Menos piezas que operar; mismo origen para cookies, CSP y WebSockets. Render/Fly/Railway o un VPS sirven igual. |
 | Seguridad web | **helmet** con CSP estricta (el script de tema salió del HTML para no necesitar `unsafe-inline`) | Mitiga XSS, que es el riesgo principal para claves guardadas en el navegador. |
+
+## Arquitectura de servicios: gateway en Go, tiempo real en Elixir
+
+Pedido explícito: chat en tiempo real en **Elixir**, **Go** como API gateway / orquestador central,
+conexión por **WebSocket** y **traductores** en el gateway que envían *payloads* limpios al backend de
+cada app; vistas en **Next.js**. Esto reemplaza las guías originales (todo en NestJS) para esas piezas.
+
+| Decisión | Elección | Por qué |
+| --- | --- | --- |
+| Dónde viven los traductores | **Dentro del gateway**, un paquete por app (`services/gateway/internal/translators/<app>`) | Una capa anticorrupción en un solo binario: sin saltos de red extra ni otro servicio que operar. La interfaz `Translator` permite sacar uno a su propio proceso si algún día lo necesita. |
+| Qué limpia el traductor | Solo eventos de una lista blanca; IDs con formato y largo máximo; tamaños (SDP < 100 KB); se re-serializa desde structs tipados (los campos desconocidos se pierden); el usuario lo pone el gateway desde el JWT | El backend nunca recibe lo que el navegador inventó. |
+| Protocolos | **WebSocket** para el tiempo real (navegador ↔ gateway y gateway ↔ Elixir); **HTTP** para lo que es pedido/respuesta (gateway → core) | Cada uno donde rinde: REST es más simple de cachear, limitar y depurar; el WebSocket solo donde hay eventos que empujar. |
+| Enlace gateway ↔ Elixir | **Un solo WebSocket multiplexado** (`/link`) con token entre servicios; operaciones `open/close/event` y `deliver/ack` | Una conexión por gateway en vez de una por usuario; el gateway queda sin estado de negocio. |
+| Qué hace Elixir | Conexiones, presencia, «escribiendo…» y **un GenServer por llamada** (bajo `DynamicSupervisor`); `Registry` con claves únicas para «ocupado» sin carreras; caché ETS de 30 s para los permisos | OTP está hecho para esto: millones de procesos livianos, aislamiento de fallos (si una llamada falla, solo cae esa) y temporizadores por proceso. |
+| Qué sigue en NestJS | Toda la lógica de negocio y la base de datos (**core**); el tiempo real le consulta permisos y le avisa la presencia por `/api/internal/*` | Patrón *strangler*: se mueve primero lo que más gana con el cambio (tiempo real) sin reescribir lo que ya funciona y está probado. |
+| Seguridad entre servicios | `INTERNAL_TOKEN` (comparación en tiempo constante) en `/link`, `/internal/publish` y `/api/internal/*`; el gateway responde 404 a `/api/internal/*` | Las rutas internas no existen hacia fuera aunque alguien adivine la URL. |
+| Orden del cambio | **Fase 1** (hecha): Elixir + gateway + traductor del chat, con la web actual y las 17 pruebas E2E como red de seguridad. **Fase 2**: la web a Next.js. **Fase 3**: los backends de las otras apps, cada una con su traductor | Cambiar backend y frontend a la vez dejaría sin forma de saber qué rompió qué. |
+| Librerías | Go: `coder/websocket` (única dependencia), JWT HS256 propio con la biblioteca estándar. Elixir: Bandit + Plug + WebSockAdapter + Jason + Req | Pocas dependencias, mantenidas y sin servicios externos. |

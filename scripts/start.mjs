@@ -1,57 +1,46 @@
 #!/usr/bin/env node
-// Un solo comando: instala, prepara la base de datos, carga los datos de ejemplo y arranca API + web.
-//   npm start
-import { spawn, spawnSync } from 'node:child_process';
+// Un solo comando: instala, prepara la base de datos, carga los datos de ejemplo y arranca
+// gateway (Go) + tiempo real (Elixir) + core (NestJS) + web.
+//   npm start          todo compilado
+//   npm run dev        el core con recarga automática
 import { copyFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { buildServices, checkTools, npm, ports, root, run, startServices, step } from './lib/services.mjs';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const isWindows = process.platform === 'win32';
-const npm = isWindows ? 'npm.cmd' : 'npm';
 const devMode = process.argv.includes('--dev');
 
-const step = (title) => console.log(`\n\x1b[36m▸ ${title}\x1b[0m`);
+checkTools();
 
-function run(args, cwd = root) {
-  const result = spawnSync(npm, args, { cwd, stdio: 'inherit', shell: isWindows });
-  if (result.status !== 0) {
-    console.error(`\n✖ Falló: npm ${args.join(' ')}`);
-    process.exit(result.status ?? 1);
-  }
+if (!existsSync(join(root, 'node_modules', '.package-lock.json'))) {
+  step('Instalando dependencias (solo la primera vez)…');
+  run(npm, ['install']);
 }
+
+const envFile = join(root, 'apps', 'api', '.env');
+if (!existsSync(envFile)) {
+  step('Creando apps/api/.env a partir de .env.example');
+  copyFileSync(join(root, 'apps', 'api', '.env.example'), envFile);
+}
+
+step('Compilando contratos y cifrado compartidos');
+run(npm, ['run', 'build:packages']);
 
 if (!devMode) {
-  if (!existsSync(join(root, 'node_modules', '.package-lock.json'))) {
-    step('Instalando dependencias (solo la primera vez)…');
-    run(['install']);
-  }
-
-  const envFile = join(root, 'apps', 'api', '.env');
-  if (!existsSync(envFile)) {
-    step('Creando apps/api/.env a partir de .env.example');
-    copyFileSync(join(root, 'apps', 'api', '.env.example'), envFile);
-  }
-
-  step('Compilando contratos y cifrado compartidos');
-  run(['run', 'build:packages']);
-
   step('Preparando la base de datos (SQLite embebida) y los datos de ejemplo');
-  run(['run', 'db:setup', '-w', '@parla/api']);
+  run(npm, ['run', 'db:setup', '-w', '@parla/api']);
 
-  step('Compilando la API');
-  run(['run', 'build', '-w', '@parla/api']);
+  step('Compilando el core (NestJS)');
+  run(npm, ['run', 'build', '-w', '@parla/api']);
 }
 
-step('Arrancando la API (http://localhost:4100) y la web (http://localhost:3100)');
-const children = [
-  spawn(npm, ['run', devMode ? 'dev' : 'start', '-w', '@parla/api'], { cwd: root, stdio: 'inherit', shell: isWindows }),
-  spawn(npm, ['run', 'dev', '-w', '@parla/web'], { cwd: root, stdio: 'inherit', shell: isWindows }),
-];
+buildServices();
+
+step(`Arrancando: web ${ports.web} · gateway ${ports.gateway} · core ${ports.core} · tiempo real ${ports.realtime}`);
+startServices({ core: devMode ? 'dev' : 'start' });
 
 console.log(`
 \x1b[32m✔ Parla está listo\x1b[0m
-  Abre http://localhost:3100 en el navegador (o en tu celular, en la misma red, para instalarla).
+  Abre http://localhost:${ports.web} en el navegador (o en tu celular, en la misma red, para instalarla).
   Usuarios de prueba (contraseña: Parla2026!):
     laura              administradora de Café Andino
     camila             administradora de Proyecto Faro
@@ -59,25 +48,3 @@ console.log(`
     +57 300 123 4567   Sofía, colaboradora (entra por teléfono)
   Ctrl + C para detener.
 `);
-
-let stopping = false;
-const stop = (exitCode = 0) => {
-  if (stopping) return;
-  stopping = true;
-  for (const child of children) {
-    if (child.exitCode !== null) continue;
-    if (isWindows) spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-    else child.kill('SIGTERM');
-  }
-  process.exit(exitCode);
-};
-process.on('SIGINT', () => stop(0));
-process.on('SIGTERM', () => stop(0));
-// Si un servidor se cae, se detiene el otro y el comando termina con error.
-for (const child of children) {
-  child.on('exit', (code) => {
-    if (stopping) return;
-    console.error(`\n✖ Un servidor se detuvo (código ${code}). Revisa el mensaje de arriba.`);
-    stop(code || 1);
-  });
-}

@@ -1,4 +1,5 @@
-# Parla + PostgreSQL en un servidor propio:
+# Parla en un servidor propio: gateway (Go, único puerto público) → core (NestJS) + tiempo real
+# (Elixir), con PostgreSQL.
 #   cp .env.production.example .env.production   (y completa los valores)
 #   docker compose --env-file .env.production up -d --build
 # Luego pon un proxy con HTTPS delante (Caddy, Nginx, Traefik): la cámara, el micrófono, las
@@ -19,15 +20,36 @@ services:
       interval: 10s
       retries: 5
 
-  app:
+  gateway:
+    build: services/gateway
+    restart: unless-stopped
+    depends_on: [core, realtime]
+    ports:
+      - '8080:4100'
+    environment:
+      APP_ENV: production
+      CORE_URL: http://core:4101
+      REALTIME_LINK_URL: ws://realtime:4102/link
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?Define INTERNAL_TOKEN (24+ caracteres)}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET (32+ caracteres)}
+      WEB_ORIGIN: ${PUBLIC_URL}
+
+  realtime:
+    build: services/realtime
+    restart: unless-stopped
+    environment:
+      CORE_URL: http://core:4101
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+
+  core:
     build: .
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - '8080:8080'
     environment:
+      REALTIME_URL: http://realtime:4102
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
       DATABASE_URL: postgresql://parla:${POSTGRES_PASSWORD}@db:5432/parla
       JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET (32+ caracteres)}
       PUBLIC_WEB_URL: ${PUBLIC_URL:?Define PUBLIC_URL, p. ej. https://chat.miempresa.com}

@@ -24,6 +24,11 @@ export function setUnauthorizedHandler(handler: () => void): void {
   onUnauthorized = handler;
 }
 
+/** El tiempo real también avisa cuando la sesión venció (cierre 4401 del gateway). */
+export function notifySessionExpired(): void {
+  onUnauthorized?.();
+}
+
 async function request<T>(method: string, path: string, body?: unknown, raw = false): Promise<T> {
   const token = tokenStorage.get();
   const headers: Record<string, string> = {};

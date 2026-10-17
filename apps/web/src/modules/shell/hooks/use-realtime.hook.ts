@@ -42,7 +42,7 @@ export function useRealtime(userId: string | undefined) {
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
-    socket.io.on('reconnect_attempt', onReconnecting);
+    socket.on('reconnecting', onReconnecting);
     socket.on('message:new', async (message) => {
       const result = await useChatStore.getState().receiveMessage(message, { focused: isFocused() });
       const sound = useSessionStore.getState().user?.preferences.notificationSound;
@@ -91,7 +91,6 @@ export function useRealtime(userId: string | undefined) {
     return () => {
       window.removeEventListener('focus', onFocus);
       socket.removeAllListeners();
-      socket.io.off('reconnect_attempt', onReconnecting);
       pendingTeardown = window.setTimeout(() => {
         pendingTeardown = null;
         if (useCallStore.getState().phase !== 'idle') useCallStore.getState().hangUp();

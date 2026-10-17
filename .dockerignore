@@ -11,3 +11,6 @@ apps/api/.env
 **/test-results
 **/playwright-report
 .git
+services/gateway/bin
+services/realtime/_build
+services/realtime/deps

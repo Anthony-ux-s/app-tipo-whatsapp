@@ -11,20 +11,28 @@ el celular como PWA.
 
 ## Arrancar
 
-Requisitos: **Node.js 20.19 o superior** (probado con Node 24). No hace falta instalar ninguna base
-de datos ni servicio aparte.
+Requisitos: **Node.js 20.19+**, **Go 1.23+** y **Elixir 1.17+ con Erlang/OTP 27+** (probado con Node 24,
+Go 1.27 y Elixir 1.20 / OTP 29). En Windows: `winget install GoLang.Go Erlang.ErlangOTP Elixir.Elixir`.
+Si Go o Elixir no quedaron en el PATH de la terminal, el script los busca en su carpeta de instalación.
+No hace falta instalar ninguna base de datos.
 
 ```bash
 npm start
 ```
 
 Ese único comando instala las dependencias (la primera vez), crea `apps/api/.env`, prepara la
-base de datos SQLite embebida, carga los datos de ejemplo, compila y levanta:
+base de datos SQLite embebida, carga los datos de ejemplo, compila el gateway (Go) y el tiempo real
+(Elixir), y levanta cuatro procesos:
 
-| Servicio | URL |
-| --- | --- |
-| Web (PWA) | http://localhost:3100 |
-| API | http://localhost:4100/api (salud: `/api/health`) |
+| Servicio | URL | Quién lo ve |
+| --- | --- | --- |
+| Web (PWA) | http://localhost:3100 | el navegador |
+| **Gateway** (Go) | http://localhost:4100 — `/api`, `/ws`, salud en `/gateway/health` | la única puerta del backend |
+| Core (NestJS) | http://localhost:4101/api | solo el gateway y el tiempo real |
+| Tiempo real (Elixir) | http://localhost:4102 | solo el gateway y el core |
+
+Los puertos se pueden cambiar con `PARLA_WEB_PORT`, `PARLA_GATEWAY_PORT`, `PARLA_CORE_PORT` y
+`PARLA_REALTIME_PORT`.
 
 Para instalarla en el celular, abre la web desde el navegador del teléfono y elige «Agregar a la
 pantalla de inicio». La cámara, el micrófono y las notificaciones push exigen HTTPS fuera de
@@ -34,9 +42,10 @@ Otros comandos:
 
 | Comando | Para qué |
 | --- | --- |
-| `npm run dev` | Igual que `start` pero con la API en modo *watch* (sin reinstalar ni recargar datos). |
-| `npm run start:prod` | **Producción en un solo proceso**: compila y la API sirve también la web en http://localhost:4100. |
-| `npm test` | Pruebas unitarias: cifrado, casos de uso de la API y utilidades de la web. |
+| `npm run dev` | Igual que `start` pero con el core en modo *watch* (sin recargar datos). |
+| `npm run start:prod` | **Producción**: compila todo y el gateway sirve web, API y tiempo real en http://localhost:4100. |
+| `npm test` | Pruebas unitarias: cifrado, casos de uso del core y utilidades de la web. |
+| `go test ./...` en `services/gateway` · `mix test` en `services/realtime` | Pruebas del gateway y del tiempo real. |
 | `npm run test:e2e` | Recorrido de punta a punta con Playwright. La primera vez: `npx playwright install chromium`. |
 | `npm run db:reset` | Borra la base de desarrollo y los archivos, y vuelve a cargar los datos de ejemplo. |
 | `npm run typecheck` / `npm run build` | Verificación de tipos y compilación de producción. |
@@ -65,7 +74,7 @@ privada) y pulsa el botón de video o de teléfono en su chat.
 - Perfil (nombre, info., color de avatar), preferencias (tema claro/oscuro/sistema, enviar con Enter, sonido).
 
 **Chat individual y grupal**
-- Mensajes en **tiempo real** (Socket.IO), con estados **enviado ✓ → entregado ✓✓ → leído ✓✓ (cian)**;
+- Mensajes en **tiempo real** (Elixir, por WebSocket a través del gateway en Go), con estados **enviado ✓ → entregado ✓✓ → leído ✓✓ (cian)**;
   en grupos manda el destinatario más atrasado.
 - Fotos y videos con comentario, **notas de voz** grabadas en el navegador, visor de imágenes.
 - «Escribiendo…», presencia, no leídos, búsqueda y filtros, historial ilimitado.
@@ -117,11 +126,32 @@ privada) y pulsa el botón de video o de teléfono en su chat.
 
 ## Cómo está hecho
 
+```
+ navegador ── HTTPS /api ──►┌──────────────┐── HTTP (REST) ──────────► core NestJS (4101)
+            ── WSS  /ws  ──►│ gateway  Go  │                              ▲  │ POST /internal/publish
+                            │ (4100)       │                  /api/internal │  ▼
+                            │ traductores  │── WebSocket /link ──────► tiempo real Elixir (4102)
+                            └──────────────┘   (un solo enlace multiplexado)
+```
+
+- **Gateway (Go)**: única puerta pública. Valida el JWT, limita peticiones, y cada app tiene su
+  **traductor** (`internal/translators/<app>`): convierte lo que manda el navegador en un *payload*
+  limpio (solo campos conocidos, tipos y tamaños validados; el usuario sale del token, nunca del
+  mensaje) antes de enviarlo al backend de esa app.
+- **Tiempo real (Elixir/OTP)**: conexiones, presencia, «escribiendo…» y **un proceso por llamada**
+  (timbre, contestar, señalización WebRTC, colgar, perdida a los 45 s).
+- **Core (NestJS)**: la lógica de negocio y la base de datos. Publica eventos al tiempo real, y este
+  le consulta permisos y le avisa la presencia por rutas internas con un token entre servicios.
+- Protocolo completo: [docs/architecture/realtime-protocol.md](docs/architecture/realtime-protocol.md).
+
 Monorepo con npm workspaces:
 
 ```
+services/
+  gateway/   Go — API gateway / orquestador: proxy REST, WebSocket, traductores por app
+  realtime/  Elixir — tiempo real y llamadas (OTP: Registry, un GenServer por llamada)
 apps/
-  api/   NestJS + Prisma — Screaming Architecture + Ports & Adapters
+  api/   NestJS + Prisma (core) — Screaming Architecture + Ports & Adapters
          src/modules/{admin,members,platform}
          src/infra/{prisma,identity,storage,realtime,push,payments}
   web/   React + Vite + Tailwind — módulos con components/ hooks/ const/ types/ utils/
@@ -142,16 +172,16 @@ cp .env.production.example .env.production   # completa PUBLIC_URL, POSTGRES_PAS
 docker compose --env-file .env.production up -d --build
 ```
 
-La imagen compila el esquema PostgreSQL (`schema.postgres.prisma`), sincroniza la base al arrancar y
-sirve web + API en el puerto 8080. Pon delante un proxy con HTTPS (Caddy, Nginx, Traefik o el del
+Levanta cuatro contenedores: `gateway` (único puerto publicado, 8080), `core`, `realtime` y `db`. El
+core compila el esquema PostgreSQL (`schema.postgres.prisma`) y sincroniza la base al arrancar. Pon delante un proxy con HTTPS (Caddy, Nginx, Traefik o el del
 proveedor). Para llamadas en redes corporativas muy cerradas, configura un servidor TURN (`TURN_URL`).
 
-**Opción B — un solo proceso Node** (sin Docker): `npm run start:prod`. Usa la base de `DATABASE_URL`
-(SQLite por defecto), genera un secreto de sesiones en `apps/api/.secrets/` si no defines `JWT_SECRET`,
-y sirve todo en el puerto `PORT` (4100).
+**Opción B — sin Docker**: `npm run start:prod`. Usa la base de `DATABASE_URL` (SQLite por defecto),
+genera el secreto de sesiones y el token entre servicios en `apps/api/.secrets/` si no defines
+`JWT_SECRET` / `INTERNAL_TOKEN`, y el gateway sirve todo en el puerto `PORT` (4100).
 
-En producción la API: se niega a arrancar con el secreto de desarrollo o uno de menos de 32
-caracteres; envía cabeceras de seguridad con helmet (CSP estricta, HSTS, `nosniff`,
+En producción los tres servicios se niegan a arrancar con los secretos de desarrollo (`JWT_SECRET`
+de 32+ caracteres, `INTERNAL_TOKEN` de 24+). El core además envía cabeceras de seguridad con helmet (CSP estricta, HSTS, `nosniff`,
 `frame-ancestors 'none'`, `Permissions-Policy` de cámara y micrófono); confía en el proxy para la IP
 real (límite de intentos) y sirve los assets con caché inmutable y el `index.html`/`sw.js` sin caché.
 
@@ -159,25 +189,33 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 
 ## Pruebas
 
-- **Unitarias (Vitest, 108)**: cifrado E2E (7); API (75): estados de entrega, permisos, inicio de
+- **Unitarias (Vitest, 102)**: cifrado E2E (7); core (69): estados de entrega, permisos, inicio de
   sesión, hilos, menciones, tareas, push, **planes y pagos** (vigencia, límite de miembros, renovación
   acumulada, pago aprobado/rechazado/repetido, importe que no coincide, webhook), **MercadoPago con red
-  simulada** (preferencia, firma del webhook válida y falsificada), **llamadas** (timbre, contestar,
-  reenvío de señalización solo entre participantes, colgar con duración, perdida a los 45 s, rechazo,
-  grupo, ocupado, caída de conexión, push) y **datos personales** (términos, exportar, eliminar
+  simulada** (preferencia, firma del webhook válida y falsificada), **puente con el tiempo real**
+  (presencia, contexto solo para participantes, registro y push de llamadas) y **datos personales** (términos, exportar, eliminar
   anonimizando, administrador único); web (26).
+- **Gateway (Go, 14)**: JWT (firma, vencimiento, algoritmo), límite de peticiones, traductor del chat
+  (rechaza eventos desconocidos, IDs inválidos y SDP enormes; descarta campos extra), flujo completo
+  navegador ↔ gateway ↔ tiempo real con un Elixir simulado, caída del enlace, rutas internas ocultas.
+- **Tiempo real (Elixir, 17)**: llamadas (timbre, contestar, contestada en otro dispositivo, rechazo,
+  perdida, ocupado, grupo con límite del plan, señalización solo entre participantes, caída de una
+  conexión, registro en el chat) y el enlace con el gateway (token, usuario tomado del enlace).
 - **Punta a punta (Playwright, 17 recorridos, navegador real)**: chat cifrado en tiempo real, fotos y
   notas de voz, registro e invitación, celular, Fase 3 (menciones, hilos, tareas, push) y Fase 4:
   **videollamada real por WebRTC** entre dos navegadores con cámara y micrófono simulados (ambos ven
   el video del otro, silenciar, apagar cámara, colgar y registro en el chat), llamada rechazada,
   **mejora de plan con pago de prueba**, pago rechazado, colaborador sin permiso de pago, páginas
   legales, y descarga de datos + eliminación de cuenta.
-  La suite completa pasa en modo desarrollo y en **modo producción de un solo proceso** (CSP activa).
+  La suite completa pasa con la arquitectura nueva (web → gateway → core + Elixir) en modo
+  desarrollo y en **modo producción** (todo por un solo puerto, CSP activa).
 
 ## Qué falta
 
-- **Probado en esta PC sin Docker**: el `Dockerfile` y el `docker-compose.yml` no se pudieron
-  construir aquí; el esquema PostgreSQL sí se validó con Prisma y el modo producción se probó con SQLite.
+- **Fase 2 de la arquitectura**: pasar la web a **Next.js** (las vistas); el gateway ya la sirve igual.
+- **Fase 3 de la arquitectura**: los backends de las otras apps, cada una con su traductor en el gateway.
+- **Probado en esta PC sin Docker**: los `Dockerfile` (core, gateway, tiempo real) y el
+  `docker-compose.yml` no se pudieron construir aquí; el modo producción sí se probó sin Docker.
 - **MercadoPago real**: el adaptador está probado con la red simulada; falta probarlo con
   credenciales de prueba de una cuenta de MercadoPago y un webhook público.
 - **Llamadas**: sin servidor TURN propio, algunas redes muy restrictivas no conectan; compartir
@@ -186,4 +224,5 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
   privada no extraíble en IndexedDB, recuperación de cuenta, auditoría externa.
 - **Producto**: búsqueda en el historial (en el dispositivo), recordatorios de tareas, silenciar chats,
   facturación electrónica (DIAN) para los pagos, revisión legal de los textos por un abogado.
-- **Escala**: Socket.IO y presencia con Redis para varias instancias, archivos en S3/R2, colas.
+- **Escala**: varios nodos de Elixir en clúster (`libcluster` + `:pg`) y varios gateways; la
+  presencia del core en memoria pasaría a la base o a Redis; archivos en S3/R2, colas.

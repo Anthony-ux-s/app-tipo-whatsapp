@@ -1,5 +1,5 @@
-# Parla en producción: una sola imagen con la API (NestJS) que también sirve la web (PWA).
-# Base de datos: PostgreSQL (ver docker-compose.yml). Puerto: 8080.
+# Core de Parla (NestJS): API REST y la web (PWA) compilada. Va detrás del gateway (services/gateway),
+# que es la única puerta pública. Base de datos: PostgreSQL (ver docker-compose.yml). Puerto interno: 4101.
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
@@ -28,11 +28,11 @@ COPY --from=build --chown=parla /app /app
 USER parla
 
 ENV NODE_ENV=production \
-    PORT=8080 \
+    PORT=4101 \
     WEB_DIST=../web/dist \
     STORAGE_DIR=/data/storage
-EXPOSE 8080
+EXPOSE 4101
 WORKDIR /app/apps/api
-HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://localhost:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://localhost:4101/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 # Sincroniza el esquema (sin borrar datos) y arranca.
 CMD ["sh", "-c", "npx prisma db push --schema prisma/schema.postgres.prisma --skip-generate && node dist/main.js"]

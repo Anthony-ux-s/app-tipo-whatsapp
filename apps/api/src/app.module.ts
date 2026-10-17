@@ -15,7 +15,7 @@ import { PushModule } from './modules/members/push/push.module';
 import { TasksModule } from './modules/members/tasks/tasks.module';
 import { WorkspacesModule } from './modules/members/workspaces/workspaces.module';
 import { AuthModule } from './modules/platform/identity/auth/auth.module';
-import { LiveModule } from './modules/platform/messaging/live/live.module';
+import { RealtimeBridgeModule } from './modules/platform/messaging/realtime-bridge/realtime-bridge.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -31,7 +31,7 @@ import { HealthController } from './health.controller';
     WorkspaceAdminModule,
     AdminBillingModule,
     BillingModule,
-    LiveModule,
+    RealtimeBridgeModule,
     CallsModule,
   ],
   controllers: [HealthController],

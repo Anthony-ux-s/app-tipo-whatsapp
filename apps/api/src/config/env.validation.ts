@@ -22,9 +22,13 @@ export interface AppEnv {
   mercadoPago: { accessToken: string | null; webhookSecret: string | null; useSandboxUrl: boolean };
   /** Servidores STUN/TURN para las llamadas WebRTC. */
   ice: CallIceConfig;
+  /** Servicio de tiempo real (Elixir) y token compartido entre servicios internos. */
+  realtimeUrl: string;
+  internalToken: string;
 }
 
 export const DEV_JWT_SECRET = 'parla-dev-secret-cambiar-en-produccion';
+export const DEV_INTERNAL_TOKEN = 'parla-dev-internal-token';
 
 /** Carga apps/api/.env (si existe) y valida las variables que la API necesita. */
 export function loadEnv(): AppEnv {
@@ -42,7 +46,12 @@ export function loadEnv(): AppEnv {
     throw new Error('En producción JWT_SECRET debe ser un secreto propio de al menos 32 caracteres');
   }
 
-  const port = Number(env.PORT ?? 4100);
+  const internalToken = env.INTERNAL_TOKEN ?? DEV_INTERNAL_TOKEN;
+  if (production && (internalToken === DEV_INTERNAL_TOKEN || internalToken.length < 24)) {
+    throw new Error('En producción INTERNAL_TOKEN debe ser un secreto propio de al menos 24 caracteres');
+  }
+
+  const port = Number(env.PORT ?? 4101);
   if (!Number.isInteger(port) || port <= 0) throw new Error('PORT debe ser un número de puerto válido');
 
   const webOrigin = (env.WEB_ORIGIN ?? 'http://localhost:3100').split(',').map((o) => o.trim());
@@ -83,6 +92,8 @@ export function loadEnv(): AppEnv {
       useSandboxUrl: env.MERCADOPAGO_SANDBOX === 'true',
     },
     ice: { iceServers },
+    realtimeUrl: (env.REALTIME_URL ?? 'http://localhost:4102').replace(/\/$/, ''),
+    internalToken,
   };
 }
 

@@ -17,3 +17,8 @@ playwright-report/
 apps/api/verify-storage/
 apps/api/.secrets/
 .env.production
+
+# Servicios compilados
+services/gateway/bin/
+services/realtime/_build/
+services/realtime/deps/

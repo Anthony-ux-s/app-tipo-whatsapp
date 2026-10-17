@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 
+// El navegador solo habla con el gateway (Go): API REST en /api y tiempo real en /ws.
 const API_URL = process.env.PARLA_API_URL ?? 'http://localhost:4100';
 const WEB_PORT = Number(process.env.PARLA_WEB_PORT ?? 3100);
 
@@ -45,7 +46,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['react', 'react-dom/client', 'react-router', 'zustand', 'lucide-react', 'socket.io-client'],
+    include: ['react', 'react-dom/client', 'react-router', 'zustand', 'lucide-react', 'workbox-core', 'workbox-precaching', 'workbox-routing'],
   },
   server: {
     port: WEB_PORT,
@@ -53,7 +54,7 @@ export default defineConfig({
     warmup: { clientFiles: ['./src/main.tsx', './src/app/router.tsx'] },
     proxy: {
       '/api': { target: API_URL, changeOrigin: true },
-      '/socket.io': { target: API_URL, ws: true, changeOrigin: true },
+      '/ws': { target: API_URL, ws: true, changeOrigin: true },
     },
   },
   preview: {
@@ -61,7 +62,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': { target: API_URL, changeOrigin: true },
-      '/socket.io': { target: API_URL, ws: true, changeOrigin: true },
+      '/ws': { target: API_URL, ws: true, changeOrigin: true },
     },
   },
   test: {

@@ -17,7 +17,7 @@ if (import.meta.env.PROD) {
   cleanupOutdatedCaches();
   precacheAndRoute(self.__WB_MANIFEST);
   registerRoute(
-    new NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api/, /^\/socket\.io/] }),
+    new NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api/, /^\/ws/] }),
   );
 }
 
