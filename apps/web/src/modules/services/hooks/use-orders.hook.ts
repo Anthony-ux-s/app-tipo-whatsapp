@@ -4,7 +4,7 @@ import { sortOrders, useOrdersStore } from '@shared/stores/orders.store';
 import { errorMessage } from '@shared/utils/http';
 import { isFinalStatus, minutesLeft, orderStepIndex } from '../utils/services.utils';
 
-/** «Mis pedidos». */
+/** Delivery: «Mis pedidos». */
 export function useOrders() {
   const navigate = useNavigate();
   const orders = useOrdersStore((s) => s.orders);

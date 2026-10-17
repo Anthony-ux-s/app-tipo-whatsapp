@@ -18,7 +18,7 @@ export function AppShellView() {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-canvas">
-      <AppRail user={shell.user} section={layout.section} unread={layout.totalUnread} />
+      <AppRail user={shell.user} section={layout.section} unread={layout.totalUnread} activeOrders={layout.activeOrders} />
       <div className="flex min-w-0 flex-1 flex-col">
         <ConnectionBanner connection={shell.connection} />
         <div className="flex min-h-0 min-w-0 flex-1">
@@ -26,13 +26,13 @@ export function AppShellView() {
             className={`${layout.showListOnMobile ? 'flex' : 'hidden'} w-full shrink-0 flex-col border-r border-line md:flex md:w-[340px] lg:w-[380px]`}
           >
             <ChatListPanel />
-            <MobileNav section={layout.section} unread={layout.totalUnread} />
+            <MobileNav section={layout.section} unread={layout.totalUnread} activeOrders={layout.activeOrders} />
           </aside>
           <main className={`${layout.showListOnMobile ? 'hidden' : 'flex'} min-w-0 flex-1 flex-col md:flex`}>
             <div className="flex min-h-0 flex-1 animate-fade-in">
               <Outlet />
             </div>
-            {layout.showMobileNavInMain && <MobileNav section={layout.section} unread={layout.totalUnread} />}
+            {layout.showMobileNavInMain && <MobileNav section={layout.section} unread={layout.totalUnread} activeOrders={layout.activeOrders} />}
           </main>
         </div>
       </div>

@@ -9,6 +9,8 @@ type Producto struct {
 	Stock          int     `json:"stock"`
 	Categoria      string  `json:"categoria"`
 	Imagen         *string `json:"imagen"`
+	// PrecioAntesCentimos: precio normal cuando el producto está en oferta (PrecioCentimos es el rebajado).
+	PrecioAntesCentimos *int `json:"precio_antes_centimos,omitempty"`
 }
 
 // catalogoInicial: abarrotes y productos del día de una bodega peruana.
@@ -16,7 +18,7 @@ func catalogoInicial() []Producto {
 	p := func(sku, nombre, presentacion string, precio, stock int, categoria string) Producto {
 		return Producto{SKU: sku, Nombre: nombre, Presentacion: presentacion, PrecioCentimos: precio, Stock: stock, Categoria: categoria}
 	}
-	return []Producto{
+	productos := []Producto{
 		p("AZU-RUB-1K", "Azúcar rubia", "1 kg", 450, 200, "Abarrotes"),
 		p("AZU-BLA-1K", "Azúcar blanca", "1 kg", 520, 150, "Abarrotes"),
 		p("ARR-EXT-1K", "Arroz extra", "1 kg", 480, 300, "Abarrotes"),
@@ -51,4 +53,21 @@ func catalogoInicial() []Producto {
 		p("AGU-MIN-2L", "Agua mineral sin gas", "2.5 L", 350, 150, "Bebidas"),
 		p("GAS-COL-1L", "Gaseosa sabor original", "1.5 L", 650, 100, "Bebidas"),
 	}
+	// Ofertas de la semana: precio normal antes de la rebaja.
+	ofertas := map[string]int{
+		"ACE-VEG-1L":  1290,
+		"ARR-EXT-5K":  2690,
+		"LEC-EVA-6PK": 2690,
+		"CAF-SOL-200": 1890,
+		"HUE-PAR-15":  1290,
+		"DET-POL-900": 1490,
+		"ATU-FIL-170": 750,
+		"MAN-ISR-1K":  850,
+	}
+	for i := range productos {
+		if antes, ok := ofertas[productos[i].SKU]; ok {
+			productos[i].PrecioAntesCentimos = &antes
+		}
+	}
+	return productos
 }

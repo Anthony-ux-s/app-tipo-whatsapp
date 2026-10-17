@@ -34,6 +34,8 @@ type Product struct {
 	Stock      int     `json:"stock"`
 	Category   string  `json:"category"`
 	ImageURL   *string `json:"imageUrl"`
+	// ListPriceCents: precio normal cuando el producto está en oferta.
+	ListPriceCents *int `json:"listPriceCents,omitempty"`
 }
 
 type CartItem struct {

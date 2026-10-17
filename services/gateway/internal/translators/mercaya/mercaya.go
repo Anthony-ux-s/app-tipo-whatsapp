@@ -40,6 +40,7 @@ type producto struct {
 	Stock          *int    `json:"stock"`
 	Categoria      string  `json:"categoria"`
 	Imagen         *string `json:"imagen"`
+	PrecioAntes    *int    `json:"precio_antes_centimos"`
 }
 
 // translate valida un producto de MercaYa y lo convierte; los campos desconocidos se pierden.
@@ -57,10 +58,15 @@ func translate(p producto) (services.Product, error) {
 			image = p.Imagen
 		}
 	}
+	// Solo es oferta si el precio de antes es mayor y creíble; si no, se ignora.
+	var listPrice *int
+	if p.PrecioAntes != nil && *p.PrecioAntes > *p.PrecioCentimos && *p.PrecioAntes <= maxPriceCents {
+		listPrice = p.PrecioAntes
+	}
 	return services.Product{
 		ID: p.SKU, Name: strings.TrimSpace(p.Nombre), Unit: strings.TrimSpace(p.Presentacion),
 		PriceCents: *p.PrecioCentimos, Currency: services.Currency, Stock: *p.Stock,
-		Category: strings.TrimSpace(p.Categoria), ImageURL: image,
+		Category: strings.TrimSpace(p.Categoria), ImageURL: image, ListPriceCents: listPrice,
 	}, nil
 }
 

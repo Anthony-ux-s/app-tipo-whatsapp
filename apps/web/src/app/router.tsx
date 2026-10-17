@@ -8,6 +8,7 @@ import { NoChatSelected } from '../modules/chats/components/NoChatSelected';
 import { LegalView } from '../modules/legal/components/LegalView';
 import { CheckoutView } from '../modules/services/components/CheckoutView';
 import { MarketView } from '../modules/services/components/MarketView';
+import { OffersView } from '../modules/services/components/OffersView';
 import { OrderDetailView } from '../modules/services/components/OrderDetailView';
 import { OrdersView } from '../modules/services/components/OrdersView';
 import { ServicesHomeView } from '../modules/services/components/ServicesHomeView';
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
           { path: 'servicios', element: <ServicesHomeView /> },
           { path: 'servicios/mercado', element: <MarketView /> },
           { path: 'servicios/mercado/carrito', element: <CheckoutView /> },
+          { path: 'ofertas', element: <OffersView /> },
           { path: 'pedidos', element: <OrdersView /> },
           { path: 'pedidos/:orderId', element: <OrderDetailView /> },
           { path: 'tareas', element: <MyTasksView /> },

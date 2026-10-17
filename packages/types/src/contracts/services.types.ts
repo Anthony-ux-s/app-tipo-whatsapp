@@ -27,6 +27,8 @@ export interface Product {
   stock: number;
   category: string;
   imageUrl: string | null;
+  /** Precio normal cuando el producto está en oferta (priceCents es el rebajado). */
+  listPriceCents?: number;
 }
 
 export interface CartItemRequest {

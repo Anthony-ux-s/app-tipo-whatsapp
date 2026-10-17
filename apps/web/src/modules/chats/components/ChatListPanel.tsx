@@ -1,7 +1,6 @@
 import { MessageSquarePlus, Search, Users, X } from 'lucide-react';
-import { Link } from 'react-router';
-import { Avatar } from '@shared/ui/Avatar';
 import { Button, IconButton } from '@shared/ui/Button';
+import { ProfileButton } from '@shared/ui/ProfileButton';
 import { EmptyChatsIllustration, NoResultsIllustration } from '@shared/ui/illustrations';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
 import { useChatList } from '../hooks/use-chat-list.hook';
@@ -14,9 +13,7 @@ export function ChatListPanel() {
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-surface" aria-label="Chats">
       <header className="flex items-center gap-2 px-3 pt-3 pb-2 md:px-4">
-        <Link to="/app/ajustes/perfil" aria-label="Tu perfil" className="rounded-full md:hidden">
-          <Avatar name={list.user.displayName} color={list.user.avatarColor} photo={list.user.avatarUrl} size="sm" />
-        </Link>
+        <ProfileButton />
         <h1 className="min-w-0 flex-1 truncate px-1 font-display text-2xl font-extrabold text-ink">Chats</h1>
         <IconButton label="Nuevo grupo" onClick={() => list.openNewChat('group')}>
           <Users className="size-5" />

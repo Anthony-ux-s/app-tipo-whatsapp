@@ -1,5 +1,6 @@
 import { ChevronRight, Lock, Receipt } from 'lucide-react';
 import { Link } from 'react-router';
+import { ProfileButton } from '@shared/ui/ProfileButton';
 import { ErrorState } from '@shared/ui/States';
 import { formatSoles } from '@shared/utils/money';
 import { SERVICE_VISUALS } from '../const/services.const';
@@ -11,7 +12,7 @@ export function ServicesHomeView() {
   const s = useServices();
   return (
     <ServicePage>
-      <PageHeader title="Servicios" subtitle="Compra, paga y recibe sin salir de Parla." />
+      <PageHeader title="Servicios" subtitle="Compra, paga y recibe sin salir de Parla." action={<ProfileButton />} />
 
       {s.error && <ErrorState message={s.error} onRetry={s.retry} />}
 

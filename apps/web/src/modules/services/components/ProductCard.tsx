@@ -1,6 +1,7 @@
 import type { Product } from '@parla/types';
 import { Minus, Package, Plus } from 'lucide-react';
 import { formatSoles } from '@shared/utils/money';
+import { discountPercent } from '../utils/services.utils';
 
 interface ProductCardProps {
   product: Product;
@@ -11,19 +12,30 @@ interface ProductCardProps {
 
 export function ProductCard({ product, quantity, onAdd, onSubtract }: ProductCardProps) {
   const soldOut = product.stock === 0;
+  const discount = discountPercent(product.priceCents, product.listPriceCents);
   return (
     <article data-testid="product" className="flex flex-col gap-3 rounded-2xl bg-surface p-3 shadow-float">
-      <div className="flex aspect-[4/3] items-center justify-center rounded-xl bg-gradient-to-br from-teal-50 to-cyan-50 text-teal-600 dark:from-teal-950/60 dark:to-cyan-950/60 dark:text-teal-300">
+      <div className="relative flex aspect-[4/3] items-center justify-center rounded-xl bg-gradient-to-br from-teal-50 to-cyan-50 text-teal-600 dark:from-teal-950/60 dark:to-cyan-950/60 dark:text-teal-300">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt="" className="size-full rounded-xl object-cover" loading="lazy" />
         ) : (
           <Package className="size-10" aria-hidden="true" />
         )}
+        {discount > 0 && (
+          <span className="absolute top-2 left-2 rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-extrabold text-white">-{discount} %</span>
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <h3 className="line-clamp-2 text-sm font-semibold text-ink">{product.name}</h3>
         <p className="text-xs text-ink-soft">{product.unit}</p>
-        <p className="mt-1 font-extrabold whitespace-nowrap text-ink">{formatSoles(product.priceCents)}</p>
+        <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5">
+          <span className={`font-extrabold whitespace-nowrap ${discount > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-ink'}`}>{formatSoles(product.priceCents)}</span>
+          {discount > 0 && (
+            <span className="text-xs whitespace-nowrap text-ink-faint line-through" aria-label={`Antes ${formatSoles(product.listPriceCents!)}`}>
+              {formatSoles(product.listPriceCents!)}
+            </span>
+          )}
+        </p>
       </div>
       <div className="flex h-9 items-center">
         {soldOut ? (

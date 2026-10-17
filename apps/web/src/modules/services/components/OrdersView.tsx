@@ -1,5 +1,6 @@
 import { ChevronRight, ShoppingBasket } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
+import { ProfileButton } from '@shared/ui/ProfileButton';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
 import { EmptyChatsIllustration } from '@shared/ui/illustrations';
 import { formatListTimestamp } from '@shared/utils/date';
@@ -7,12 +8,12 @@ import { formatSoles } from '@shared/utils/money';
 import { useOrders } from '../hooks/use-orders.hook';
 import { OrderStatusBadge, PageHeader, ServicePage } from './ServicesUi';
 
-/** «Mis pedidos»: historial con su estado en vivo. */
+/** Delivery («Mis pedidos»): historial y seguimiento en vivo de cada pedido. */
 export function OrdersView() {
   const o = useOrders();
   return (
     <ServicePage>
-      <PageHeader title="Mis pedidos" subtitle="Tus compras en Servicios y cómo van." onBack={o.back} />
+      <PageHeader title="Delivery" subtitle="Tus pedidos y su seguimiento en vivo." action={<ProfileButton />} />
       {o.error && o.orders.length === 0 ? (
         <ErrorState message={o.error} onRetry={o.reload} />
       ) : o.loading && o.orders.length === 0 ? (

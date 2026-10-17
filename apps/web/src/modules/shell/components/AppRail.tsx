@@ -8,10 +8,11 @@ interface AppRailProps {
   user: SessionUser;
   section: AppSection;
   unread: number;
+  activeOrders: number;
 }
 
-/** Barra de secciones (solo escritorio): Chats, Servicios, Tareas y Ajustes, como en WeChat. */
-export function AppRail({ user, section, unread }: AppRailProps) {
+/** Barra de secciones (solo escritorio): Chats, Servicios, Ofertas, Delivery, Tareas y Ajustes, como en WeChat. */
+export function AppRail({ user, section, unread, activeOrders }: AppRailProps) {
   const main = NAV_ITEMS.filter((item) => item.id !== 'ajustes');
   const settings = NAV_ITEMS.find((item) => item.id === 'ajustes')!;
   const itemClass = (active: boolean) =>
@@ -23,16 +24,19 @@ export function AppRail({ user, section, unread }: AppRailProps) {
         <LogoMark className="size-10" />
       </Link>
       <div className="flex flex-1 flex-col items-center gap-2">
-        {main.map(({ id, to, label, icon: Icon }) => (
-          <Link key={id} to={to} title={label} aria-label={label} aria-current={section === id ? 'page' : undefined} className={itemClass(section === id)}>
-            <Icon className="size-5" />
-            {id === 'chats' && unread > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-400 px-1 text-[10px] font-bold text-teal-950">
-                {unread > 99 ? '99+' : unread}
-              </span>
-            )}
-          </Link>
-        ))}
+        {main.map(({ id, to, label, icon: Icon }) => {
+          const badge = id === 'chats' ? unread : id === 'delivery' ? activeOrders : 0;
+          return (
+            <Link key={id} to={to} title={label} aria-label={label} aria-current={section === id ? 'page' : undefined} className={itemClass(section === id)}>
+              <Icon className="size-5" />
+              {badge > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-400 px-1 text-[10px] font-bold text-teal-950">
+                  {badge > 99 ? '99+' : badge}
+                </span>
+              )}
+            </Link>
+          );
+        })}
       </div>
       <Link to={settings.to} title={settings.label} aria-label={settings.label} className={itemClass(section === 'ajustes')}>
         <settings.icon className="size-5" />

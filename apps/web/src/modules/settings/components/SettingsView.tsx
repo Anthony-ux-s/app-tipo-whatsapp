@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, Lock, LogOut } from 'lucide-react';
+import { ChevronRight, ExternalLink, ListChecks, Lock, LogOut } from 'lucide-react';
 import { Link } from 'react-router';
 import { Avatar } from '@shared/ui/Avatar';
 import { Button } from '@shared/ui/Button';
@@ -27,6 +27,10 @@ export function SettingsView() {
         </span>
         <ChevronRight className="size-5 shrink-0 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5" />
       </Link>
+
+      <SettingsGroup title="Tu actividad">
+        <SettingsRow to="/app/tareas" icon={ListChecks} title="Mis tareas" summary="Lo que te asignaron y lo que pediste en tus chats" />
+      </SettingsGroup>
 
       {SETTINGS_GROUPS.map((group) => (
         <SettingsGroup key={group.title} title={group.title}>

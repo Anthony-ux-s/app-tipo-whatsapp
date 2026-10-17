@@ -1,38 +1,16 @@
-import { Search, ShoppingCart, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { EmptyState, ErrorState } from '@shared/ui/States';
 import { NoResultsIllustration } from '@shared/ui/illustrations';
-import { formatSoles } from '@shared/utils/money';
 import { useMarket } from '../hooks/use-market.hook';
 import { ProductCard } from './ProductCard';
-import { PageHeader, ServicePage } from './ServicesUi';
+import { CartBar, PageHeader, ServicePage } from './ServicesUi';
 
 /** Mercado (tienda MercaYa): se escribe la lista como se habla y se arma el carrito. */
 export function MarketView() {
   const m = useMarket();
   return (
     <ServicePage
-      footer={
-        m.count > 0 && (
-          <div className="safe-bottom border-t border-line bg-surface p-3 md:px-6">
-            <button
-              type="button"
-              onClick={m.goToCart}
-              data-testid="cart-bar"
-              className="mx-auto flex w-full max-w-3xl animate-rise items-center gap-3 rounded-2xl bg-brand px-4 py-3 text-left text-white shadow-pop transition-colors duration-200 hover:bg-brand-strong"
-            >
-              <span className="relative">
-                <ShoppingCart className="size-6" />
-                <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-400 px-1 text-[11px] font-bold text-teal-950">
-                  {m.count}
-                </span>
-              </span>
-              <span className="flex-1 font-bold">Ver carrito</span>
-              <span className="text-sm text-teal-100">aprox.</span>
-              <span className="font-extrabold">{formatSoles(m.estimate)}</span>
-            </button>
-          </div>
-        )
-      }
+      footer={<CartBar count={m.count} estimateCents={m.estimate} onOpen={m.goToCart} />}
     >
       <PageHeader title="Mercado" subtitle="Tienda MercaYa · delivery MotoYa · pago con QR" onBack={m.back} />
 

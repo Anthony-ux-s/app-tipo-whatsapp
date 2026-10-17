@@ -1,4 +1,5 @@
-import { ListChecks } from 'lucide-react';
+import { ArrowLeft, ListChecks } from 'lucide-react';
+import { Link } from 'react-router';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
 import { TaskCard } from '@shared/ui/TaskCard';
 import { TeamIllustration } from '@shared/ui/illustrations';
@@ -10,6 +11,10 @@ export function MyTasksView() {
   return (
     <div className="flex-1 overflow-y-auto bg-canvas">
       <div className="mx-auto flex max-w-3xl flex-col gap-4 p-3 sm:p-4 md:gap-6 md:p-6 lg:p-8">
+        {/* En el celular las tareas se abren desde Ajustes (el avatar del encabezado). */}
+        <Link to="/app/ajustes" className="-mb-2 inline-flex items-center gap-1.5 self-start rounded-full px-2 py-1 text-sm font-semibold text-ink-soft hover:bg-surface-3 hover:text-ink md:hidden">
+          <ArrowLeft className="size-4" /> Ajustes
+        </Link>
         <header className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-teal-700 to-cyan-800 p-5 text-white shadow-float md:p-6">
           <span className="flex size-12 items-center justify-center rounded-2xl bg-white/15">
             <ListChecks className="size-6" />

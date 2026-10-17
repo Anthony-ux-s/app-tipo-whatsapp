@@ -26,6 +26,12 @@ export function orderStepIndex(status: OrderStatus): number {
   return index === -1 ? 0 : index;
 }
 
+/** Descuento redondeado («-15 %»); 0 si no hay precio normal mayor. */
+export function discountPercent(priceCents: number, listPriceCents: number | undefined): number {
+  if (!listPriceCents || listPriceCents <= priceCents) return 0;
+  return Math.round(((listPriceCents - priceCents) / listPriceCents) * 100);
+}
+
 /** El pedido ya no va a cambiar. */
 export function isFinalStatus(status: OrderStatus): boolean {
   return status === 'delivered' || status === 'payment_expired' || status === 'cancelled';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatSoles } from '@shared/utils/money';
-import { isFinalStatus, minutesLeft, orderStepIndex, parseShoppingQuery } from './services.utils';
+import { discountPercent, isFinalStatus, minutesLeft, orderStepIndex, parseShoppingQuery } from './services.utils';
 
 describe('servicios', () => {
   it('entiende un pedido escrito como se habla', () => {
@@ -17,6 +17,12 @@ describe('servicios', () => {
     expect(orderStepIndex('delivered')).toBe(3);
     expect(isFinalStatus('delivered')).toBe(true);
     expect(isFinalStatus('searching_driver')).toBe(false);
+  });
+
+  it('calcula el descuento de una oferta', () => {
+    expect(discountPercent(1090, 1290)).toBe(16);
+    expect(discountPercent(500, undefined)).toBe(0);
+    expect(discountPercent(500, 400)).toBe(0);
   });
 
   it('montos en soles y minutos para pagar', () => {

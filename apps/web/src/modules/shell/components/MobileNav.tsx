@@ -1,18 +1,19 @@
 import { Link } from 'react-router';
-import { NAV_ITEMS, type AppSection } from '../const/navigation.const';
+import { MOBILE_NAV_ITEMS, type AppSection } from '../const/navigation.const';
 
 interface MobileNavProps {
   section: AppSection;
   unread: number;
+  activeOrders: number;
 }
 
-/** Navegación inferior del celular. */
-export function MobileNav({ section, unread }: MobileNavProps) {
+/** Navegación inferior del celular: Chats, Servicios, Ofertas y Delivery (Ajustes va en el avatar). */
+export function MobileNav({ section, unread, activeOrders }: MobileNavProps) {
   return (
     <nav aria-label="Navegación principal" className="safe-bottom flex shrink-0 border-t border-line bg-surface md:hidden">
-      {NAV_ITEMS.map(({ id, to, label, icon: Icon }) => {
+      {MOBILE_NAV_ITEMS.map(({ id, to, label, icon: Icon }) => {
         const active = section === id;
-        const badge = id === 'chats' ? unread : 0;
+        const badge = id === 'chats' ? unread : id === 'delivery' ? activeOrders : 0;
         return (
           <Link
             key={id}

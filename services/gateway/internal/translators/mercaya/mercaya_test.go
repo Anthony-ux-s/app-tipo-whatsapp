@@ -48,6 +48,26 @@ func TestBuscarTraduceYDescartaProductosMalFormados(t *testing.T) {
 	}
 }
 
+func TestOfertaSoloSiElPrecioDeAntesEsMayor(t *testing.T) {
+	c := fake(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"resultados":[
+			{"sku":"ACE-VEG-1L","nombre":"Aceite","precio_centimos":1090,"precio_antes_centimos":1290,"stock":5},
+			{"sku":"RARO","nombre":"Antes más barato","precio_centimos":500,"precio_antes_centimos":400,"stock":5},
+			{"sku":"NORMAL","nombre":"Sin oferta","precio_centimos":500,"stock":5}
+		]}`)
+	})
+	products, err := c.Search(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(products) != 3 || products[0].ListPriceCents == nil || *products[0].ListPriceCents != 1290 {
+		t.Fatalf("la oferta debía traer su precio normal: %+v", products)
+	}
+	if products[1].ListPriceCents != nil || products[2].ListPriceCents != nil {
+		t.Fatal("un precio de antes menor o ausente no es oferta")
+	}
+}
+
 func TestProductoValidaQueSeaElPedido(t *testing.T) {
 	c := fake(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

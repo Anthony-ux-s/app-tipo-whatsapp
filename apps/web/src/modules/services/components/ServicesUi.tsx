@@ -1,6 +1,7 @@
 import type { OrderStatus } from '@parla/types';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ShoppingCart } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { formatSoles } from '@shared/utils/money';
 import { ORDER_STATUS_LABELS } from '../const/services.const';
 
 /** Contenedor de las pantallas de Servicios: ancho cómodo y desplazamiento propio. */
@@ -63,6 +64,31 @@ export function AmountRow({ label, value, strong = false }: { label: string; val
     <div className={`flex items-center justify-between gap-4 ${strong ? 'text-base font-extrabold text-ink' : 'text-sm text-ink-soft'}`}>
       <span>{label}</span>
       <span className={strong ? '' : 'font-semibold text-ink'}>{value}</span>
+    </div>
+  );
+}
+
+/** Barra inferior con el carrito del Mercado (solo si tiene algo). */
+export function CartBar({ count, estimateCents, onOpen }: { count: number; estimateCents: number; onOpen: () => void }) {
+  if (count === 0) return null;
+  return (
+    <div className="safe-bottom border-t border-line bg-surface p-3 md:px-6">
+      <button
+        type="button"
+        onClick={onOpen}
+        data-testid="cart-bar"
+        className="mx-auto flex w-full max-w-3xl animate-rise items-center gap-3 rounded-2xl bg-brand px-4 py-3 text-left text-white shadow-pop transition-colors duration-200 hover:bg-brand-strong"
+      >
+        <span className="relative">
+          <ShoppingCart className="size-6" />
+          <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-400 px-1 text-[11px] font-bold text-teal-950">
+            {count}
+          </span>
+        </span>
+        <span className="flex-1 font-bold">Ver carrito</span>
+        <span className="text-sm text-teal-100">aprox.</span>
+        <span className="font-extrabold">{formatSoles(estimateCents)}</span>
+      </button>
     </div>
   );
 }
