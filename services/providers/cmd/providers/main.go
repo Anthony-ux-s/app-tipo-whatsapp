@@ -42,6 +42,7 @@ func millis(key string, fallback int) time.Duration {
 }
 
 func main() {
+	production := os.Getenv("NODE_ENV") == "production" || os.Getenv("APP_ENV") == "production"
 	port := env("PROVIDERS_PORT", "4103")
 	publicURL := env("PROVIDERS_PUBLIC_URL", "http://localhost:"+port)
 
@@ -49,7 +50,13 @@ func main() {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		notify.WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "parla-providers", "systems": []string{"mercaya", "rapidito", "pagaya"}})
 	})
-	mercaya.NewStore().Routes(mux)
+	store := mercaya.NewStore()
+	store.AdminKey = env("MERCAYA_ADMIN_KEY", mercaya.DevAdminKey)
+	if production && (store.AdminKey == mercaya.DevAdminKey || len(store.AdminKey) < 24) {
+		slog.Error("en producción MERCAYA_ADMIN_KEY debe ser una clave propia de al menos 24 caracteres")
+		os.Exit(1)
+	}
+	store.Routes(mux)
 	rapidito.New().Routes(mux)
 	pagaya.New(publicURL, millis("PAGAYA_EXPIRY_MS", 15*60*1000), notify.Notifier{
 		Secret: env("PAGAYA_WEBHOOK_SECRET", "pagaya-dev-secret"), Header: "x-pagaya-firma", Retries: 4, Backoff: time.Second,

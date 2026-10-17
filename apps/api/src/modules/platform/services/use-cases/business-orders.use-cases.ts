@@ -1,14 +1,19 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { BusinessInfo, BusinessOrder, OrderContactRole, OrderStatus, PublicUser } from '@parla/types';
+import type { BusinessInfo, BusinessOrder, BusinessStatus, OrderContactRole, OrderStatus, PublicUser, ServiceId, UpdateBusinessRequest } from '@parla/types';
 import { PresenceRegistry } from '../../../../infra/realtime/presence.registry';
+import { assertHour, businessStatus } from '../../../../kernel/business-hours';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { toPublicUser } from '../../identity/user.mapper';
-import { BUSINESSES_REPOSITORY, type BusinessesRepository } from '../businesses.repository';
+import { BUSINESSES_REPOSITORY, type BusinessesRepository, type BusinessRecord } from '../businesses.repository';
 import { ORDERS_REPOSITORY, type OrderChanges, type OrderRecord, type OrdersRepository } from '../orders.repository';
 import { customersOf, OrderEvents, toBusinessOrder } from './orders.use-cases';
 
 const BUSINESS_HISTORY_LIMIT = 100;
+
+function toBusinessInfo(b: BusinessRecord): BusinessInfo {
+  return { id: b.id, name: b.name, service: b.service, acceptingOrders: b.acceptingOrders, opensAt: b.opensAt, closesAt: b.closesAt };
+}
 
 /** El negocio de quien consulta, o null si no es dueño de ninguno. */
 @Injectable()
@@ -17,7 +22,59 @@ export class GetMyBusinessUseCase {
 
   async execute(userId: string): Promise<BusinessInfo | null> {
     const business = await this.businesses.findByOwner(userId);
-    return business ? { id: business.id, name: business.name, service: business.service } : null;
+    return business ? toBusinessInfo(business) : null;
+  }
+}
+
+/** El dueño pausa o reanuda los pedidos («Recibir pedidos») y cambia el horario. */
+@Injectable()
+export class UpdateMyBusinessUseCase {
+  constructor(@Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository) {}
+
+  async execute(userId: string, changes: UpdateBusinessRequest): Promise<BusinessInfo> {
+    const business = await this.businesses.findByOwner(userId);
+    if (!business) throw new NotFoundError('No tienes un negocio en Parla');
+    if (changes.opensAt !== undefined) assertHour(changes.opensAt, 'Abre');
+    if (changes.closesAt !== undefined) assertHour(changes.closesAt, 'Cierra');
+    const patch: UpdateBusinessRequest = {};
+    if (changes.acceptingOrders !== undefined) patch.acceptingOrders = changes.acceptingOrders;
+    if (changes.opensAt !== undefined) patch.opensAt = changes.opensAt;
+    if (changes.closesAt !== undefined) patch.closesAt = changes.closesAt;
+    if (Object.keys(patch).length === 0) throw new ValidationError('No hay cambios');
+    return toBusinessInfo(await this.businesses.update(business.id, patch));
+  }
+}
+
+/** Si el negocio de un servicio recibe pedidos ahora (lo ve el cliente en el Mercado). Null si no hay negocio. */
+@Injectable()
+export class GetBusinessStatusUseCase {
+  constructor(@Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository) {}
+
+  async execute(service: ServiceId, now = new Date()): Promise<BusinessStatus | null> {
+    const business = await this.businesses.findByService(service);
+    if (!business) return null;
+    return { name: business.name, ...businessStatus(business, now), opensAt: business.opensAt, closesAt: business.closesAt };
+  }
+}
+
+/** Para el gateway: el negocio con su dueño y si recibe pedidos ahora (antes de cotizar o cobrar). */
+export interface InternalBusiness {
+  id: string;
+  name: string;
+  service: ServiceId;
+  ownerId: string;
+  open: boolean;
+  closedMessage: string | null;
+}
+
+@Injectable()
+export class GetInternalBusinessUseCase {
+  constructor(@Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository) {}
+
+  async execute(by: 'service' | 'owner', key: string, now = new Date()): Promise<InternalBusiness> {
+    const business = by === 'service' ? await this.businesses.findByService(key as ServiceId) : await this.businesses.findByOwner(key);
+    if (!business) throw new NotFoundError('Negocio no encontrado');
+    return { id: business.id, name: business.name, service: business.service, ownerId: business.ownerId, ...businessStatus(business, now) };
   }
 }
 

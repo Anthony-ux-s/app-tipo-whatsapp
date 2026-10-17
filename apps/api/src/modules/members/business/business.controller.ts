@@ -1,12 +1,21 @@
-import { Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import type { BusinessInfo, BusinessOrder } from '@parla/types';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import type { BusinessInfo, BusinessOrder, BusinessStatus, ServiceId, UpdateBusinessRequest } from '@parla/types';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../../../http/current-user.decorator';
 import {
   DecideBusinessOrderUseCase,
   GetBusinessOrderUseCase,
+  GetBusinessStatusUseCase,
   GetMyBusinessUseCase,
   ListBusinessOrdersUseCase,
+  UpdateMyBusinessUseCase,
 } from '../../platform/services/use-cases/business-orders.use-cases';
+
+class UpdateBusinessDto implements UpdateBusinessRequest {
+  @IsOptional() @IsBoolean() acceptingOrders?: boolean;
+  @IsOptional() @IsString() opensAt?: string;
+  @IsOptional() @IsString() closesAt?: string;
+}
 
 /**
  * «Mi negocio»: el dueño ve los pedidos que recibe, los acepta, avisa cuando están listos (se ofrecen
@@ -21,11 +30,26 @@ export class BusinessController {
     private readonly listOrders: ListBusinessOrdersUseCase,
     private readonly getOrder: GetBusinessOrderUseCase,
     private readonly decide: DecideBusinessOrderUseCase,
+    private readonly updateMine: UpdateMyBusinessUseCase,
+    private readonly status: GetBusinessStatusUseCase,
   ) {}
 
   @Get()
   async mine(@CurrentUser() user: AuthUser): Promise<{ business: BusinessInfo | null }> {
     return { business: await this.myBusiness.execute(user.userId) };
+  }
+
+  /** Pausar o reanudar los pedidos y cambiar el horario. */
+  @Patch()
+  update(@CurrentUser() user: AuthUser, @Body() body: UpdateBusinessDto): Promise<BusinessInfo> {
+    return this.updateMine.execute(user.userId, body);
+  }
+
+  /** Para cualquier cliente: si la tienda de un servicio recibe pedidos ahora. */
+  @Get('status/:service')
+  async statusOf(@Param('service') service: string): Promise<{ status: BusinessStatus | null }> {
+    if (!['mercado', 'salud'].includes(service)) return { status: null };
+    return { status: await this.status.execute(service as ServiceId) };
   }
 
   @Get('orders')

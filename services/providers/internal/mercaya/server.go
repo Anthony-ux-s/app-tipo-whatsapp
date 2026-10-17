@@ -4,10 +4,18 @@
 //	GET  /mercaya/v1/productos/{sku}         → Producto | 404 {"error":"NO_EXISTE"}
 //	POST /mercaya/v1/pedidos                 → 201 {"numero_pedido","estado":"RESERVADO","total_centimos"}
 //	                                           409 {"error":"SIN_STOCK","sku"} si no alcanza
+//
+// Administración (la usa la dueña de la tienda desde Parla, con la clave en x-mercaya-clave):
+//
+//	PATCH /mercaya/v1/productos/{sku}  {"precio_centimos"?,"precio_antes_centimos"?:int|null,"stock"?}
+//	                                   → Producto | 400 DATOS_INVALIDOS | 401 CLAVE_INVALIDA | 404 NO_EXISTE
+//	                                   (precio_antes_centimos: null quita la oferta; si no viene, no cambia)
 package mercaya
 
 import (
+	"bytes"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -19,6 +27,9 @@ import (
 
 // Store guarda el catálogo y las reservas (en memoria, como un sistema de prueba).
 type Store struct {
+	// AdminKey protege la API de administración del catálogo.
+	AdminKey string
+
 	mu       sync.Mutex
 	products []Producto
 	// pedidos por referencia del cliente: reservar dos veces lo mismo no descuenta dos veces.
@@ -31,7 +42,7 @@ type pedido struct {
 }
 
 func NewStore() *Store {
-	return &Store{products: catalogoInicial(), orders: map[string]pedido{}}
+	return &Store{AdminKey: DevAdminKey, products: catalogoInicial(), orders: map[string]pedido{}}
 }
 
 // Routes registra la API de MercaYa.
@@ -39,6 +50,70 @@ func (s *Store) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /mercaya/v1/catalogo", s.catalogo)
 	mux.HandleFunc("GET /mercaya/v1/productos/{sku}", s.producto)
 	mux.HandleFunc("POST /mercaya/v1/pedidos", s.pedido)
+	mux.HandleFunc("PATCH /mercaya/v1/productos/{sku}", s.actualizar)
+}
+
+// DevAdminKey: clave de administración fuera de producción.
+const DevAdminKey = "mercaya-dev-clave"
+
+const maxStock = 100_000
+
+// cambioProducto: lo que la tienda puede cambiar. precio_antes_centimos distingue «no viene» de null.
+type cambioProducto struct {
+	PrecioCentimos *int            `json:"precio_centimos"`
+	PrecioAntes    json.RawMessage `json:"precio_antes_centimos"`
+	Stock          *int            `json:"stock"`
+}
+
+func (s *Store) actualizar(w http.ResponseWriter, r *http.Request) {
+	if s.AdminKey == "" || subtle.ConstantTimeCompare([]byte(r.Header.Get("x-mercaya-clave")), []byte(s.AdminKey)) != 1 {
+		notify.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "CLAVE_INVALIDA"})
+		return
+	}
+	var req cambioProducto
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&req); err != nil {
+		notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "DATOS_INVALIDOS"})
+		return
+	}
+	// precio_antes: ausente → no cambia; null → quita la oferta; número → nueva oferta.
+	clearOffer := bytes.Equal(bytes.TrimSpace(req.PrecioAntes), []byte("null"))
+	var antes *int
+	if len(req.PrecioAntes) > 0 && !clearOffer {
+		var n int
+		if err := json.Unmarshal(req.PrecioAntes, &n); err != nil {
+			notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "DATOS_INVALIDOS"})
+			return
+		}
+		antes = &n
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.find(r.PathValue("sku"))
+	if !ok {
+		notify.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "NO_EXISTE"})
+		return
+	}
+	// Se valida sobre el resultado: el precio de antes tiene que seguir siendo mayor que el vigente.
+	next := *p
+	if req.PrecioCentimos != nil {
+		next.PrecioCentimos = *req.PrecioCentimos
+	}
+	if clearOffer {
+		next.PrecioAntesCentimos = nil
+	} else if antes != nil {
+		next.PrecioAntesCentimos = antes
+	}
+	if req.Stock != nil {
+		next.Stock = *req.Stock
+	}
+	if next.PrecioCentimos <= 0 || next.Stock < 0 || next.Stock > maxStock ||
+		(next.PrecioAntesCentimos != nil && *next.PrecioAntesCentimos <= next.PrecioCentimos) {
+		notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "DATOS_INVALIDOS"})
+		return
+	}
+	*p = next
+	notify.WriteJSON(w, http.StatusOK, next)
 }
 
 func (s *Store) catalogo(w http.ResponseWriter, r *http.Request) {

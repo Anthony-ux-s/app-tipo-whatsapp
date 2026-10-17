@@ -24,6 +24,10 @@ type Core interface {
 	CreateOrder(ctx context.Context, order services.InternalCreateOrder) (services.InternalOrder, error)
 	GetOrder(ctx context.Context, id string) (services.InternalOrder, error)
 	UpdateOrder(ctx context.Context, id string, update services.InternalUpdateOrder) (services.InternalOrder, error)
+	// BusinessByService: el negocio que atiende un servicio (ErrNotFound si ninguno).
+	BusinessByService(ctx context.Context, service services.ServiceID) (services.Business, error)
+	// BusinessByOwner: el negocio de una persona (ErrNotFound si no es dueña de ninguno).
+	BusinessByOwner(ctx context.Context, userID string) (services.Business, error)
 }
 
 // HTTPCore habla con las rutas internas del core con el token entre servicios.
@@ -46,6 +50,16 @@ func (c HTTPCore) GetOrder(ctx context.Context, id string) (services.InternalOrd
 func (c HTTPCore) UpdateOrder(ctx context.Context, id string, update services.InternalUpdateOrder) (services.InternalOrder, error) {
 	var out services.InternalOrder
 	return out, c.call(ctx, http.MethodPatch, "/api/internal/orders/"+url.PathEscape(id), update, &out)
+}
+
+func (c HTTPCore) BusinessByService(ctx context.Context, service services.ServiceID) (services.Business, error) {
+	var out services.Business
+	return out, c.call(ctx, http.MethodGet, "/api/internal/businesses/by-service/"+url.PathEscape(string(service)), nil, &out)
+}
+
+func (c HTTPCore) BusinessByOwner(ctx context.Context, userID string) (services.Business, error) {
+	var out services.Business
+	return out, c.call(ctx, http.MethodGet, "/api/internal/businesses/by-owner/"+url.PathEscape(userID), nil, &out)
 }
 
 func (c HTTPCore) call(ctx context.Context, method, path string, in, out any) error {

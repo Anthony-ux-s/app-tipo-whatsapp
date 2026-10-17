@@ -15,6 +15,7 @@ import type {
 import type { PushResult, PushSender, PushTarget } from '../infra/push/push-sender.port';
 import type { PushSubscriptionsRepository, StoredSubscription } from '../modules/platform/messaging/push/push-subscriptions.repository';
 import type { PushPayload } from '@parla/types';
+import type { UpdateBusinessRequest } from '@parla/types';
 import type { BusinessesRepository, BusinessRecord } from '../modules/platform/services/businesses.repository';
 import type { DriverRecord, DriversRepository } from '../modules/platform/services/drivers.repository';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
@@ -283,6 +284,11 @@ export class InMemoryBusinessesRepository implements BusinessesRepository {
   }
   async findByOwner(ownerId: string) {
     return this.businesses.find((b) => b.ownerId === ownerId) ?? null;
+  }
+  async update(id: string, changes: UpdateBusinessRequest) {
+    const business = this.businesses.find((b) => b.id === id)!;
+    Object.assign(business, changes);
+    return { ...business };
   }
 }
 

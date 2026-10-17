@@ -10,9 +10,12 @@ import { PrismaOrdersRepository } from './prisma-orders.repository';
 import {
   DecideBusinessOrderUseCase,
   GetBusinessOrderUseCase,
+  GetBusinessStatusUseCase,
+  GetInternalBusinessUseCase,
   GetMyBusinessUseCase,
   GetOrderContactUseCase,
   ListBusinessOrdersUseCase,
+  UpdateMyBusinessUseCase,
 } from './use-cases/business-orders.use-cases';
 import {
   AcceptDeliveryUseCase,
@@ -43,6 +46,9 @@ const USE_CASES = [
   GetBusinessOrderUseCase,
   DecideBusinessOrderUseCase,
   GetOrderContactUseCase,
+  UpdateMyBusinessUseCase,
+  GetBusinessStatusUseCase,
+  GetInternalBusinessUseCase,
   GetMyDriverUseCase,
   ListDriverOrdersUseCase,
   GetDriverOrderUseCase,

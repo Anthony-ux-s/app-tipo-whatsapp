@@ -24,6 +24,7 @@ export const ports = {
 const DEV_JWT_SECRET = 'parla-dev-secret-cambiar-en-produccion';
 const DEV_INTERNAL_TOKEN = 'parla-dev-internal-token';
 const DEV_PAGAYA_SECRET = 'pagaya-dev-secret';
+const DEV_MERCAYA_KEY = 'mercaya-dev-clave';
 
 export const step = (title) => console.log(`\n\x1b[36m▸ ${title}\x1b[0m`);
 
@@ -90,6 +91,8 @@ export function sharedEnv() {
     JWT_SECRET: process.env.JWT_SECRET ?? DEV_JWT_SECRET,
     INTERNAL_TOKEN: process.env.INTERNAL_TOKEN ?? DEV_INTERNAL_TOKEN,
     PAGAYA_WEBHOOK_SECRET: process.env.PAGAYA_WEBHOOK_SECRET ?? DEV_PAGAYA_SECRET,
+    // Clave de la API de administración de la tienda (la dueña cambia precios, ofertas y stock).
+    MERCAYA_ADMIN_KEY: process.env.MERCAYA_ADMIN_KEY ?? DEV_MERCAYA_KEY,
     CORE_URL: `http://localhost:${ports.core}`,
     REALTIME_URL: `http://localhost:${ports.realtime}`,
     PROVIDERS_URL: `http://localhost:${ports.providers}`,

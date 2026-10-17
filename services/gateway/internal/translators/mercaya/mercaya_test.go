@@ -2,6 +2,7 @@ package mercaya
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -114,5 +115,56 @@ func TestReservaTraduceSinStock(t *testing.T) {
 	}
 	if !strings.Contains(sent, `"referencia":"ord_1"`) {
 		t.Fatalf("la reserva debe llevar la referencia: %s", sent)
+	}
+}
+
+func TestUpdateMandaLaClaveYDistingueQuitarOferta(t *testing.T) {
+	var got []map[string]any
+	c := fake(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/mercaya/v1/productos/AZU-RUB-1K" || r.Header.Get("x-mercaya-clave") != "clave" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		got = append(got, body)
+		_, _ = io.WriteString(w, `{"sku":"AZU-RUB-1K","nombre":"Azúcar rubia","presentacion":"1 kg","precio_centimos":400,"stock":0}`)
+	})
+	c.AdminKey = "clave"
+	price, stock := 400, 0
+	p, err := c.Update(context.Background(), "AZU-RUB-1K", ProductPatch{PriceCents: &price, ClearListPrice: true, Stock: &stock})
+	if err != nil || p.PriceCents != 400 || p.Stock != 0 || p.ListPriceCents != nil {
+		t.Fatalf("traducción inesperada: %+v %v", p, err)
+	}
+	if v, ok := got[0]["precio_antes_centimos"]; !ok || v != nil {
+		t.Fatalf("quitar la oferta debe mandar null explícito: %v", got[0])
+	}
+	if _, err := c.Update(context.Background(), "AZU-RUB-1K", ProductPatch{Stock: &stock}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got[1]["precio_antes_centimos"]; ok {
+		t.Fatalf("sin cambio de oferta no se manda el campo: %v", got[1])
+	}
+	c.AdminKey = "otra"
+	if _, err := c.Update(context.Background(), "AZU-RUB-1K", ProductPatch{Stock: &stock}); !errors.Is(err, providerapi.ErrUnavailable) {
+		t.Fatalf("clave rechazada = mala configuración (no disponible), obtuve %v", err)
+	}
+}
+
+func TestUpdateTraduceRechazoYNoExiste(t *testing.T) {
+	c := fake(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/NADA") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"error":"DATOS_INVALIDOS"}`)
+	})
+	stock := 1
+	if _, err := c.Update(context.Background(), "NADA", ProductPatch{Stock: &stock}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("esperaba ErrNotFound, obtuve %v", err)
+	}
+	if _, err := c.Update(context.Background(), "AZU-RUB-1K", ProductPatch{Stock: &stock}); !errors.Is(err, ErrRejected) {
+		t.Fatalf("esperaba ErrRejected, obtuve %v", err)
 	}
 }

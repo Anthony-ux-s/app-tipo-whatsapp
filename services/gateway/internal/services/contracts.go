@@ -173,3 +173,14 @@ type InternalOrder struct {
 	// BusinessOwnerID: dueño del negocio que atiende el pedido (null en pedidos sin negocio).
 	BusinessOwnerID *string `json:"businessOwnerId"`
 }
+
+// Business: negocio que atiende un servicio, con su dueño y si está abierto ahora (lo calcula el core
+// con el horario y el interruptor de la tienda).
+type Business struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Service       ServiceID `json:"service"`
+	OwnerID       string    `json:"ownerId"`
+	Open          bool      `json:"open"`
+	ClosedMessage *string   `json:"closedMessage"`
+}

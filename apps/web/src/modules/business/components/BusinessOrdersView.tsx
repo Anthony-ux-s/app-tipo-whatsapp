@@ -7,6 +7,7 @@ import { formatSoles } from '@shared/utils/money';
 import { OrderStatusBadge, PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { BUSINESS_TABS } from '../const/business.const';
 import { useBusinessOrders } from '../hooks/use-business.hook';
+import { StoreSettingsCard } from './StoreSettingsCard';
 
 /** «Mi negocio»: los pedidos que recibe el dueño, para aceptarlos, prepararlos y entregarlos a Rapidito. */
 export function BusinessOrdersView() {
@@ -14,6 +15,8 @@ export function BusinessOrdersView() {
   return (
     <ServicePage>
       <PageHeader title="Mi negocio" subtitle={b.business ? `${b.business.name} · pedidos con delivery Rapidito` : 'Pedidos con delivery Rapidito'} onBack={b.back} />
+
+      <StoreSettingsCard />
 
       <div className="-mt-2 flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Filtrar pedidos del negocio">
         {BUSINESS_TABS.map((t) => (

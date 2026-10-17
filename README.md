@@ -115,6 +115,11 @@ pones tu nombre, un usuario opcional y la contraseña.
     acepta o rechaza, avisa cuando están listos, ve qué repartidor viene y **confirma que se lo
     entregó** (como «Despachado» en PedidosYa). Al final ve la **constancia**: entregado a quién, a qué
     hora y confirmado con el código del cliente. Pestañas Nuevos · Preparando · Con Rapidito · Terminados.
+  - **Mi tienda**: el dueño ve si está abierta, puede **pausar los pedidos** («Recibir pedidos») y
+    fijar el **horario** (hora de Lima, también nocturno o 24 horas). Cerrada, el cliente ve el aviso
+    y el gateway no cotiza ni cobra. En **Catálogo y precios** cambia el precio, pone o quita la
+    **oferta** (precio normal tachado) y el **stock** (o lo marca agotado de un toque); se guarda en el
+    sistema de la tienda y se ve al instante en Mercado y Ofertas.
   - **Repartidor** (*Delivery → Rapidito · Repartidor*): ve los pedidos listos con la tienda, el destino
     y lo que gana; el primero que lo toma se lo queda (una entrega a la vez). Recoge en la tienda y
     entrega **solo con el código del cliente**: con 5 códigos equivocados se bloquea, para que no se
@@ -299,8 +304,8 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 - **Llamadas**: TURN propio para redes muy restrictivas, compartir pantalla, SFU para grupos grandes.
 - **Delivery**: mapa y ubicación en vivo del repartidor; reasignación automática si nadie toma el
   pedido o el repartidor no avanza; calificaciones y propinas; resumen de ganancias del repartidor.
-- **Negocios**: el dueño aún no administra su catálogo, precios, stock ni horario (vienen de MercaYa);
-  hay un solo negocio por servicio y no hay registro de negocios ni de repartidores.
+- **Negocios**: hay un solo negocio por servicio y no hay registro de negocios ni de repartidores;
+  el dueño todavía no puede crear productos nuevos ni subir fotos (solo edita los que tiene la tienda).
 - **Ofertas de restaurantes y salud**: son una vitrina de ejemplo; todavía no se pueden pedir.
 - **Seguridad**: rotación de la clave del grupo cuando alguien sale, clave privada no extraíble en
   IndexedDB, auditoría externa.

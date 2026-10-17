@@ -57,7 +57,8 @@ const USERS: SeedUser[] = [
 ];
 
 /** Negocio de ejemplo: atiende los pedidos del Mercado con delivery Rapidito. */
-const BUSINESS = { owner: 'tienda', name: 'Bodega MercaYa', service: 'mercado', address: 'Av. Benavides 1180, Miraflores' } as const;
+/** Abre las 24 horas (misma hora de apertura y cierre); la dueña cambia el horario en «Mi negocio». */
+const BUSINESS = { owner: 'tienda', name: 'Bodega MercaYa', service: 'mercado', address: 'Av. Benavides 1180, Miraflores', opensAt: '00:00', closesAt: '00:00' } as const;
 
 /** Repartidores de Rapidito con su vehículo. */
 const DRIVERS = [
@@ -266,7 +267,9 @@ async function main(): Promise<void> {
   const person = (key: string) => people.get(key)!;
 
   console.log('Creando el negocio del Mercado y los repartidores de Rapidito…');
-  await prisma.business.create({ data: { name: BUSINESS.name, service: BUSINESS.service, address: BUSINESS.address, ownerId: person(BUSINESS.owner).id } });
+  await prisma.business.create({
+    data: { name: BUSINESS.name, service: BUSINESS.service, address: BUSINESS.address, opensAt: BUSINESS.opensAt, closesAt: BUSINESS.closesAt, ownerId: person(BUSINESS.owner).id },
+  });
   for (const d of DRIVERS) {
     await prisma.driver.create({ data: { userId: person(d.user).id, vehicle: d.vehicle, plate: d.plate } });
   }

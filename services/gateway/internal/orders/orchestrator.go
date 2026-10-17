@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,8 @@ type Commerce interface {
 	Search(ctx context.Context, query string) ([]services.Product, error)
 	Product(ctx context.Context, id string) (services.Product, error)
 	Reserve(ctx context.Context, reference string, items []services.CartItem) error
+	// Update cambia precio, oferta o stock (lo usa la dueña de la tienda).
+	Update(ctx context.Context, id string, patch mercaya.ProductPatch) (services.Product, error)
 }
 
 // Delivery: la tarifa y el tiempo estimado del delivery.
@@ -149,6 +152,9 @@ func validateRequest(req services.QuoteRequest) (services.QuoteRequest, error) {
 // quote calcula el pedido con los precios vigentes de la tienda (nunca los del navegador) y la
 // tarifa del delivery, y devuelve también la cotización del delivery (el core la guarda con el pedido).
 func (o *Orchestrator) quote(ctx context.Context, req services.QuoteRequest) (services.OrderQuote, services.QuoteRequest, rapidito.Quote, error) {
+	if err := o.storeOpen(ctx, services.Mercado); err != nil {
+		return services.OrderQuote{}, req, rapidito.Quote{}, err
+	}
 	req, err := validateRequest(req)
 	if err != nil {
 		return services.OrderQuote{}, req, rapidito.Quote{}, err
@@ -441,4 +447,127 @@ func (o *Orchestrator) refund(ctx context.Context, order services.InternalOrder,
 
 func conflict(message string) error {
 	return &Error{Status: http.StatusConflict, Code: "conflict", Message: message}
+}
+
+// storeOpen: con la tienda cerrada (por horario o porque la dueña la cerró) no se cotiza ni se pide.
+// Si ningún negocio atiende el servicio, se vende igual (la tienda externa siempre atiende).
+func (o *Orchestrator) storeOpen(ctx context.Context, service services.ServiceID) error {
+	business, err := o.Core.BusinessByService(ctx, service)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return nil
+	case err != nil:
+		slog.Error("no se pudo consultar el horario de la tienda", "servicio", service, "error", err)
+		return unavailable("Parla")
+	case business.Open:
+		return nil
+	}
+	message := "La tienda está cerrada ahora"
+	if business.ClosedMessage != nil && strings.TrimSpace(*business.ClosedMessage) != "" {
+		message = *business.ClosedMessage
+	}
+	return conflict(message)
+}
+
+// ── Catálogo de la tienda (lo administra la dueña) ────────────────────────────
+
+const (
+	minPriceCents = 10
+	maxPriceCents = 1_000_000
+	maxStock      = 100_000
+)
+
+// CatalogPatch: lo que pide cambiar la dueña. ListPriceSet distingue «no viene» de «null» (quitar oferta).
+type CatalogPatch struct {
+	PriceCents     *int
+	ListPriceSet   bool
+	ListPriceCents *int
+	Stock          *int
+}
+
+func noBusiness() error {
+	return &Error{Status: http.StatusNotFound, Code: "not_found", Message: "No tienes un negocio en Parla"}
+}
+
+// ownStore comprueba que la persona es dueña de la tienda del Mercado (la única con catálogo hoy).
+func (o *Orchestrator) ownStore(ctx context.Context, userID string) error {
+	business, err := o.Core.BusinessByOwner(ctx, userID)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return noBusiness()
+	case err != nil:
+		slog.Error("no se pudo consultar el negocio", "error", err)
+		return unavailable("Parla")
+	case business.Service != services.Mercado:
+		return noBusiness()
+	}
+	return nil
+}
+
+// StoreCatalog: todo el catálogo de la tienda, también lo agotado, por categoría y nombre.
+func (o *Orchestrator) StoreCatalog(ctx context.Context, userID string) ([]services.Product, error) {
+	if err := o.ownStore(ctx, userID); err != nil {
+		return nil, err
+	}
+	products, err := o.Commerce.Search(ctx, "")
+	if err != nil {
+		slog.Warn("catálogo de la tienda falló", "error", err)
+		return nil, unavailable("La tienda")
+	}
+	sort.SliceStable(products, func(i, j int) bool {
+		if products[i].Category != products[j].Category {
+			return products[i].Category < products[j].Category
+		}
+		return products[i].Name < products[j].Name
+	})
+	return products, nil
+}
+
+// UpdateStoreProduct: la dueña cambia precio, oferta o stock de un producto de su tienda.
+func (o *Orchestrator) UpdateStoreProduct(ctx context.Context, userID, productID string, patch CatalogPatch) (services.Product, error) {
+	if err := o.ownStore(ctx, userID); err != nil {
+		return services.Product{}, err
+	}
+	if patch.PriceCents == nil && !patch.ListPriceSet && patch.Stock == nil {
+		return services.Product{}, invalid("No hay cambios")
+	}
+	if p := patch.PriceCents; p != nil && (*p < minPriceCents || *p > maxPriceCents) {
+		return services.Product{}, invalid("El precio debe estar entre S/ 0.10 y S/ 10 000")
+	}
+	if s := patch.Stock; s != nil && (*s < 0 || *s > maxStock) {
+		return services.Product{}, invalid("El stock debe estar entre 0 y 100 000")
+	}
+	if patch.ListPriceSet && patch.ListPriceCents != nil {
+		list := *patch.ListPriceCents
+		price := patch.PriceCents
+		if price == nil {
+			// Sin precio nuevo, la oferta se compara con el precio vigente de la tienda.
+			current, err := o.Commerce.Product(ctx, productID)
+			if errors.Is(err, mercaya.ErrNotFound) {
+				return services.Product{}, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Producto no encontrado"}
+			}
+			if err != nil {
+				return services.Product{}, unavailable("La tienda")
+			}
+			price = &current.PriceCents
+		}
+		if list <= *price || list > maxPriceCents {
+			return services.Product{}, invalid("El precio normal debe ser mayor que el de oferta")
+		}
+	}
+	product, err := o.Commerce.Update(ctx, productID, mercaya.ProductPatch{
+		PriceCents: patch.PriceCents, ListPriceCents: patch.ListPriceCents,
+		ClearListPrice: patch.ListPriceSet && patch.ListPriceCents == nil, Stock: patch.Stock,
+	})
+	switch {
+	case errors.Is(err, mercaya.ErrNotFound):
+		return services.Product{}, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Producto no encontrado"}
+	case errors.Is(err, mercaya.ErrRejected):
+		// Con el precio nuevo, la oferta que ya tenía dejó de ser mayor.
+		return services.Product{}, invalid("El precio normal debe ser mayor que el de oferta")
+	case err != nil:
+		slog.Warn("cambio en el catálogo falló", "producto", productID, "error", err)
+		return services.Product{}, unavailable("La tienda")
+	}
+	return product, nil
 }

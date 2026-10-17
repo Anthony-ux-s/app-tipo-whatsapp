@@ -1,5 +1,5 @@
-import type { OrderStatus, OrderTimelineEntry } from '@parla/types';
-import { ArrowLeft, ShoppingCart } from 'lucide-react';
+import type { BusinessStatus, OrderStatus, OrderTimelineEntry } from '@parla/types';
+import { ArrowLeft, Moon, ShoppingCart } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { formatTime } from '@shared/utils/date';
 import { formatSoles } from '@shared/utils/money';
@@ -135,5 +135,18 @@ export function OrderTimeline({ entries }: { entries: OrderTimelineEntry[] }) {
         })}
       </ol>
     </section>
+  );
+}
+
+/** Aviso de tienda cerrada (fuera de horario o pausada por el dueño): se puede mirar, no pagar. */
+export function StoreClosedBanner({ status }: { status: BusinessStatus | null }) {
+  if (!status || status.open) return null;
+  return (
+    <div role="status" data-testid="store-closed" className="flex items-center gap-3 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900">
+      <Moon className="size-5 shrink-0 text-amber-700 dark:text-amber-300" />
+      <p className="text-sm text-ink">
+        <span className="font-semibold">{status.closedMessage}</span> Puedes armar tu carrito y pagar cuando abra.
+      </p>
+    </div>
   );
 }

@@ -231,14 +231,19 @@ model Order {
  * El dueño acepta cada pedido, lo prepara, avisa cuando está listo y se lo entrega al repartidor.
  */
 model Business {
-  id        String   @id @default(cuid())
-  name      String
+  id              String   @id @default(cuid())
+  name            String
   /// ServiceId que atiende: mercado | salud (uno por servicio).
-  service   String   @unique
-  ownerId   String   @unique
+  service         String   @unique
+  ownerId         String   @unique
   /// Dirección donde el repartidor recoge los pedidos.
-  address   String
-  createdAt DateTime @default(now())
+  address         String
+  /// El dueño puede pausar los pedidos aunque esté en horario («Recibir pedidos»).
+  acceptingOrders Boolean  @default(true)
+  /// Horario de atención (hora de Lima, «HH:MM»); si cierra antes de abrir, cruza la medianoche.
+  opensAt         String   @default("08:00")
+  closesAt        String   @default("22:00")
+  createdAt       DateTime @default(now())
 
   owner  User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   orders Order[]

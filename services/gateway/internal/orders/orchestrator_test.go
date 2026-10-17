@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -20,6 +22,33 @@ type fakeCommerce struct {
 	products map[string]services.Product
 	reserved map[string][]services.CartItem
 	outOf    string
+	patches  []mercaya.ProductPatch
+	// updateErr simula que la tienda rechaza o no responde un cambio del catálogo.
+	updateErr error
+}
+
+func (f *fakeCommerce) Update(_ context.Context, id string, patch mercaya.ProductPatch) (services.Product, error) {
+	if f.updateErr != nil {
+		return services.Product{}, f.updateErr
+	}
+	p, ok := f.products[id]
+	if !ok {
+		return services.Product{}, mercaya.ErrNotFound
+	}
+	f.patches = append(f.patches, patch)
+	if patch.PriceCents != nil {
+		p.PriceCents = *patch.PriceCents
+	}
+	if patch.ClearListPrice {
+		p.ListPriceCents = nil
+	} else if patch.ListPriceCents != nil {
+		p.ListPriceCents = patch.ListPriceCents
+	}
+	if patch.Stock != nil {
+		p.Stock = *patch.Stock
+	}
+	f.products[id] = p
+	return p, nil
 }
 
 func (f *fakeCommerce) Search(context.Context, string) ([]services.Product, error) {
@@ -90,6 +119,29 @@ type fakeCore struct {
 	mu      sync.Mutex
 	orders  map[string]services.InternalOrder
 	updates []services.InternalUpdateOrder
+	// business: el negocio del Mercado (nil = ninguno); businessErr simula que el core no responde.
+	business    *services.Business
+	businessErr error
+}
+
+func (f *fakeCore) BusinessByService(_ context.Context, service services.ServiceID) (services.Business, error) {
+	if f.businessErr != nil {
+		return services.Business{}, f.businessErr
+	}
+	if f.business == nil || f.business.Service != service {
+		return services.Business{}, ErrNotFound
+	}
+	return *f.business, nil
+}
+
+func (f *fakeCore) BusinessByOwner(_ context.Context, userID string) (services.Business, error) {
+	if f.businessErr != nil {
+		return services.Business{}, f.businessErr
+	}
+	if f.business == nil || f.business.OwnerID != userID {
+		return services.Business{}, ErrNotFound
+	}
+	return *f.business, nil
 }
 
 func (f *fakeCore) CreateOrder(_ context.Context, in services.InternalCreateOrder) (services.InternalOrder, error) {
@@ -468,5 +520,158 @@ func TestPagoQueLlegaTrasCancelarSeDevuelve(t *testing.T) {
 	// El aviso repetido no devuelve dos veces.
 	if err := w.orch.PaymentEvent(ctx, paidEvent()); err != nil || len(w.payments.refunded) != 1 {
 		t.Fatalf("idempotente: %v %v", err, w.payments.refunded)
+	}
+}
+
+// ── Horario y catálogo de la tienda ───────────────────────────────────────────
+
+func store(open bool) *services.Business {
+	msg := "Bodega MercaYa abre a las 08:00"
+	return &services.Business{ID: "biz_1", Name: "Bodega MercaYa", Service: services.Mercado, OwnerID: owner, Open: open, ClosedMessage: &msg}
+}
+
+func TestTiendaCerradaNoCotizaNiVende(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	w.core.business = store(false)
+	if _, err := w.orch.Quote(ctx, cart); status(err) != http.StatusConflict || err.Error() != "Bodega MercaYa abre a las 08:00" {
+		t.Fatalf("cerrada no cotiza, obtuve %v", err)
+	}
+	if _, err := w.orch.Create(ctx, "u", cart); status(err) != http.StatusConflict {
+		t.Fatalf("cerrada no vende, obtuve %v", err)
+	}
+	if len(w.commerce.reserved) != 0 || w.payments.last.Reference != "" {
+		t.Fatal("con la tienda cerrada no se reserva ni se cobra")
+	}
+	// Sin mensaje del core, uno genérico.
+	w.core.business.ClosedMessage = nil
+	if _, err := w.orch.Quote(ctx, cart); err == nil || err.Error() != "La tienda está cerrada ahora" {
+		t.Fatalf("mensaje genérico esperado, obtuve %v", err)
+	}
+	w.core.business = store(true)
+	if _, err := w.orch.Quote(ctx, cart); err != nil {
+		t.Fatalf("abierta cotiza: %v", err)
+	}
+}
+
+func TestSinNegocioSeVendeYSiElCoreFallaEs502(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	if _, err := w.orch.Quote(ctx, cart); err != nil {
+		t.Fatalf("sin negocio la tienda atiende igual: %v", err)
+	}
+	w.core.businessErr = errors.New("core caído")
+	if _, err := w.orch.Quote(ctx, cart); status(err) != http.StatusBadGateway {
+		t.Fatalf("si no se sabe el horario, 502; obtuve %v", err)
+	}
+}
+
+func TestSoloLaDuenaVeYCambiaElCatalogo(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	if _, err := w.orch.StoreCatalog(ctx, owner); status(err) != http.StatusNotFound {
+		t.Fatalf("sin negocio, 404; obtuve %v", err)
+	}
+	w.core.business = store(true)
+	if _, err := w.orch.StoreCatalog(ctx, "u"); status(err) != http.StatusNotFound {
+		t.Fatalf("otra persona no ve el catálogo, obtuve %v", err)
+	}
+	ten := 10
+	if _, err := w.orch.UpdateStoreProduct(ctx, "u", "AZU-RUB-1K", CatalogPatch{Stock: &ten}); status(err) != http.StatusNotFound {
+		t.Fatalf("otra persona no cambia el catálogo, obtuve %v", err)
+	}
+	list, err := w.orch.StoreCatalog(ctx, owner)
+	if err != nil || len(list) != 2 || list[0].ID != "ARR-EXT-1K" {
+		t.Fatalf("catálogo ordenado esperado: %+v %v", list, err)
+	}
+	w.core.business.Service = services.Salud
+	if _, err := w.orch.StoreCatalog(ctx, owner); status(err) != http.StatusNotFound {
+		t.Fatalf("un negocio de otro servicio no tiene catálogo de MercaYa, obtuve %v", err)
+	}
+}
+
+func TestValidacionesDelCatalogo(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	w.core.business = store(true)
+	n := func(v int) *int { return &v }
+	cases := []struct {
+		patch CatalogPatch
+		want  string
+	}{
+		{CatalogPatch{}, "No hay cambios"},
+		{CatalogPatch{PriceCents: n(5)}, "El precio debe estar entre S/ 0.10 y S/ 10 000"},
+		{CatalogPatch{PriceCents: n(1_000_001)}, "El precio debe estar entre S/ 0.10 y S/ 10 000"},
+		{CatalogPatch{Stock: n(-1)}, "El stock debe estar entre 0 y 100 000"},
+		{CatalogPatch{Stock: n(100_001)}, "El stock debe estar entre 0 y 100 000"},
+		{CatalogPatch{PriceCents: n(500), ListPriceSet: true, ListPriceCents: n(500)}, "El precio normal debe ser mayor que el de oferta"},
+		// Sin precio nuevo, se compara con el vigente (450).
+		{CatalogPatch{ListPriceSet: true, ListPriceCents: n(400)}, "El precio normal debe ser mayor que el de oferta"},
+	}
+	for _, c := range cases {
+		if _, err := w.orch.UpdateStoreProduct(ctx, owner, "AZU-RUB-1K", c.patch); status(err) != http.StatusBadRequest || err.Error() != c.want {
+			t.Fatalf("%+v: esperaba «%s», obtuve %v", c.patch, c.want, err)
+		}
+	}
+	if len(w.commerce.patches) != 0 {
+		t.Fatal("ningún cambio inválido debe llegar a la tienda")
+	}
+	if _, err := w.orch.UpdateStoreProduct(ctx, owner, "NADA", CatalogPatch{Stock: n(1)}); status(err) != http.StatusNotFound {
+		t.Fatalf("producto desconocido, 404; obtuve %v", err)
+	}
+	w.commerce.updateErr = errors.New("tienda caída")
+	if _, err := w.orch.UpdateStoreProduct(ctx, owner, "AZU-RUB-1K", CatalogPatch{Stock: n(1)}); status(err) != http.StatusBadGateway {
+		t.Fatalf("tienda caída, 502; obtuve %v", err)
+	}
+}
+
+func TestOfertaNullLaQuitaYAusenteNoLaToca(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	w.core.business = store(true)
+	n := func(v int) *int { return &v }
+	p, err := w.orch.UpdateStoreProduct(ctx, owner, "AZU-RUB-1K", CatalogPatch{PriceCents: n(400), ListPriceSet: true, ListPriceCents: n(450)})
+	if err != nil || p.PriceCents != 400 || p.ListPriceCents == nil || *p.ListPriceCents != 450 {
+		t.Fatalf("oferta esperada: %+v %v", p, err)
+	}
+	if p, _ = w.orch.UpdateStoreProduct(ctx, owner, "AZU-RUB-1K", CatalogPatch{Stock: n(0)}); p.ListPriceCents == nil || p.Stock != 0 {
+		t.Fatalf("sin listPriceCents la oferta queda: %+v", p)
+	}
+	if w.commerce.patches[1].ClearListPrice || w.commerce.patches[1].ListPriceCents != nil {
+		t.Fatalf("ausente no debe tocar la oferta: %+v", w.commerce.patches[1])
+	}
+	if p, _ = w.orch.UpdateStoreProduct(ctx, owner, "AZU-RUB-1K", CatalogPatch{ListPriceSet: true}); p.ListPriceCents != nil {
+		t.Fatalf("null quita la oferta: %+v", p)
+	}
+	if !w.commerce.patches[2].ClearListPrice {
+		t.Fatal("null debe llegar a la tienda como «quitar oferta»")
+	}
+}
+
+func TestElCuerpoDistingueOfertaAusenteNullYNumero(t *testing.T) {
+	w := newWorld()
+	w.core.business = store(true)
+	h := &HTTP{Orch: w.orch}
+	send := func(body string) int {
+		req := httptest.NewRequest(http.MethodPatch, "/api/business/catalog/AZU-RUB-1K", strings.NewReader(body))
+		req.SetPathValue("sku", "AZU-RUB-1K")
+		rec := httptest.NewRecorder()
+		h.UpdateStoreProduct(rec, req, owner)
+		return rec.Code
+	}
+	if code := send(`{"priceCents":400,"listPriceCents":450}`); code != http.StatusOK {
+		t.Fatalf("oferta: %d", code)
+	}
+	if code := send(`{"stock":3}`); code != http.StatusOK || w.commerce.patches[1].ClearListPrice || w.commerce.patches[1].ListPriceCents != nil {
+		t.Fatalf("ausente no toca la oferta: %d %+v", code, w.commerce.patches[1])
+	}
+	if code := send(`{"listPriceCents":null}`); code != http.StatusOK || !w.commerce.patches[2].ClearListPrice {
+		t.Fatalf("null quita la oferta: %d %+v", code, w.commerce.patches)
+	}
+	if code := send(`{"listPriceCents":"x"}`); code != http.StatusBadRequest {
+		t.Fatalf("oferta inválida: %d", code)
+	}
+	if code := send(`{}`); code != http.StatusBadRequest {
+		t.Fatalf("sin cambios: %d", code)
 	}
 }

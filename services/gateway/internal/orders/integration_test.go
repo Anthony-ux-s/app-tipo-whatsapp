@@ -119,3 +119,33 @@ func TestIntegracionCancelarSinPagarAnulaElCobro(t *testing.T) {
 		t.Fatalf("un cobro anulado no se debe poder pagar, obtuve %d", resp.StatusCode)
 	}
 }
+
+// La dueña cambia un precio en MercaYa (API de administración) y la búsqueda ya lo muestra.
+func TestIntegracionLaDuenaCambiaUnPrecio(t *testing.T) {
+	base := os.Getenv("PARLA_PROVIDERS_URL")
+	if base == "" {
+		t.Skip("define PARLA_PROVIDERS_URL para probar contra los simuladores")
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	shop := mercaya.Client{BaseURL: base, HTTP: client, AdminKey: mercaya.DevAdminKey}
+	core := &fakeCore{orders: map[string]services.InternalOrder{}}
+	core.business = &services.Business{ID: "biz_1", Name: "Bodega MercaYa", Service: services.Mercado, OwnerID: owner, Open: true}
+	orch := &Orchestrator{Commerce: shop, Core: core}
+	ctx := context.Background()
+
+	before, err := shop.Product(ctx, "SAL-YOD-1K")
+	if err != nil {
+		t.Fatal(err)
+	}
+	price := before.PriceCents + 10
+	if _, err := orch.UpdateStoreProduct(ctx, owner, "SAL-YOD-1K", CatalogPatch{PriceCents: &price}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = orch.UpdateStoreProduct(ctx, owner, "SAL-YOD-1K", CatalogPatch{PriceCents: &before.PriceCents})
+	})
+	found, err := orch.Products(ctx, "sal de mesa")
+	if err != nil || len(found) == 0 || found[0].PriceCents != price {
+		t.Fatalf("la búsqueda debía traer el precio nuevo %d: %+v %v", price, found, err)
+	}
+}

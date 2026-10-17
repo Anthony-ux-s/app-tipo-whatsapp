@@ -94,6 +94,9 @@ func New(opts Options) http.Handler {
 		mux.HandleFunc("POST /api/orders/{id}/cancel", authed(svc.CancelOrder))
 		mux.HandleFunc("POST /api/business/orders/{id}/reject", authed(svc.RejectOrder))
 		mux.HandleFunc("POST /api/business/orders/{id}/cancel", authed(svc.CancelBusinessOrder))
+		// Catálogo de la tienda: precios, ofertas y stock viven en MercaYa; la dueña los cambia por aquí.
+		mux.HandleFunc("GET /api/business/catalog", authed(svc.StoreCatalog))
+		mux.HandleFunc("PATCH /api/business/catalog/{sku}", authed(svc.UpdateStoreProduct))
 		mux.HandleFunc("POST /hooks/pagaya", svc.PagayaHook)
 	}
 	mux.HandleFunc("/api/", limited(proxy.ServeHTTP))

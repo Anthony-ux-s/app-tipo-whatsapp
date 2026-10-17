@@ -12,6 +12,7 @@ import (
 const devInternalToken = "parla-dev-internal-token"
 const devJWTSecret = "parla-dev-secret-cambiar-en-produccion"
 const devPagayaSecret = "pagaya-dev-secret"
+const devMercayaKey = "mercaya-dev-clave"
 
 type Config struct {
 	Production bool
@@ -31,6 +32,8 @@ type Config struct {
 	// PublicURL: dirección pública del gateway, a la que la billetera manda sus avisos.
 	PublicURL    string
 	PagayaSecret string
+	// MercayaAdminKey: clave de la API de administración de la tienda (catálogo de la dueña).
+	MercayaAdminKey string
 }
 
 func env(key, fallback string) string {
@@ -77,6 +80,7 @@ func Load() (Config, error) {
 		ProvidersURL:    strings.TrimRight(providers.String(), "/"),
 		PublicURL:       strings.TrimRight(public.String(), "/"),
 		PagayaSecret:    env("PAGAYA_WEBHOOK_SECRET", devPagayaSecret),
+		MercayaAdminKey: env("MERCAYA_ADMIN_KEY", devMercayaKey),
 	}
 
 	if production {
@@ -88,6 +92,9 @@ func Load() (Config, error) {
 		}
 		if cfg.PagayaSecret == devPagayaSecret || len(cfg.PagayaSecret) < 24 {
 			return Config{}, errors.New("en producción PAGAYA_WEBHOOK_SECRET debe ser un secreto propio de al menos 24 caracteres")
+		}
+		if cfg.MercayaAdminKey == devMercayaKey || len(cfg.MercayaAdminKey) < 24 {
+			return Config{}, errors.New("en producción MERCAYA_ADMIN_KEY debe ser una clave propia de al menos 24 caracteres")
 		}
 	}
 	return cfg, nil

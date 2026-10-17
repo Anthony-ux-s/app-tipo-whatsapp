@@ -58,7 +58,7 @@ func main() {
 	client := &http.Client{Timeout: 10 * time.Second}
 	servicesAPI := &orders.HTTP{
 		Orch: &orders.Orchestrator{
-			Commerce:  mercaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
+			Commerce:  mercaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client, AdminKey: cfg.MercayaAdminKey},
 			Delivery:  rapidito.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
 			Payments:  pagaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
 			Core:      orders.HTTPCore{BaseURL: cfg.CoreURL, Token: cfg.InternalToken, HTTP: client},

@@ -5,11 +5,13 @@ import { EmptyState } from '@shared/ui/States';
 import { EmptyChatsIllustration } from '@shared/ui/illustrations';
 import { formatSoles } from '@shared/utils/money';
 import { useCheckout } from '../hooks/use-checkout.hook';
-import { AmountRow, PageHeader, ServicePage } from './ServicesUi';
+import { useStoreStatus } from '../hooks/use-store-status.hook';
+import { AmountRow, PageHeader, ServicePage, StoreClosedBanner } from './ServicesUi';
 
 /** Carrito → dirección → total (productos + delivery) → pagar con QR. */
 export function CheckoutView() {
   const c = useCheckout();
+  const store = useStoreStatus('mercado');
 
   if (c.count === 0) {
     return (
@@ -82,7 +84,8 @@ export function CheckoutView() {
         )}
       </section>
 
-      <Button fullWidth size="lg" icon={<QrCode className="size-5" />} loading={c.placing} disabled={!c.canPay} onClick={c.pay}>
+      <StoreClosedBanner status={store.status} />
+      <Button fullWidth size="lg" icon={<QrCode className="size-5" />} loading={c.placing} disabled={!c.canPay || store.closed} onClick={c.pay}>
         {c.quote ? `Pagar ${formatSoles(c.quote.totalCents)} con QR` : 'Pagar con QR'}
       </Button>
     </ServicePage>

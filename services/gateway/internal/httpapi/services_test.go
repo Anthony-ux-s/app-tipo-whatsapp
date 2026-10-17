@@ -41,6 +41,9 @@ func (shopFake) Product(_ context.Context, id string) (services.Product, error) 
 	return services.Product{ID: id, Name: "Azúcar rubia", Unit: "1 kg", PriceCents: 450, Stock: 9, Currency: "PEN"}, nil
 }
 func (shopFake) Reserve(context.Context, string, []services.CartItem) error { return nil }
+func (shopFake) Update(_ context.Context, id string, _ mercaya.ProductPatch) (services.Product, error) {
+	return services.Product{ID: id, Name: "Azúcar rubia", PriceCents: 450, Stock: 9, Currency: "PEN"}, nil
+}
 
 type motoFake struct{}
 
@@ -60,6 +63,12 @@ func (c *coreFake) GetOrder(_ context.Context, id string) (services.InternalOrde
 }
 func (c *coreFake) UpdateOrder(context.Context, string, services.InternalUpdateOrder) (services.InternalOrder, error) {
 	return services.InternalOrder{}, nil
+}
+func (c *coreFake) BusinessByService(context.Context, services.ServiceID) (services.Business, error) {
+	return services.Business{}, orders.ErrNotFound
+}
+func (c *coreFake) BusinessByOwner(context.Context, string) (services.Business, error) {
+	return services.Business{}, orders.ErrNotFound
 }
 
 type payFake struct{}

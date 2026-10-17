@@ -1,6 +1,7 @@
 package orders
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -77,6 +78,50 @@ func (h *HTTP) RejectOrder(w http.ResponseWriter, r *http.Request, userID string
 // CancelBusinessOrder: la tienda cancela un pedido aceptado que aún no salió; se devuelve el pago.
 func (h *HTTP) CancelBusinessOrder(w http.ResponseWriter, r *http.Request, userID string) {
 	h.respond(w)(h.Orch.CancelByOwner(r.Context(), userID, r.PathValue("id")))
+}
+
+// StoreCatalog: el catálogo completo de la tienda, para la dueña.
+func (h *HTTP) StoreCatalog(w http.ResponseWriter, r *http.Request, userID string) {
+	products, err := h.Orch.StoreCatalog(r.Context(), userID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, products)
+}
+
+// catalogPatchBody: listPriceCents puede no venir (no cambia), venir null (quita la oferta) o un número.
+type catalogPatchBody struct {
+	PriceCents     *int            `json:"priceCents"`
+	ListPriceCents json.RawMessage `json:"listPriceCents"`
+	Stock          *int            `json:"stock"`
+}
+
+// UpdateStoreProduct: la dueña cambia precio, oferta o stock de un producto.
+func (h *HTTP) UpdateStoreProduct(w http.ResponseWriter, r *http.Request, userID string) {
+	var body catalogPatchBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBody)).Decode(&body); err != nil {
+		writeError(w, invalid("La solicitud no es válida"))
+		return
+	}
+	patch := CatalogPatch{PriceCents: body.PriceCents, Stock: body.Stock}
+	if raw := bytes.TrimSpace(body.ListPriceCents); len(raw) > 0 {
+		patch.ListPriceSet = true
+		if !bytes.Equal(raw, []byte("null")) {
+			var n int
+			if err := json.Unmarshal(raw, &n); err != nil {
+				writeError(w, invalid("El precio normal no es válido"))
+				return
+			}
+			patch.ListPriceCents = &n
+		}
+	}
+	product, err := h.Orch.UpdateStoreProduct(r.Context(), userID, r.PathValue("sku"), patch)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, product)
 }
 
 func (h *HTTP) respond(w http.ResponseWriter) func(services.Order, error) {

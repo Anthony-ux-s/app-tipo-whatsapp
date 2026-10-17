@@ -16,6 +16,9 @@ import { NotificationDispatcher } from '../messaging/push/use-cases/notification
 import {
   DecideBusinessOrderUseCase,
   GetBusinessOrderUseCase,
+  GetBusinessStatusUseCase,
+  GetInternalBusinessUseCase,
+  UpdateMyBusinessUseCase,
   GetOrderContactUseCase,
   ListBusinessOrdersUseCase,
 } from './use-cases/business-orders.use-cases';
@@ -86,7 +89,7 @@ describe('pedidos de Servicios (core)', () => {
     users = new InMemoryAuthRepository();
     users.users.push(ana, beto, rosa, carlos, lucia);
     businesses = new InMemoryBusinessesRepository();
-    businesses.businesses.push({ id: 'biz_1', name: 'Bodega MercaYa', service: 'mercado', ownerId: rosa.id, address: 'Av. Benavides 1180' });
+    businesses.businesses.push({ id: 'biz_1', name: 'Bodega MercaYa', service: 'mercado', ownerId: rosa.id, address: 'Av. Benavides 1180', acceptingOrders: true, opensAt: '08:00', closesAt: '22:00' });
     drivers = new InMemoryDriversRepository();
     drivers.drivers.push({ userId: carlos.id, vehicle: 'Moto', plate: 'B7K-482' }, { userId: lucia.id, vehicle: 'Moto', plate: 'D5T-663' });
     orders = new InMemoryOrdersRepository(businesses);
@@ -206,6 +209,21 @@ describe('pedidos de Servicios (core)', () => {
   });
 
   describe('el negocio', () => {
+    it('la dueña pausa los pedidos y cambia el horario; el cliente y el gateway lo ven', async () => {
+      const update = new UpdateMyBusinessUseCase(businesses);
+      const noon = new Date('2026-10-17T12:00:00-05:00');
+      expect((await new GetBusinessStatusUseCase(businesses).execute('mercado', noon))?.open).toBe(true);
+      await expect(update.execute(beto.id, { acceptingOrders: false })).rejects.toThrow(NotFoundError);
+      await expect(update.execute(rosa.id, { opensAt: '9:00' })).rejects.toThrow(ValidationError);
+      await expect(update.execute(rosa.id, {})).rejects.toThrow('No hay cambios');
+      expect(await update.execute(rosa.id, { acceptingOrders: false })).toMatchObject({ acceptingOrders: false });
+      const internal = await new GetInternalBusinessUseCase(businesses).execute('service', 'mercado', noon);
+      expect(internal).toMatchObject({ ownerId: rosa.id, open: false, closedMessage: expect.stringContaining('pausó') });
+      await update.execute(rosa.id, { acceptingOrders: true, opensAt: '13:00', closesAt: '23:00' });
+      expect((await new GetBusinessStatusUseCase(businesses).execute('mercado', noon))?.closedMessage).toBe('Bodega MercaYa está cerrada. Abre a las 13:00.');
+      expect((await new GetInternalBusinessUseCase(businesses).execute('owner', rosa.id, noon)).service).toBe('mercado');
+    });
+
     it('ve sus pedidos ya pagados con quién los pidió; nadie más los ve', async () => {
       await create.execute(newOrder());
       const list = new ListBusinessOrdersUseCase(businesses, orders, users);

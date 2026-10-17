@@ -115,6 +115,35 @@ export interface BusinessInfo {
   id: string;
   name: string;
   service: ServiceId;
+  /** El dueño puede pausar los pedidos aunque esté en horario. */
+  acceptingOrders: boolean;
+  /** Horario de atención, hora de Lima («HH:MM»). */
+  opensAt: string;
+  closesAt: string;
+}
+
+/** Si un negocio recibe pedidos ahora (lo ve el cliente antes de pagar). */
+export interface BusinessStatus {
+  name: string;
+  open: boolean;
+  /** Por qué no recibe pedidos (pausado o fuera de horario); null si está abierto. */
+  closedMessage: string | null;
+  opensAt: string;
+  closesAt: string;
+}
+
+export interface UpdateBusinessRequest {
+  acceptingOrders?: boolean;
+  opensAt?: string;
+  closesAt?: string;
+}
+
+/** Cambio de un producto del catálogo de la tienda (lo hace el dueño). */
+export interface UpdateCatalogProductRequest {
+  priceCents?: number;
+  /** Precio normal para mostrarlo en oferta; null quita la oferta. */
+  listPriceCents?: number | null;
+  stock?: number;
 }
 
 export interface OrderBusiness {

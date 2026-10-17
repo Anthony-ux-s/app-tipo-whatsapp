@@ -37,6 +37,7 @@ services:
       # Los avisos de pago viajan por la red interna de Docker
       GATEWAY_PUBLIC_URL: http://gateway:4100
       PAGAYA_WEBHOOK_SECRET: ${PAGAYA_WEBHOOK_SECRET:?Define PAGAYA_WEBHOOK_SECRET (24+ caracteres)}
+      MERCAYA_ADMIN_KEY: ${MERCAYA_ADMIN_KEY:?Define MERCAYA_ADMIN_KEY (24+ caracteres)}
 
   # Simuladores de tienda (MercaYa), tarifa del delivery (Rapidito) y billetera con QR (PagaYa). Para producción
   # real se reemplazan por los proveedores verdaderos y solo cambian los traductores del gateway.
@@ -48,6 +49,7 @@ services:
     environment:
       PROVIDERS_PUBLIC_URL: ${PROVIDERS_PUBLIC_URL:?Define PROVIDERS_PUBLIC_URL}
       PAGAYA_WEBHOOK_SECRET: ${PAGAYA_WEBHOOK_SECRET}
+      MERCAYA_ADMIN_KEY: ${MERCAYA_ADMIN_KEY}
 
   realtime:
     build: services/realtime

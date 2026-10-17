@@ -5,6 +5,7 @@ import { DriverOrdersView } from '../modules/driver/components/DriverOrdersView'
 import { ForgotPasswordView } from '../modules/auth/components/ForgotPasswordView';
 import { LoginView } from '../modules/auth/components/LoginView';
 import { RegisterView } from '../modules/auth/components/RegisterView';
+import { BusinessCatalogView } from '../modules/business/components/BusinessCatalogView';
 import { BusinessOrderDetailView } from '../modules/business/components/BusinessOrderDetailView';
 import { BusinessOrdersView } from '../modules/business/components/BusinessOrdersView';
 import { ConversationView } from '../modules/chats/components/ConversationView';
@@ -51,6 +52,7 @@ export const router = createBrowserRouter([
           { path: 'pedidos', element: <OrdersView /> },
           { path: 'pedidos/:orderId', element: <OrderDetailView /> },
           { path: 'negocio', element: <BusinessOrdersView /> },
+          { path: 'negocio/catalogo', element: <BusinessCatalogView /> },
           { path: 'negocio/pedidos/:orderId', element: <BusinessOrderDetailView /> },
           { path: 'rapidito', element: <DriverOrdersView /> },
           { path: 'rapidito/pedidos/:orderId', element: <DriverOrderDetailView /> },

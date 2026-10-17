@@ -20,6 +20,11 @@ const maxResponse = 1 << 20
 // Call envía in (si no es nil) como JSON y decodifica la respuesta en out según el código:
 // devuelve el código HTTP y el cuerpo crudo para que el traductor interprete los errores.
 func Call(ctx context.Context, client *http.Client, method, url string, in any) (int, []byte, error) {
+	return CallWithHeaders(ctx, client, method, url, in, nil)
+}
+
+// CallWithHeaders es Call con cabeceras propias del proveedor (p. ej. su clave de administración).
+func CallWithHeaders(ctx context.Context, client *http.Client, method, url string, in any, headers map[string]string) (int, []byte, error) {
 	var body io.Reader
 	if in != nil {
 		raw, err := json.Marshal(in)
@@ -33,6 +38,9 @@ func Call(ctx context.Context, client *http.Client, method, url string, in any) 
 		return 0, nil, err
 	}
 	req.Header.Set("Accept", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

@@ -18,7 +18,12 @@ var (
 	ErrNotFound = errors.New("producto no encontrado")
 	// ErrInvalid: el proveedor devolvió datos que no tienen sentido; se descartan.
 	ErrInvalid = errors.New("datos inválidos de la tienda")
+	// ErrRejected: la tienda no aceptó el cambio de precio, oferta o stock.
+	ErrRejected = errors.New("la tienda rechazó el cambio")
 )
+
+// DevAdminKey: clave de administración de MercaYa fuera de producción.
+const DevAdminKey = "mercaya-dev-clave"
 
 // OutOfStockError: la tienda no tiene suficiente de un producto.
 type OutOfStockError struct{ ProductID string }
@@ -30,6 +35,16 @@ const maxPriceCents = 1_000_000 // S/ 10 000 por unidad: más que eso es un erro
 type Client struct {
 	BaseURL string
 	HTTP    *http.Client
+	// AdminKey: clave de la API de administración (cambiar precios, ofertas y stock).
+	AdminKey string
+}
+
+// ProductPatch: lo que la dueña cambia de un producto. nil = no cambia; ClearListPrice quita la oferta.
+type ProductPatch struct {
+	PriceCents     *int
+	ListPriceCents *int
+	ClearListPrice bool
+	Stock          *int
 }
 
 type producto struct {
@@ -154,4 +169,50 @@ func (c Client) Reserve(ctx context.Context, reference string, items []services.
 	default:
 		return fmt.Errorf("%w: reserva respondió %d %s", providerapi.ErrUnavailable, status, body.Error)
 	}
+}
+
+// Update cambia precio, oferta o stock de un producto en la tienda y devuelve cómo quedó.
+func (c Client) Update(ctx context.Context, id string, patch ProductPatch) (services.Product, error) {
+	if !services.ValidID.MatchString(id) {
+		return services.Product{}, ErrNotFound
+	}
+	body := map[string]any{}
+	if patch.PriceCents != nil {
+		body["precio_centimos"] = *patch.PriceCents
+	}
+	if patch.ClearListPrice {
+		body["precio_antes_centimos"] = nil
+	} else if patch.ListPriceCents != nil {
+		body["precio_antes_centimos"] = *patch.ListPriceCents
+	}
+	if patch.Stock != nil {
+		body["stock"] = *patch.Stock
+	}
+	status, raw, err := providerapi.CallWithHeaders(ctx, c.HTTP, http.MethodPatch, c.BaseURL+"/mercaya/v1/productos/"+url.PathEscape(id), body,
+		map[string]string{"x-mercaya-clave": c.AdminKey})
+	if err != nil {
+		return services.Product{}, err
+	}
+	switch status {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return services.Product{}, ErrNotFound
+	case http.StatusBadRequest:
+		return services.Product{}, ErrRejected
+	default:
+		// 401: la clave del gateway no coincide con la de la tienda (configuración), u otra respuesta rara.
+		return services.Product{}, fmt.Errorf("%w: administración respondió %d", providerapi.ErrUnavailable, status)
+	}
+	var p producto
+	if err := providerapi.Decode(raw, &p); err != nil {
+		return services.Product{}, err
+	}
+	product, err := translate(p)
+	if err != nil {
+		return services.Product{}, err
+	}
+	if product.ID != id {
+		return services.Product{}, fmt.Errorf("%w: cambié %q y llegó %q", ErrInvalid, id, product.ID)
+	}
+	return product, nil
 }

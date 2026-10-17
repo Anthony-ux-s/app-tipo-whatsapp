@@ -72,12 +72,35 @@ cambiar el estado (`expectStatus` y `status` iguales, con `paidAt`, `refundedAt`
 recibido tras cancelar · devuelto»). Si la devolución falla, responde 503 para que PagaYa reintente el
 aviso. Un aviso repetido no devuelve dos veces.
 
+## Horario y catálogo de la tienda (gateway)
+
+**Tienda abierta o cerrada.** Antes de cotizar (`POST /api/services/mercado/quote`) o de crear un
+pedido, el gateway pregunta al core `GET /api/internal/businesses/by-service/mercado`. Si el negocio
+está cerrado (`open: false`, por horario o porque la dueña la cerró) responde **409** con el
+`closedMessage` del core (o «La tienda está cerrada ahora») y no reserva ni cobra nada. Si ningún
+negocio atiende el servicio (404) se vende igual; si el core no responde, 502.
+
+**Catálogo de la dueña.** Precios, ofertas y stock viven en MercaYa; la dueña los cambia desde Parla:
+
+| Ruta (con sesión) | Qué hace |
+| --- | --- |
+| `GET /api/business/catalog` | Todo el catálogo de la tienda, también lo agotado, ordenado por categoría y nombre → `Product[]` |
+| `PATCH /api/business/catalog/:sku` `{"priceCents"?, "listPriceCents"?: number\|null, "stock"?}` | Cambia precio, oferta o stock → el `Product` actualizado |
+
+Solo la dueña: el gateway pregunta `GET /api/internal/businesses/by-owner/:userId`; si no es dueña de
+un negocio del Mercado responde 404 «No tienes un negocio en Parla». En el `PATCH`, `listPriceCents`
+**ausente** no toca la oferta, **null** la quita y un número pone una oferta (el precio normal tiene que
+ser mayor que el de oferta). Validaciones (400): precio entre 10 y 1 000 000 céntimos, stock entre 0 y
+100 000, y «No hay cambios» si el cuerpo viene vacío. Producto desconocido → 404; tienda caída → 502.
+
 ## Rutas internas del core (token entre servicios, nunca expuestas)
 
 | Ruta | Para qué |
 | --- | --- |
 | `POST /api/internal/orders` `InternalCreateOrder` | Guarda el pedido nuevo → 201 `InternalOrder` |
 | `GET /api/internal/orders/:id` | Lee el pedido (con `userId`, `deliveryQuoteId` y `businessOwnerId`) → `InternalOrder` |
+| `GET /api/internal/businesses/by-service/:service` | El negocio que atiende un servicio → `{"id","name","service","ownerId","open","closedMessage"}`; 404 si ninguno |
+| `GET /api/internal/businesses/by-owner/:userId` | El negocio de una persona, con la misma forma; 404 si no es dueña |
 | `PATCH /api/internal/orders/:id` `InternalUpdateOrder` | Cambia estado/pago/delivery (`paidAt`, `refundedAt`, `note` para la línea de tiempo). Con `expectStatus`, si el estado actual no coincide responde **409** sin cambiar nada. Acepta el mismo estado (p. ej. la devolución de un pago tardío). Publica `order:updated` al dueño. |
 
 ## APIs externas (simuladas en `services/providers`, puerto 4103)
@@ -87,6 +110,10 @@ Formatos distintos a propósito: así es en la vida real y es lo que justifica l
 **MercaYa** (tienda, español, precios en céntimos):
 - `GET /mercaya/v1/catalogo?buscar=texto` → `{"resultados":[{"sku","nombre","presentacion","precio_centimos","stock","categoria","imagen"}]}`
 - `POST /mercaya/v1/pedidos` `{"referencia","lineas":[{"sku","cantidad"}]}` → `{"numero_pedido","estado":"RESERVADO","total_centimos"}`; 409 `{"error":"SIN_STOCK","sku"}` si falta stock.
+- Administración, con la clave en `x-mercaya-clave` (`MERCAYA_ADMIN_KEY`): `PATCH /mercaya/v1/productos/{sku}`
+  `{"precio_centimos"?, "precio_antes_centimos"?: int|null, "stock"?}` → el `Producto` actualizado.
+  `precio_antes_centimos: null` quita la oferta y si no viene no cambia. 400 `{"error":"DATOS_INVALIDOS"}`
+  (precio ≤ 0, oferta que no es mayor que el precio, stock fuera de 0–100 000), 401 `{"error":"CLAVE_INVALIDA"}`, 404.
 
 **Rapidito** (tarifa del delivery, inglés, montos en texto decimal):
 - `POST /rapidito/api/quotes` `{"dropoff":{"address","notes"}}` → `{"quote_id","fee":{"amount":"6.50","currency":"PEN"},"eta_minutes","expires_at"}`
@@ -100,4 +127,5 @@ Formatos distintos a propósito: así es en la vida real y es lo que justifica l
 
 La firma de los avisos de PagaYa es `hex(HMAC-SHA256(secreto, cuerpo))`. Secreto por variable de entorno
 (`PAGAYA_WEBHOOK_SECRET`); en desarrollo hay un valor por defecto y en
-producción el gateway no arranca sin secretos propios.
+producción el gateway no arranca sin secretos propios. Lo mismo con la clave de administración de
+MercaYa (`MERCAYA_ADMIN_KEY`, 24+ caracteres en producción).
