@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { BusinessInfo, BusinessOrder, BusinessStatus, OrderContactRole, OrderStatus, PublicUser, ServiceId, UpdateBusinessRequest } from '@parla/types';
+import type { BusinessInfo, BusinessOrder, BusinessStatus, GeoPoint, OrderContactRole, OrderStatus, PublicUser, ServiceId, UpdateBusinessRequest } from '@parla/types';
 import { PresenceRegistry } from '../../../../infra/realtime/presence.registry';
 import { assertHour, businessStatus } from '../../../../kernel/business-hours';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { toPublicUser } from '../../identity/user.mapper';
 import { BUSINESSES_REPOSITORY, type BusinessesRepository, type BusinessRecord } from '../businesses.repository';
+import { DispatchPolicy } from '../dispatch.policy';
 import { ORDERS_REPOSITORY, type OrderChanges, type OrderRecord, type OrdersRepository } from '../orders.repository';
 import { customersOf, OrderEvents, toBusinessOrder } from './orders.use-cases';
 
@@ -67,6 +68,8 @@ export interface InternalBusiness {
   name: string;
   service: ServiceId;
   ownerId: string;
+  /** Punto de la tienda: el gateway cotiza el envío por distancia hasta el cliente. */
+  location: GeoPoint | null;
   open: boolean;
   closedMessage: string | null;
 }
@@ -78,7 +81,7 @@ export class GetInternalBusinessUseCase {
   async execute(by: 'service' | 'owner', key: string, now = new Date()): Promise<InternalBusiness> {
     const business = by === 'service' ? await this.businesses.findByService(key as ServiceId) : await this.businesses.findByOwner(key);
     if (!business) throw new NotFoundError('Negocio no encontrado');
-    return { id: business.id, name: business.name, service: business.service, ownerId: business.ownerId, ...businessStatus(business, now) };
+    return { id: business.id, name: business.name, service: business.service, ownerId: business.ownerId, location: business.location, ...businessStatus(business, now) };
   }
 }
 
@@ -147,6 +150,7 @@ export class DecideBusinessOrderUseCase {
     @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
     private readonly events: OrderEvents,
+    private readonly dispatch: DispatchPolicy,
   ) {}
 
   async execute(userId: string, id: string, action: BusinessAction): Promise<BusinessOrder> {
@@ -156,6 +160,8 @@ export class DecideBusinessOrderUseCase {
       if (order.status !== step.from) throw new ConflictError(step.late);
       const driverName = order.delivery?.driverName ?? 'el repartidor';
       const changes: OrderChanges = { status: step.to };
+      // Listo (o de nuevo sin repartidor): se ofrece por cercanía desde la primera oleada.
+      if (step.to === 'searching_driver') changes.offer = this.dispatch.firstOffer();
       if (action === 'handoff') {
         changes.note = `Entregado a ${driverName} en la tienda`;
         changes.delivery = order.delivery && {

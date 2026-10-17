@@ -2,9 +2,32 @@ import { expect, type Browser, type Page } from '@playwright/test';
 
 export const PASSWORD = 'Parla2026!';
 
+/**
+ * GPS simulado a una cuadra de Bodega MercaYa (Miraflores): los repartidores conectados mandan su
+ * ubicación y así les llegan las ofertas por cercanía.
+ */
+export const NEAR_STORE = { latitude: -12.1275, longitude: -77.0205 };
+
+/** Una foto JPEG de prueba (documento, entrega o reclamo), dibujada en el navegador. */
+export async function testJpeg(page: Page) {
+  const dataUrl = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 200;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#0f766e';
+    ctx.fillRect(0, 0, 320, 200);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '28px sans-serif';
+    ctx.fillText('Foto de prueba', 60, 110);
+    return canvas.toDataURL('image/jpeg', 0.9);
+  });
+  return { name: 'foto.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(dataUrl.split(',')[1], 'base64') };
+}
+
 /** Abre un navegador aparte (otra persona) y guarda los errores de consola para revisarlos al final. */
 export async function openSession(browser: Browser, identifier: string, viewport = { width: 1366, height: 860 }) {
-  const context = await browser.newContext({ viewport, permissions: ['microphone', 'camera'] });
+  const context = await browser.newContext({ viewport, permissions: ['microphone', 'camera', 'geolocation'], geolocation: NEAR_STORE });
   const page = await context.newPage();
   const consoleErrors: string[] = [];
   page.on('console', (msg) => msg.type() === 'error' && consoleErrors.push(msg.text()));

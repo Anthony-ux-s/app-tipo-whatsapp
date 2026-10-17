@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import { WelcomeView } from '../modules/account/components/WelcomeView';
+import { AdminView } from '../modules/admin/components/AdminView';
 import { DriverOrderDetailView } from '../modules/driver/components/DriverOrderDetailView';
 import { DriverOrdersView } from '../modules/driver/components/DriverOrdersView';
 import { DriverProfileView } from '../modules/driver/components/DriverProfileView';
@@ -60,6 +61,7 @@ export const router = createBrowserRouter([
           { path: 'rapidito/registro', element: <DriverRegisterView /> },
           { path: 'rapidito/perfil', element: <DriverProfileView /> },
           { path: 'rapidito/pedidos/:orderId', element: <DriverOrderDetailView /> },
+          { path: 'admin', element: <AdminView /> },
           { path: 'ajustes', element: <SettingsView /> },
           { path: 'ajustes/:section', element: <SettingsSectionView /> },
         ],

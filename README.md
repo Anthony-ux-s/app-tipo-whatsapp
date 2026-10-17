@@ -65,7 +65,9 @@ Contraseña para todos: **`Parla2026!`**
 | `tienda` | Elena Condori | **Dueña de Bodega MercaYa**: recibe los pedidos del Mercado, los acepta, los alista y se los entrega al repartidor |
 | `repartidor` | Carlos Huamán | **Repartidor de Rapidito** (moto B7K-482): toma pedidos listos, los recoge y los entrega con el código del cliente |
 | `repartidora` | Lucía Ramos | **Repartidora de Rapidito** (moto D5T-663): para ver que el primero que toma un pedido se lo queda |
+| `soporte` | Soporte Parla | **Soporte**: en *Ajustes → Soporte Parla* aprueba o rechaza repartidores nuevos y resuelve reclamos con devolución |
 | `+57 300 123 4567` | Sofía Ramírez | Entra con su **teléfono** |
+| `diego`, `mateo`, `valentina` | Resto de contactos | |
 
 Todas las cuentas de ejemplo tienen el teléfono verificado (Andrés `+57 300 555 0101`, Camila `…0102`,
 Diego `…0103`, Mateo `…0104`, Valentina `…0105` y Laura `+57 310 456 7890`). Laura además tiene
@@ -74,7 +76,6 @@ correo de recuperación (`laura@example.com`).
 **Registro nuevo**: en `/registro` escribes tu número y llega un código por SMS. Sin OneSignal
 configurado, el código aparece en pantalla como «modo de prueba» y en la consola del core. Luego
 pones tu nombre, un usuario opcional y la contraseña.
-| `diego`, `mateo`, `valentina` | Resto de contactos | |
 
 - **Llamada**: entra con `laura` en una ventana y con `andres` en otra (o en una ventana privada) y
   pulsa el botón de video o de teléfono en su chat.
@@ -90,6 +91,11 @@ pones tu nombre, un usuario opcional y la contraseña.
      *Confirmar entrega*. Sin el código correcto no se puede marcar como entregado.
   Todos lo ven en vivo, con el historial de cada paso, y cualquiera se escribe con los otros desde el
   pedido (cliente ↔ tienda, cliente ↔ repartidor, tienda ↔ repartidor).
+- **Reclamo con devolución parcial**: con el pedido entregado, el cliente pulsa *Tengo un problema con
+  mi pedido*, elige «Faltaron productos» y cuántos. `soporte` lo abre en *Ajustes → Soporte Parla →
+  Reclamos*, ajusta el monto y pulsa *Devolver*: PagaYa devuelve esa parte y el cliente lo ve en el pedido.
+- **Nuevo repartidor**: con cualquier cuenta, *Delivery → Trabaja con Rapidito*, con DNI, licencia y
+  foto del documento. Queda en revisión hasta que `soporte` lo apruebe en *Repartidores*.
 
 ## Qué tiene esta versión
 
@@ -121,9 +127,29 @@ pones tu nombre, un usuario opcional y la contraseña.
     **oferta** (precio normal tachado) y el **stock** (o lo marca agotado de un toque); se guarda en el
     sistema de la tienda y se ve al instante en Mercado y Ofertas.
   - **Registro de repartidores**: cualquiera entra a *Delivery → Trabaja con Rapidito*, elige su
-    vehículo (moto, bicicleta, auto o a pie) y su placa. En su perfil se **conecta o desconecta** (solo
-    a los conectados les llegan pedidos), cambia el vehículo, ve sus **ganancias** (hoy, 7 días y total)
-    y puede **dejar de repartir** (su historial queda y puede volver).
+    vehículo (moto, bicicleta, auto o a pie) y su placa, escribe su **DNI** (y su **licencia** si maneja
+    moto o auto) y sube la **foto del documento**. Queda **en revisión** hasta que soporte lo apruebe;
+    mientras tanto no puede conectarse. Si lo rechazan ve el motivo y vuelve a enviar la foto. Ya
+    aprobado, en su perfil se **conecta o desconecta** (solo a los conectados les llegan pedidos),
+    cambia el vehículo, ve sus **ganancias** (hoy, 7 días y total) y puede **dejar de repartir** (su
+    historial queda y, si vuelve, no repite la verificación).
+  - **Ofertas por cercanía y tarifa por distancia**: un pedido listo se ofrece primero a los
+    repartidores a menos de 3 km de la tienda; si nadie lo toma en 2 minutos, se amplía a 6 km, luego
+    a 12 km y al final a todos los conectados (`DISPATCH_RADII_KM`, `DISPATCH_WAVE_MINUTES`). Para
+    eso el celular del repartidor conectado manda su ubicación cada 30 s (no se comparte con nadie).
+    Cada oferta muestra a cuántos km está la tienda. La tarifa de delivery depende de la distancia de
+    la tienda a la dirección (el carrito la muestra).
+  - **Entrega con foto**: el repartidor puede adjuntar una foto al entregar con el código; si el
+    cliente no responde, **lo deja con una foto** como prueba («Dejado sin código»). El cliente, la
+    tienda y soporte ven la foto (privada: solo se sirve con sesión).
+  - **Reclamos y devoluciones parciales**: hasta 48 horas después de recibirlo, el cliente reporta
+    *Faltaron productos · Llegó dañado · Llegó otro producto · No me llegó · Otro*, marca qué productos
+    y cuántos (la devolución sugerida es lo que costaron), con comentario y foto. Soporte decide el
+    monto y **PagaYa devuelve esa parte** del cobro (con referencia única, nunca dos veces ni más de
+    lo pagado), o lo cierra con un motivo. El cliente ve el estado en el pedido y la tienda, el reclamo.
+  - **Panel de soporte** (*Ajustes → Soporte Parla*, solo cuentas de soporte): repartidores por
+    revisar con su DNI, licencia y foto del documento para **aprobar o rechazar**, y la bandeja de
+    **reclamos** con las fotos del cliente y de la entrega para devolver o rechazar.
   - **Propina**: en el carrito el cliente elige S/ 1, 2, 3, 5 u otro monto; se cobra en el mismo QR
     y va completa al repartidor (que la ve en la oferta y en sus ganancias).
   - **Ganancias del repartidor y comisión automática**: el repartidor gana el **95 % de la tarifa de

@@ -27,6 +27,7 @@ export function sectionOf(pathname: string): AppSection {
   if (pathname.startsWith('/app/ofertas')) return 'ofertas';
   // «Mi negocio» y Rapidito (repartidores) viven dentro de Delivery: son los otros lados de los mismos pedidos.
   if (['/app/pedidos', '/app/negocio', '/app/rapidito'].some((p) => pathname.startsWith(p))) return 'delivery';
-  if (pathname.startsWith('/app/ajustes')) return 'ajustes';
+  // El panel de soporte se abre desde Ajustes.
+  if (pathname.startsWith('/app/ajustes') || pathname.startsWith('/app/admin')) return 'ajustes';
   return 'chats';
 }

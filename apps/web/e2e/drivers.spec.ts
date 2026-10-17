@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { login, openSession, PASSWORD } from './helpers';
+import { login, NEAR_STORE, openSession, PASSWORD, registerNewUser, testJpeg, unique } from './helpers';
 
 /** Sesión con ubicación simulada (como el GPS del celular del repartidor). */
 async function openWithLocation(browser: Browser, identifier: string, location: { latitude: number; longitude: number }) {
@@ -15,23 +15,62 @@ const api = async (page: Page) => {
 };
 
 test.describe('Repartidores de Rapidito', () => {
-  test('alta, perfil, conectarse, cambiar de vehículo y dejar de repartir (y volver)', async ({ browser }) => {
-    const andres = await openSession(browser, 'andres');
-    const page = andres.page;
+  test('alta con documentos, revisión de soporte (rechazo y aprobación), perfil y dejar de repartir', async ({ browser }) => {
+    test.setTimeout(120_000);
+    const name = unique('Rider');
+    const rider = await browser.newContext({ viewport: { width: 1366, height: 860 }, permissions: ['geolocation'], geolocation: NEAR_STORE });
+    const page = await rider.newPage();
+    await registerNewUser(page, name);
+    const photo = await testJpeg(page);
 
     await page.goto('/app/pedidos');
     await page.getByTestId('become-driver').click();
     await expect(page.getByRole('heading', { name: 'Trabaja con Rapidito' })).toBeVisible();
     await page.getByRole('radio', { name: 'Moto' }).click();
     await page.getByLabel('Placa').fill('x');
+    await page.getByTestId('driver-dni').fill('45678912');
+    await page.getByTestId('driver-license').fill('q12345678');
+    // Sin la foto del documento no se envía
+    await page.getByTestId('register-driver').click();
+    await expect(page.getByRole('alert')).toContainText('foto de tu licencia');
+    await page.getByTestId('driver-document').setInputFiles(photo);
+    await expect(page.getByAltText('Foto elegida')).toBeVisible();
     await page.getByTestId('register-driver').click();
     await expect(page.getByRole('alert')).toContainText('placa');
     await page.getByLabel('Placa').fill('abc-123');
     await page.getByTestId('register-driver').click();
 
-    // Recién registrado queda desconectado: no ve pedidos hasta conectarse
+    // En revisión: no puede conectarse
     await expect(page.getByRole('heading', { name: 'Rapidito' })).toBeVisible();
-    await expect(page.getByRole('switch', { name: /Desconectado/ })).toBeVisible();
+    await expect(page.getByTestId('driver-review')).toHaveAttribute('data-status', 'pending');
+    await expect(page.getByRole('switch')).toHaveCount(0);
+
+    // Soporte ve su DNI, su licencia y la foto; lo rechaza con un motivo
+    const soporte = await openSession(browser, 'soporte');
+    await soporte.page.goto('/app/ajustes');
+    await soporte.page.getByRole('link', { name: /Soporte Parla/ }).click();
+    const card = soporte.page.getByTestId('admin-driver').filter({ hasText: name });
+    await expect(card).toContainText('45678912');
+    await expect(card).toContainText('Q12345678');
+    await card.getByTestId('show-document').click();
+    await expect(card.getByTestId('private-photo')).toBeVisible();
+    await card.getByTestId('reject-driver').click();
+    await soporte.page.getByTestId('reject-note').fill('La foto está borrosa');
+    await soporte.page.getByTestId('confirm-reject').click();
+    await expect(card).toBeHidden();
+
+    // Le llega al instante: ve el motivo y manda otra foto
+    await expect(page.getByTestId('driver-review')).toHaveAttribute('data-status', 'rejected');
+    await expect(page.getByTestId('driver-review')).toContainText('La foto está borrosa');
+    await page.getByTestId('driver-document-again').setInputFiles(photo);
+    await page.getByTestId('send-document').click();
+    await expect(page.getByTestId('driver-review')).toHaveAttribute('data-status', 'pending');
+
+    // Soporte lo aprueba: ya puede conectarse
+    await soporte.page.getByRole('button', { name: 'Actualizar' }).click();
+    await card.getByTestId('approve-driver').click();
+    await expect(card).toBeHidden();
+    await expect(page.getByTestId('driver-review')).toBeHidden();
     await page.getByRole('switch', { name: /Desconectado/ }).click();
     await expect(page.getByRole('switch', { name: /Conectado/ })).toHaveAttribute('aria-checked', 'true');
 
@@ -51,8 +90,8 @@ test.describe('Repartidores de Rapidito', () => {
     await expect(page).toHaveURL(/\/app\/pedidos$/);
     await expect(page.getByTestId('become-driver')).toBeVisible();
 
-    expect(andres.consoleErrors.filter((e) => !e.includes('status of 400'))).toEqual([]);
-    await andres.context.close();
+    await soporte.context.close();
+    await rider.close();
   });
 
   test('mapa en vivo: la clienta y la tienda siguen al repartidor mientras se mueve', async ({ browser }) => {

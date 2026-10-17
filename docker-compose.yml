@@ -88,6 +88,9 @@ services:
       DRIVER_SHARE_PERCENT: ${DRIVER_SHARE_PERCENT:-95}
       DRIVER_MIN_AUTO_PAYOUT_SOLES: ${DRIVER_MIN_AUTO_PAYOUT_SOLES:-5}
       DRIVER_MIN_MANUAL_PAYOUT_SOLES: ${DRIVER_MIN_MANUAL_PAYOUT_SOLES:-1}
+      # Ofertas por cercanía: radios de cada oleada (km) y minutos entre oleadas
+      DISPATCH_RADII_KM: ${DISPATCH_RADII_KM:-3,6,12}
+      DISPATCH_WAVE_MINUTES: ${DISPATCH_WAVE_MINUTES:-2}
     volumes:
       - app-storage:/data/storage
 

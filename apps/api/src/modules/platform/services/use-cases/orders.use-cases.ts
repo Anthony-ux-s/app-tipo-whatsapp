@@ -7,10 +7,13 @@ import type {
   InternalUpdateOrder,
   Order,
   OrderCustomer,
+  OrderClaim,
   OrderStatus,
+  GeoPoint,
   RateOrderRequest,
 } from '@parla/types';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
+import { distanceKm } from '../../../../kernel/geo';
 import {
   assertOrderTotals,
   assertOrderTransition,
@@ -27,6 +30,8 @@ import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.r
 import { avatarUrlOf } from '../../identity/user.mapper';
 import { NotificationDispatcher } from '../../messaging/push/use-cases/notification-dispatcher';
 import { BUSINESSES_REPOSITORY, type BusinessesRepository } from '../businesses.repository';
+import type { ClaimRecord } from '../claims.repository';
+import { DispatchPolicy } from '../dispatch.policy';
 import { DriverPayPolicy } from '../driver-pay.policy';
 import { DRIVERS_REPOSITORY, type DriversRepository } from '../drivers.repository';
 import { ORDERS_REPOSITORY, type OrderChanges, type OrderRecord, type OrdersRepository } from '../orders.repository';
@@ -60,6 +65,9 @@ export function toOrder(order: OrderRecord, forCustomer = false): Order {
     delivery: order.delivery,
     timeline: order.timeline,
     rating: order.rating,
+    hasDeliveryPhoto: !!order.deliveryPhotoId,
+    deliveredWithoutCode: order.deliveredWithoutCode,
+    claims: order.claims.map(toOrderClaim),
     // Mientras el repartidor lo lleva, cliente y tienda lo siguen en el mapa.
     ...(order.status === 'driver_assigned' || order.status === 'on_the_way'
       ? { driverLocation: order.driverLocation && { orderId: order.id, lat: order.driverLocation.lat, lng: order.driverLocation.lng, at: order.driverLocation.at.toISOString() } }
@@ -74,6 +82,24 @@ export function toOrder(order: OrderRecord, forCustomer = false): Order {
 
 function toInternalOrder(order: OrderRecord): InternalOrder {
   return { ...toOrder(order), userId: order.userId, deliveryQuoteId: order.deliveryQuoteId, businessOwnerId: order.business?.ownerId ?? null };
+}
+
+/** Un reclamo como lo ven el cliente y la tienda (sin datos internos de la devolución). */
+export function toOrderClaim(c: ClaimRecord): OrderClaim {
+  return {
+    id: c.id,
+    orderId: c.orderId,
+    reason: c.reason,
+    comment: c.comment,
+    items: c.items,
+    hasPhoto: !!c.photoId,
+    suggestedCents: c.suggestedCents,
+    status: c.status,
+    refundCents: c.status === 'refunded' ? c.refundCents : null,
+    resolutionNote: c.resolutionNote,
+    createdAt: c.createdAt.toISOString(),
+    resolvedAt: c.resolvedAt?.toISOString() ?? null,
+  };
 }
 
 /** Quién hizo cada pedido, para el dueño del negocio y el repartidor. */
@@ -91,9 +117,19 @@ export function toBusinessOrder(order: OrderRecord, customers: Map<string, Order
   return { ...toOrder(order), customer: customerOf(order, customers) };
 }
 
-/** Pedido para un repartidor: qué recoge, dónde y adónde va. Solo el nombre de pila del cliente. */
-export function toDriverOrder(order: OrderRecord, driverId: string, customers: Map<string, OrderCustomer>, pay: DriverPayPolicy): DriverOrder {
+/**
+ * Pedido para un repartidor: qué recoge, dónde, adónde va, cuánto gana y a qué distancia está la
+ * tienda. Solo el nombre de pila del cliente.
+ */
+export function toDriverOrder(
+  order: OrderRecord,
+  driverId: string,
+  customers: Map<string, OrderCustomer>,
+  pay: DriverPayPolicy,
+  viewerLocation: GeoPoint | null = null,
+): DriverOrder {
   const split = pay.split(order.deliveryFeeCents, order.tipCents);
+  const store = order.business?.location ?? null;
   return {
     id: order.id,
     status: order.status,
@@ -106,6 +142,8 @@ export function toDriverOrder(order: OrderRecord, driverId: string, customers: M
     commissionCents: split.commissionCents,
     commissionPercent: pay.commissionPercent,
     earningsCents: split.earningsCents,
+    distanceToStoreKm: viewerLocation && store ? Math.round(distanceKm(viewerLocation, store) * 10) / 10 : null,
+    hasDeliveryPhoto: !!order.deliveryPhotoId,
     mine: order.driverId === driverId,
     timeline: order.timeline,
     createdAt: order.createdAt.toISOString(),
@@ -115,8 +153,9 @@ export function toDriverOrder(order: OrderRecord, driverId: string, customers: M
 
 /**
  * Avisa del cambio por tiempo real y, si no tienen Parla abierta, por push: al cliente siempre; al
- * dueño desde que está pagado; al repartidor que lo tomó; y a todos los repartidores cuando queda
- * listo para recoger (y cuando alguien lo toma, para que desaparezca de sus ofertas).
+ * dueño desde que está pagado; al repartidor que lo tomó; y, cuando queda listo para recoger, solo a
+ * los repartidores que alcanza la oferta por cercanía (y a todos cuando alguien lo toma, para que
+ * desaparezca de sus ofertas).
  */
 @Injectable()
 export class OrderEvents {
@@ -126,6 +165,7 @@ export class OrderEvents {
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     private readonly notifications: NotificationDispatcher,
     private readonly pay: DriverPayPolicy,
+    private readonly dispatch: DispatchPolicy,
   ) {}
 
   /**
@@ -153,13 +193,17 @@ export class OrderEvents {
       : null;
     if (push) void this.notifications.notify([ownerId], () => push);
 
-    // searching_driver: se ofrece (o se vuelve a ofrecer); driver_assigned: alguien acaba de tomarlo.
+    // searching_driver: se ofrece (solo a los que alcanza la oleada); driver_assigned: alguien acaba
+    // de tomarlo y se avisa a todos los conectados para que desaparezca de sus ofertas.
     const offerChanged = statusChanged && (order.status === 'searching_driver' || order.status === 'driver_assigned');
-    const driverIds = new Set(offerChanged ? await this.drivers.listUserIds() : []);
+    const online = offerChanged ? await this.drivers.listOnline() : [];
+    const reached = order.status === 'searching_driver' ? online.filter((d) => this.dispatch.canSee(order, d)) : online;
+    const locations = new Map(online.map((d) => [d.userId, d.location]));
+    const driverIds = new Set(reached.map((d) => d.userId));
     if (order.driverId) driverIds.add(order.driverId);
     if (previousDriverId) driverIds.add(previousDriverId);
     for (const driverId of driverIds) {
-      this.realtime.toUsers([driverId], 'driver-order:updated', toDriverOrder(order, driverId, customers, this.pay));
+      this.realtime.toUsers([driverId], 'driver-order:updated', toDriverOrder(order, driverId, customers, this.pay, locations.get(driverId) ?? null));
     }
     const lostBy = previousDriverId ?? (order.status === 'cancelled' ? order.driverId : null);
     const lost = statusChanged && lostBy ? driverLostPush(order.id, order.status, order.business?.name ?? 'La tienda') : null;
@@ -167,7 +211,7 @@ export class OrderEvents {
     if (offerChanged && order.status === 'searching_driver') {
       const offer = driverOfferPush(order.id, order.business?.name ?? 'Una tienda', this.pay.split(order.deliveryFeeCents, order.tipCents).earningsCents);
       // A quien lo acaba de soltar no se le vuelve a ofrecer por push.
-      void this.notifications.notify([...driverIds].filter((id) => id !== previousDriverId), () => offer);
+      void this.notifications.notify(reached.map((d) => d.userId).filter((id) => id !== previousDriverId), () => offer);
     }
   }
 }

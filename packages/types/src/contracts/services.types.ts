@@ -73,6 +73,8 @@ export interface OrderQuote {
   totalCents: number;
   currency: Currency;
   etaMinutes: number;
+  /** Distancia de la tienda al punto de entrega (si se marcó en el mapa). */
+  distanceKm?: number;
 }
 
 /**
@@ -196,6 +198,12 @@ export interface Order {
   driverLocation?: DriverLocation | null;
   /** Calificación que dejó el cliente al recibirlo; null si aún no califica. */
   rating?: OrderRating | null;
+  /** Hay foto de la entrega (se ve en GET /orders/:id/delivery-photo). */
+  hasDeliveryPhoto?: boolean;
+  /** Se dejó sin código (p. ej. en portería), con foto como prueba. */
+  deliveredWithoutCode?: boolean;
+  /** Reclamos del pedido (el último primero). */
+  claims?: OrderClaim[];
   createdAt: string;
   updatedAt: string;
 }
@@ -234,6 +242,8 @@ export interface RatingSummary {
   count: number;
 }
 
+export type DriverStatus = 'pending' | 'approved' | 'rejected';
+
 /** Repartidor de Rapidito (cuenta de Parla con su vehículo). */
 export interface DriverInfo {
   vehicle: DriverVehicle;
@@ -241,12 +251,86 @@ export interface DriverInfo {
   plate: string;
   /** Conectado: recibe ofertas y puede tomar pedidos. */
   online: boolean;
+  /** Verificación: en revisión, aprobado o rechazado (solo los aprobados reparten). */
+  status: DriverStatus;
+  /** Motivo del rechazo o lo que pide soporte. */
+  reviewNote: string | null;
+  /** Ya subió la foto de su documento. */
+  hasDocument: boolean;
 }
 
 /** Alta o cambio del perfil de repartidor. */
 export interface DriverProfileRequest {
   vehicle: DriverVehicle;
   plate?: string;
+  /** DNI (8 dígitos); se pide al registrarse. */
+  dniNumber?: string;
+  /** Licencia de conducir (moto o auto). */
+  licenseNumber?: string;
+}
+
+/** Repartidor tal como lo ve soporte para aprobarlo. */
+export interface AdminDriver {
+  userId: string;
+  displayName: string;
+  phone: string | null;
+  vehicle: DriverVehicle;
+  plate: string;
+  dniNumber: string | null;
+  licenseNumber: string | null;
+  hasDocument: boolean;
+  status: DriverStatus;
+  reviewNote: string | null;
+  createdAt: string;
+}
+
+export type ClaimReason = 'missing_items' | 'damaged' | 'wrong_items' | 'not_delivered' | 'other';
+export type ClaimStatus = 'open' | 'refunding' | 'refunded' | 'rejected';
+
+export interface ClaimItem {
+  productId: string;
+  name: string;
+  quantity: number;
+  /** Lo que se pagó por esas unidades. */
+  totalCents: number;
+}
+
+/** Reclamo de un pedido entregado. */
+export interface OrderClaim {
+  id: string;
+  orderId: string;
+  reason: ClaimReason;
+  comment: string;
+  items: ClaimItem[];
+  hasPhoto: boolean;
+  /** Devolución sugerida (lo que costaron los productos marcados). */
+  suggestedCents: number;
+  status: ClaimStatus;
+  refundCents: number | null;
+  resolutionNote: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export interface CreateClaimRequest {
+  reason: ClaimReason;
+  items?: { productId: string; quantity: number }[];
+  comment?: string;
+  /** Foto subida antes con POST /photos. */
+  photoId?: string;
+}
+
+/** Reclamo para soporte: con el pedido, quién lo pidió y cuánto queda por devolver. */
+export interface AdminClaim extends OrderClaim {
+  customerName: string;
+  businessName: string | null;
+  driverName: string | null;
+  orderTotalCents: number;
+  /** Lo que todavía se puede devolver de ese pedido. */
+  refundableCents: number;
+  lines: OrderLine[];
+  hasDeliveryPhoto: boolean;
+  deliveredWithoutCode: boolean;
 }
 
 /** Lo que lleva ganado un repartidor (las tarifas de delivery de sus entregas). */
@@ -326,6 +410,9 @@ export interface DriverOrder {
   commissionPercent: number;
   /** Lo que gana el repartidor: su porcentaje de la tarifa (95 % por defecto) + la propina completa. */
   earningsCents: number;
+  /** Distancia del repartidor a la tienda (km), si se conoce su ubicación. */
+  distanceToStoreKm: number | null;
+  hasDeliveryPhoto: boolean;
   /** Lo tiene este repartidor (si no, es una oferta disponible). */
   mine: boolean;
   timeline: OrderTimelineEntry[];
@@ -340,8 +427,10 @@ export interface DriverOrders {
   mine: DriverOrder[];
 }
 
+/** Entregar: con el código del cliente, o (si no responde) dejarlo con una foto como prueba. */
 export interface DeliverOrderRequest {
-  code: string;
+  code?: string;
+  photoId?: string;
 }
 
 /** Con quién chatear sobre un pedido. */

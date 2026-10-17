@@ -17,9 +17,11 @@ import type { PushSubscriptionsRepository, StoredSubscription } from '../modules
 import type { PushPayload } from '@parla/types';
 import type { UpdateBusinessRequest } from '@parla/types';
 import type { BusinessesRepository, BusinessRecord } from '../modules/platform/services/businesses.repository';
-import type { DriverProfileRequest, GeoPoint, OrderRating } from '@parla/types';
+import type { ClaimStatus, GeoPoint, OrderRating } from '@parla/types';
+import type { ClaimChanges, ClaimRecord, ClaimsRepository, NewClaim } from '../modules/platform/services/claims.repository';
 import type { DriverLedgerRepository, LedgerEntryRecord } from '../modules/platform/services/driver-ledger.repository';
-import type { DriverRecord, DriversRepository } from '../modules/platform/services/drivers.repository';
+import type { PhotosRepository } from '../modules/platform/services/photos.repository';
+import type { DriverChanges, DriverRecord, DriverRegistration, DriversRepository } from '../modules/platform/services/drivers.repository';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
 import type { AppEnv } from '../config/env.validation';
 import type { VerificationSender } from '../infra/messaging/verification-sender.port';
@@ -50,6 +52,7 @@ export function makeUser(overrides: Partial<UserRecord> = {}): UserRecord {
     createdAt: new Date(),
     termsVersion: null,
     termsAcceptedAt: null,
+    isAdmin: false,
     deletedAt: null,
     ...overrides,
   };
@@ -300,22 +303,37 @@ export class InMemoryDriversRepository implements DriversRepository {
     const d = this.drivers.find((x) => x.userId === userId);
     return d ? structuredClone(d) : null;
   }
-  async listUserIds() {
-    return this.drivers.filter((d) => d.active && d.online).map((d) => d.userId);
+  async listOnline() {
+    return this.drivers.filter((d) => d.active && d.online && d.status === 'approved').map((d) => structuredClone(d));
   }
-  async register(userId: string, profile: Required<DriverProfileRequest>) {
+  async register(userId: string, r: DriverRegistration) {
     const existing = this.drivers.find((d) => d.userId === userId);
-    if (existing) Object.assign(existing, profile, { active: true, online: false });
-    else this.drivers.push({ userId, ...profile, active: true, online: false, location: null, payoutPhone: null });
+    const status = existing?.status === 'approved' ? 'approved' : 'pending';
+    if (existing) Object.assign(existing, r, { active: true, online: false, status, reviewNote: null });
+    else
+      this.drivers.push({
+        userId, ...r, active: true, online: false, status, reviewNote: null, documentPhotoId: null, location: null, payoutPhone: null, createdAt: new Date(),
+      });
     return (await this.findByUser(userId))!;
   }
-  async update(userId: string, changes: Partial<Pick<DriverRecord, 'vehicle' | 'plate' | 'online' | 'active' | 'payoutPhone'>>) {
+  async update(userId: string, changes: DriverChanges) {
     Object.assign(this.drivers.find((d) => d.userId === userId)!, changes);
     return (await this.findByUser(userId))!;
   }
   async saveLocation(userId: string, point: GeoPoint, at: Date) {
     this.drivers.find((d) => d.userId === userId)!.location = { ...point, at };
   }
+  async listByStatus(status: DriverRecord['status'], limit: number) {
+    return this.drivers.filter((d) => d.status === status && d.active).slice(0, limit).map((d) => structuredClone(d));
+  }
+}
+
+/** Repartidor aprobado y conectado para las pruebas. */
+export function makeDriver(userId: string, overrides: Partial<DriverRecord> = {}): DriverRecord {
+  return {
+    userId, vehicle: 'Moto', plate: 'B7K-482', online: true, active: true, status: 'approved', dniNumber: '12345678', licenseNumber: 'Q12345678',
+    documentPhotoId: null, reviewNote: null, location: null, payoutPhone: null, createdAt: new Date(), ...overrides,
+  };
 }
 
 export class InMemoryOrdersRepository implements OrdersRepository {
@@ -326,7 +344,7 @@ export class InMemoryOrdersRepository implements OrdersRepository {
   ) {}
   async create({ businessId, ...order }: NewOrder) {
     const found = this.businesses.businesses.find((b) => b.id === businessId);
-    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId, address: found.address, location: null } : null;
+    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId, address: found.address, location: found.location ?? null } : null;
     const now = new Date();
     const record: OrderRecord = {
       ...order,
@@ -336,6 +354,11 @@ export class InMemoryOrdersRepository implements OrdersRepository {
       driverLocation: null,
       deliveryCodeAttempts: 0,
       rating: null,
+      offerRadiusKm: null,
+      offerWaveAt: null,
+      deliveryPhotoId: null,
+      deliveredWithoutCode: false,
+      claims: [],
       timeline: [{ status: order.status, at: now.toISOString() }],
       createdAt: now,
       updatedAt: now,
@@ -388,12 +411,18 @@ export class InMemoryOrdersRepository implements OrdersRepository {
     copy.driverLocation = (o.driverId && this.drivers?.drivers.find((d) => d.userId === o.driverId)?.location) || null;
     return copy;
   }
-  async updateIfStatus(id: string, expected: OrderStatus, { note, ...changes }: OrderChanges) {
+  async widenOffer(id: string, radiusKm: number | null, at: Date) {
+    const order = this.orders.find((o) => o.id === id && o.status === 'searching_driver' && !o.driverId);
+    if (!order) return null;
+    Object.assign(order, { offerRadiusKm: radiusKm, offerWaveAt: at });
+    return this.withLocation(order);
+  }
+  async updateIfStatus(id: string, expected: OrderStatus, { note, offer, ...changes }: OrderChanges) {
     const order = this.orders.find((o) => o.id === id);
     if (!order || order.status !== expected) return null;
     if (changes.status !== expected || note) order.timeline.push({ status: changes.status, at: new Date().toISOString(), ...(note ? { note } : {}) });
-    Object.assign(order, changes, { updatedAt: new Date() });
-    return structuredClone(order);
+    Object.assign(order, changes, { updatedAt: new Date() }, offer ? { offerRadiusKm: offer.radiusKm, offerWaveAt: offer.at } : {});
+    return this.withLocation(order);
   }
   async resetDeliveryCode(id: string, code: string) {
     const order = this.orders.find((o) => o.id === id)!;
@@ -531,5 +560,45 @@ export class InMemoryDriverLedger implements DriverLedgerRepository {
       if ((await this.balance(id)).availableCents >= minCents) due.push(id);
     }
     return due;
+  }
+}
+
+/** Los reclamos también se ven dentro del pedido (como el include de Prisma). */
+export class InMemoryClaims implements ClaimsRepository {
+  claims: ClaimRecord[] = [];
+  constructor(private readonly orders: InMemoryOrdersRepository) {}
+  private sync(orderId: string) {
+    const order = this.orders.orders.find((o) => o.id === orderId);
+    if (order) order.claims = this.claims.filter((c) => c.orderId === orderId).map((c) => ({ ...c })).reverse();
+  }
+  async create(claim: NewClaim) {
+    const record: ClaimRecord = { ...claim, id: nextId('cl'), status: 'open', refundCents: null, refundRef: null, providerRefundId: null, resolutionNote: '', resolvedById: null, createdAt: new Date(), resolvedAt: null };
+    this.claims.push(record);
+    this.sync(claim.orderId);
+    return { ...record };
+  }
+  async findById(id: string) {
+    const c = this.claims.find((x) => x.id === id);
+    return c ? { ...c } : null;
+  }
+  async listByStatus(statuses: ClaimStatus[], limit: number) {
+    return this.claims.filter((c) => statuses.includes(c.status)).slice(0, limit).map((c) => ({ ...c }));
+  }
+  async updateIfStatus(id: string, expected: ClaimStatus, changes: ClaimChanges) {
+    const c = this.claims.find((x) => x.id === id && x.status === expected);
+    if (!c) return null;
+    Object.assign(c, changes);
+    this.sync(c.orderId);
+    return { ...c };
+  }
+}
+
+export class InMemoryPhotos implements PhotosRepository {
+  owners = new Map<string, string>();
+  async create(id: string, uploaderId: string) {
+    this.owners.set(id, uploaderId);
+  }
+  async uploaderOf(id: string) {
+    return this.owners.get(id) ?? null;
   }
 }

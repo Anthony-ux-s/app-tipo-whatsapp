@@ -80,6 +80,8 @@ type OrderQuote struct {
 	TotalCents       int         `json:"totalCents"`
 	Currency         string      `json:"currency"`
 	ETAMinutes       int         `json:"etaMinutes"`
+	// DistanceKm: distancia de la tienda al punto de entrega (si ambos se conocen), para mostrar «a 2.3 km».
+	DistanceKm *float64 `json:"distanceKm,omitempty"`
 }
 
 type OrderStatus string
@@ -196,6 +198,8 @@ type Business struct {
 	OwnerID       string    `json:"ownerId"`
 	Open          bool      `json:"open"`
 	ClosedMessage *string   `json:"closedMessage"`
+	// Location: dónde recoge el repartidor (para la tarifa por distancia); null si no se conoce.
+	Location *GeoPoint `json:"location"`
 }
 
 // ── Retiros de los repartidores (gateway ↔ core) ──────────────────────────────
@@ -221,6 +225,22 @@ type Payout struct {
 	AmountCents int    `json:"amountCents"`
 	Status      string `json:"status"`
 	TransferID  string `json:"transferId"`
+}
+
+// ── Reclamos (gateway ↔ core) ─────────────────────────────────────────────────
+
+// ClaimRefundReservation: la devolución apartada de un reclamo (refundRef es la referencia en PagaYa).
+type ClaimRefundReservation struct {
+	RefundRef   string `json:"refundRef"`
+	ChargeID    string `json:"chargeId"`
+	AmountCents int    `json:"amountCents"`
+}
+
+// ClaimRefundSettle: cómo terminó la devolución en la billetera.
+type ClaimRefundSettle struct {
+	Status           string `json:"status"` // refunded | failed
+	ProviderRefundID string `json:"providerRefundId,omitempty"`
+	FailureReason    string `json:"failureReason,omitempty"`
 }
 
 // DuePayout: repartidor con saldo para el retiro automático.

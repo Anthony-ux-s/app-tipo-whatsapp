@@ -173,3 +173,38 @@ func TestIntegracionTransferenciaIdempotente(t *testing.T) {
 		t.Fatalf("esperaba ErrInvalidDestination, obtuve %v", err)
 	}
 }
+
+// Una devolución parcial (reclamo) repetida con la misma referencia devuelve una sola vez, y no se
+// puede devolver más de lo cobrado.
+func TestIntegracionDevolucionParcialIdempotente(t *testing.T) {
+	base := os.Getenv("PARLA_PROVIDERS_URL")
+	if base == "" {
+		t.Skip("define PARLA_PROVIDERS_URL para probar contra los simuladores")
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	wallet := pagaya.Client{BaseURL: base, HTTP: client}
+	ctx := context.Background()
+	charge, err := wallet.CreateCharge(ctx, pagaya.ChargeRequest{AmountCents: 2000, Concept: "Prueba reclamo", Reference: "ord_reclamo_" + time.Now().Format("150405"), NotifyURL: "http://localhost:1/hooks"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, _ := http.NewRequest(http.MethodPost, charge.PayURL, nil)
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("pagar: %v %v", resp, err)
+	}
+	resp.Body.Close()
+	first, err := wallet.RefundPartial(ctx, charge.ID, "rf_int_1", 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := wallet.RefundPartial(ctx, charge.ID, "rf_int_1", 500)
+	if err != nil || again != first {
+		t.Fatalf("la misma referencia debía devolver la misma devolución: %s vs %s (%v)", first, again, err)
+	}
+	// Quedan S/ 15.00: pedir S/ 16 excede.
+	if _, err := wallet.RefundPartial(ctx, charge.ID, "rf_int_2", 1600); !errors.Is(err, pagaya.ErrExceedsCharge) {
+		t.Fatalf("esperaba ErrExceedsCharge, obtuve %v", err)
+	}
+}

@@ -47,7 +47,7 @@ func (shopFake) Update(_ context.Context, id string, _ mercaya.ProductPatch) (se
 
 type motoFake struct{}
 
-func (motoFake) Quote(context.Context, services.Address) (rapidito.Quote, error) {
+func (motoFake) Quote(context.Context, *services.GeoPoint, services.Address) (rapidito.Quote, error) {
 	return rapidito.Quote{ID: "q_1", FeeCents: 600, ETAMinutes: 30}, nil
 }
 
@@ -141,6 +141,10 @@ func TestServiciosExigenSesion(t *testing.T) {
 	// El retiro de ganancias mueve dinero: sin sesión no existe.
 	if status, _ := call(t, http.MethodPost, gw.URL+"/api/driver/payouts", "", "", nil); status != http.StatusUnauthorized {
 		t.Errorf("retiro sin sesión: esperaba 401, obtuve %d", status)
+	}
+	// Devolver dinero por un reclamo tampoco existe sin sesión.
+	if status, _ := call(t, http.MethodPost, gw.URL+"/api/admin/claims/cl_1/refund", "", `{"amountCents":100}`, nil); status != http.StatusUnauthorized {
+		t.Errorf("devolución sin sesión: esperaba 401, obtuve %d", status)
 	}
 	status, body := call(t, http.MethodGet, gw.URL+"/api/services", jwt("u_1"), "", nil)
 	var catalog []services.ServiceInfo

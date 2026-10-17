@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, StreamableFile } from '@nestjs/common';
 import type { DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, DriverVehicle, DriverWallet, GeoPoint } from '@parla/types';
 import { IsBoolean, IsLatitude, IsLongitude, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../../../http/current-user.decorator';
@@ -17,16 +17,26 @@ import {
   ReportDriverLocationUseCase,
   SetDriverOnlineUseCase,
   UpdateDriverProfileUseCase,
+  SetDriverDocumentUseCase,
 } from '../../platform/services/use-cases/driver-profile.use-cases';
+import { GetDriverDocumentUseCase } from '../../platform/services/use-cases/admin-drivers.use-cases';
+import { ReadPhotoUseCase } from '../../platform/services/use-cases/photos.use-cases';
 import { GetDriverWalletUseCase, SetPayoutPhoneUseCase } from '../../platform/services/use-cases/driver-wallet.use-cases';
 
 class DeliverDto {
-  @IsString() @Matches(/^\s*\d{4}\s*$/, { message: 'El código tiene 4 dígitos' }) code: string;
+  @IsOptional() @IsString() @Matches(/^\s*\d{4}\s*$/, { message: 'El código tiene 4 dígitos' }) code?: string;
+  @IsOptional() @IsString() @MaxLength(40) photoId?: string;
+}
+
+class DocumentDto {
+  @IsString() @MaxLength(40) photoId: string;
 }
 
 class DriverProfileDto implements DriverProfileRequest {
   @IsString() @MaxLength(20) vehicle: DriverVehicle;
   @IsOptional() @IsString() @MaxLength(12) plate?: string;
+  @IsOptional() @IsString() @MaxLength(12) dniNumber?: string;
+  @IsOptional() @IsString() @MaxLength(14) licenseNumber?: string;
 }
 
 class OnlineDto {
@@ -64,6 +74,9 @@ export class DriverController {
     private readonly reportLocation: ReportDriverLocationUseCase,
     private readonly wallet: GetDriverWalletUseCase,
     private readonly setPayoutPhone: SetPayoutPhoneUseCase,
+    private readonly setDocument: SetDriverDocumentUseCase,
+    private readonly document: GetDriverDocumentUseCase,
+    private readonly readPhoto: ReadPhotoUseCase,
   ) {}
 
   @Get()
@@ -81,6 +94,20 @@ export class DriverController {
   @Patch()
   update(@CurrentUser() user: AuthUser, @Body() body: DriverProfileDto): Promise<DriverInfo> {
     return this.updateProfile.execute(user.userId, body);
+  }
+
+  /** Foto del documento (DNI o licencia) para la verificación de soporte. */
+  @HttpCode(200)
+  @Post('document')
+  uploadDocument(@CurrentUser() user: AuthUser, @Body() body: DocumentDto): Promise<DriverInfo> {
+    return this.setDocument.execute(user.userId, body.photoId);
+  }
+
+  @Get('document')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  async myDocument(@CurrentUser() user: AuthUser): Promise<StreamableFile> {
+    return new StreamableFile(await this.readPhoto.execute(await this.document.execute(user.userId, user.userId)), { type: 'image/jpeg', disposition: 'inline' });
   }
 
   @HttpCode(200)
@@ -148,6 +175,6 @@ export class DriverController {
   @HttpCode(200)
   @Post('orders/:id/deliver')
   complete(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: DeliverDto): Promise<DriverOrder> {
-    return this.deliver.execute(user.userId, id, body.code);
+    return this.deliver.execute(user.userId, id, body);
   }
 }

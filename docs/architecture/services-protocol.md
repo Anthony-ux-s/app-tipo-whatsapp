@@ -133,18 +133,51 @@ apaga) el gateway pide `GET /api/internal/payouts/due` → `[{"userId"}]` (saldo
 puesto y sin retiro en curso) y hace el mismo retiro (`"reason":"auto"`) para cada uno. Revisa cada
 minuto y corre una vez por día; lo que no se pudo pagar queda en el saldo para la próxima vez.
 
+## Tarifa del delivery por distancia (gateway)
+
+Como Rappi o PedidosYa, el envío se cobra por la distancia de la tienda al punto de entrega. Al
+cotizar o crear un pedido, el gateway ya consulta `GET /api/internal/businesses/by-service/mercado` para
+el horario; de esa misma respuesta toma `location` (dónde recoge el repartidor) y la manda a Rapidito
+como `pickup`, junto con el punto que el cliente marcó en el mapa (`address.location`).
+
+- Con los dos puntos: `km = línea recta × 1.35` (factor de calles), tarifa `S/ 3.50 + S/ 1.00 por km`,
+  redondeada a 10 céntimos y entre S/ 4 y S/ 25; tiempo `10 + 3 min por km`. `OrderQuote` trae
+  `distanceKm` para mostrar «a 2.3 km».
+- Sin alguno de los dos (la tienda sin ubicación o el cliente sin punto en el mapa): la tarifa de
+  referencia de Rapidito, sin `distanceKm`.
+
+## Reclamos: devolución parcial (gateway)
+
+Soporte aprueba un reclamo (faltó un producto, llegó mal) y devuelve parte del pedido:
+`POST /api/admin/claims/{id}/refund` `{"amountCents"}` (con sesión; de 1 a 1 000 000).
+
+1. El core aparta la devolución: `POST /api/internal/claims/{id}/refund-reservations`
+   `{"adminUserId","amountCents"}` → 201 `{"refundRef","chargeId","amountCents"}`. Responde 403 si no es
+   de soporte, 404 si el reclamo no existe y 409 si no está abierto o el monto pasa lo que queda por
+   devolver; el gateway pasa el estado y el mensaje tal cual.
+2. El gateway devuelve en PagaYa con `refundRef` como referencia (idempotente).
+3. Cierra en el core: `PATCH /api/internal/claims/{id}/refund` `{"status":"refunded","providerRefundId"}`
+   y responde 200 con el reclamo tal como lo da el core. Si PagaYa no responde se cierra `failed`
+   (el reclamo sigue abierto) → 502; si el monto excede lo cobrado → `failed` y 409.
+
+Si la devolución salió pero cerrar en el core falla, responde 502 «Devolución hecha; reintenta para
+confirmarla». Reintentar es seguro: el core entrega la misma `refundRef` pendiente y PagaYa responde la
+misma devolución sin devolver de nuevo.
+
 ## Rutas internas del core (token entre servicios, nunca expuestas)
 
 | Ruta | Para qué |
 | --- | --- |
 | `POST /api/internal/orders` `InternalCreateOrder` | Guarda el pedido nuevo → 201 `InternalOrder` |
 | `GET /api/internal/orders/:id` | Lee el pedido (con `userId`, `deliveryQuoteId` y `businessOwnerId`) → `InternalOrder` |
-| `GET /api/internal/businesses/by-service/:service` | El negocio que atiende un servicio → `{"id","name","service","ownerId","open","closedMessage"}`; 404 si ninguno |
+| `GET /api/internal/businesses/by-service/:service` | El negocio que atiende un servicio → `{"id","name","service","ownerId","open","closedMessage","location":{"lat","lng"}\|null}`; 404 si ninguno |
 | `GET /api/internal/businesses/by-owner/:userId` | El negocio de una persona, con la misma forma; 404 si no es dueña |
 | `POST /api/internal/drivers/:userId/payouts` `{"reason"}` | Aparta todo el saldo como retiro pendiente → 201 `{"payoutId","amountCents","destination"}`; 409 con mensaje; 404 |
 | `PATCH /api/internal/payouts/:payoutId` `{"status":"paid"\|"failed","transferId"?,"failureReason"?}` | Cierra el retiro (fallido: el dinero vuelve al saldo); idempotente → `{"payoutId","amountCents","status","transferId"}` |
 | `GET /api/internal/payouts/due` | Repartidores para el retiro automático → `[{"userId"}]` |
 | `GET /api/internal/payouts/stuck?olderThanMinutes=N` | Retiros pendientes hace más de N minutos, para conciliarlos → `[{"payoutId","amountCents","destination"}]` |
+| `POST /api/internal/claims/:id/refund-reservations` `{"adminUserId","amountCents"}` | Aparta la devolución de un reclamo → 201 `{"refundRef","chargeId","amountCents"}`; 403 / 404 / 409 con mensaje; repetirla devuelve la misma referencia pendiente |
+| `PATCH /api/internal/claims/:id/refund` `{"status":"refunded"\|"failed","providerRefundId"?,"failureReason"?}` | Cierra la devolución (idempotente) → el reclamo |
 | `PATCH /api/internal/orders/:id` `InternalUpdateOrder` | Cambia estado/pago/delivery (`paidAt`, `refundedAt`, `note` para la línea de tiempo). Con `expectStatus`, si el estado actual no coincide responde **409** sin cambiar nada. Acepta el mismo estado (p. ej. la devolución de un pago tardío). Publica `order:updated` al dueño. |
 
 ## APIs externas (simuladas en `services/providers`, puerto 4103)
@@ -160,14 +193,16 @@ Formatos distintos a propósito: así es en la vida real y es lo que justifica l
   (precio ≤ 0, oferta que no es mayor que el precio, stock fuera de 0–100 000), 401 `{"error":"CLAVE_INVALIDA"}`, 404.
 
 **Rapidito** (tarifa del delivery, inglés, montos en texto decimal):
-- `POST /rapidito/api/quotes` `{"dropoff":{"address","notes"}}` → `{"quote_id","fee":{"amount":"6.50","currency":"PEN"},"eta_minutes","expires_at"}`
+- `POST /rapidito/api/quotes` `{"dropoff":{"address","notes","lat"?,"lng"?},"pickup"?:{"lat","lng"}}` → `{"quote_id","fee":{"amount":"6.50","currency":"PEN"},"eta_minutes","expires_at","distancia_km"?}`
+  (con recojo y entrega en el mapa cobra por distancia; si no, tarifa de referencia).
 
 **PagaYa** (cobros con QR tipo Yape, montos en soles con decimales):
 - `POST /pagaya/cobros` `{"monto":23.40,"moneda":"PEN","concepto","referencia","notificar_a"}` → `{"id_cobro","qr_texto","url_pago","expira_en"}`
 - `GET /pagaya/pagar/{id}` → página para pagar (simula la app del banco); `POST` la confirma y avisa a `notificar_a`:
   `{"id_cobro","referencia","estado":"PAGADO"|"EXPIRADO","pagado_en"}`. Un cobro `ANULADO` o `DEVUELTO` no se puede pagar: 409 `{"error":"ANULADO"|"DEVUELTO"}` (la página dice «Este cobro fue anulado»).
 - `POST /pagaya/cobros/{id}/anular` → `PENDIENTE` → `ANULADO`: 200 `{"id_cobro","estado":"ANULADO"}` (idempotente); 409 `{"error":"YA_PAGADO"}` si ya se pagó; 404 si no existe.
-- `POST /pagaya/cobros/{id}/devolucion` → `PAGADO` → `DEVUELTO`: 200 `{"id_cobro","estado":"DEVUELTO","devuelto_en"}` (idempotente: repetirlo devuelve la misma fecha); 409 `{"error":"NO_PAGADO"}` si no se pagó.
+- `POST /pagaya/cobros/{id}/devolucion` sin cuerpo → devuelve todo lo que queda, `PAGADO` → `DEVUELTO`: 200 `{"id_cobro","estado":"DEVUELTO","devuelto_en","devuelto_total"}` (idempotente: repetirlo devuelve la misma fecha); 409 `{"error":"NO_PAGADO"}` si no se pagó.
+- `POST /pagaya/cobros/{id}/devolucion` `{"monto":5.50,"referencia":"rf_…"}` → devolución parcial (reclamos): 200 con además `"id_devolucion"` y `"monto"`; idempotente por `referencia`; el estado queda `PAGADO` hasta que se devuelve todo (entonces `DEVUELTO`); 409 `{"error":"EXCEDE_COBRO"}` si lo devuelto pasaría lo cobrado; 400 `MONTO_INVALIDO`.
 - `POST /pagaya/transferencias`, con la clave en `x-pagaya-clave` (`PAGAYA_API_KEY`): `{"destino":"9XXXXXXXX","monto":12.34,"concepto","referencia"}`
   → 201 `{"id_transferencia","estado":"COMPLETADA","referencia","monto"}`. **Idempotente por `referencia`**:
   repetirla devuelve la misma transferencia (no paga dos veces). 400 `{"error":"DESTINO_INVALIDO"}` (no es

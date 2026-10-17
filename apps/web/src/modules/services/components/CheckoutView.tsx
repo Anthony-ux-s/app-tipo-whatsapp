@@ -4,6 +4,7 @@ import { Field, FieldError } from '@shared/ui/Field';
 import { LazyDeliveryMap } from '@shared/ui/LazyDeliveryMap';
 import { EmptyState } from '@shared/ui/States';
 import { EmptyChatsIllustration } from '@shared/ui/illustrations';
+import { formatDistance } from '@shared/utils/geo';
 import { formatSoles } from '@shared/utils/money';
 import { useCheckout } from '../hooks/use-checkout.hook';
 import { useStoreStatus } from '../hooks/use-store-status.hook';
@@ -120,7 +121,7 @@ export function CheckoutView() {
         ) : (
           <>
             <AmountRow label="Productos" value={formatSoles(c.quote.subtotalCents)} />
-            <AmountRow label="Delivery Rapidito" value={formatSoles(c.quote.deliveryFeeCents)} />
+            <AmountRow label={c.quote.distanceKm ? `Delivery Rapidito · ${formatDistance(c.quote.distanceKm)}` : 'Delivery Rapidito'} value={formatSoles(c.quote.deliveryFeeCents)} />
             {c.quote.tipCents > 0 && <AmountRow label="Propina para el repartidor" value={formatSoles(c.quote.tipCents)} />}
             <div className="my-1 border-t border-dashed border-line" />
             <AmountRow label="Total a pagar" value={formatSoles(c.quote.totalCents)} strong />

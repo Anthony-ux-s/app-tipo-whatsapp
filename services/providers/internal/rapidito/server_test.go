@@ -54,3 +54,41 @@ func TestYaNoDespachaMotorizados(t *testing.T) {
 		t.Fatalf("el reparto lo hacen los repartidores de Parla, obtuve %d", status)
 	}
 }
+
+func TestConRecojoYEntregaCobraPorDistancia(t *testing.T) {
+	srv := rapidito(t)
+	// Bodega en Miraflores → Calle Berlín: ~1.9 km en línea recta, ~2.5 km por las calles.
+	status, out := postJSON(t, srv.URL+"/rapidito/api/quotes",
+		`{"pickup":{"lat":-12.1268,"lng":-77.0195},"dropoff":{"address":"Calle Berlín 300","lat":-12.1191,"lng":-77.0349}}`)
+	if status != 200 {
+		t.Fatalf("estado %d %v", status, out)
+	}
+	km := out["distancia_km"].(float64)
+	if km < 2.3 || km > 2.7 {
+		t.Fatalf("distancia inesperada: %v", km)
+	}
+	fee := out["fee"].(map[string]any)["amount"].(string)
+	if fee != "6.00" {
+		t.Fatalf("tarifa por distancia inesperada: %s (km %v)", fee, km)
+	}
+	if eta := out["eta_minutes"].(float64); eta < 16 || eta > 18 {
+		t.Fatalf("tiempo inesperado: %v", eta)
+	}
+	// Sin el punto de recojo, tarifa de referencia y sin distancia.
+	_, ref := postJSON(t, srv.URL+"/rapidito/api/quotes", `{"dropoff":{"address":"Calle Berlín 300","lat":-12.1191,"lng":-77.0349}}`)
+	if _, ok := ref["distancia_km"]; ok {
+		t.Fatalf("sin recojo no hay distancia: %v", ref)
+	}
+}
+
+func TestTarifaPorDistanciaConMinimoYMaximo(t *testing.T) {
+	cases := []struct {
+		km       float64
+		fee, eta int
+	}{{0.1, 400, 10}, {2.5, 600, 18}, {4.04, 750, 22}, {30, 2500, 100}}
+	for _, c := range cases {
+		if fee, eta := distanceQuote(c.km); fee != c.fee || eta != c.eta {
+			t.Errorf("%v km: tarifa %d (quería %d), tiempo %d (quería %d)", c.km, fee, c.fee, eta, c.eta)
+		}
+	}
+}

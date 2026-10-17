@@ -5,9 +5,11 @@ import type { DriverOrder } from '@parla/types';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
 import { EmptyChatsIllustration } from '@shared/ui/illustrations';
 import { formatListTimestamp } from '@shared/utils/date';
+import { formatDistance } from '@shared/utils/geo';
 import { formatSoles } from '@shared/utils/money';
 import { OrderStatusBadge, PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { useDriverOrders } from '../hooks/use-driver.hook';
+import { DriverReviewCard } from './DriverReviewCard';
 
 /** Rapidito para repartidores: pedidos listos para recoger cerca, y mis entregas. */
 export function DriverOrdersView() {
@@ -25,14 +27,16 @@ export function DriverOrdersView() {
         }
       />
 
-      {r.driver && (
+      {r.driver && <DriverReviewCard driver={r.driver} />}
+
+      {r.driver?.status === 'approved' && (
         <section className={`rounded-2xl p-3 shadow-float md:px-4 ${r.driver.online ? 'bg-surface' : 'bg-amber-50 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900'}`}>
           <Toggle
             checked={r.driver.online}
             onChange={r.toggleOnline}
             disabled={r.togglingOnline}
             label={r.driver.online ? 'Conectado' : 'Desconectado'}
-            description={r.driver.online ? 'Te llegan los pedidos listos para recoger.' : 'Conéctate para ver y tomar pedidos.'}
+            description={r.driver.online ? 'Te llegan los pedidos listos para recoger cerca de ti.' : 'Conéctate para ver y tomar pedidos.'}
           />
         </section>
       )}
@@ -121,6 +125,9 @@ function DriverOrderCard({ order, onOpen }: { order: DriverOrder; onOpen: () => 
         <Store className="mt-0.5 size-4 shrink-0 text-brand" />
         <span className="min-w-0">
           <span className="font-semibold">{order.business.name}</span> · {order.business.address}
+          {order.distanceToStoreKm !== null && !order.mine && (
+            <span className="ml-1.5 whitespace-nowrap text-xs font-bold text-brand dark:text-teal-300" data-testid="distance-to-store">a {formatDistance(order.distanceToStoreKm)} de ti</span>
+          )}
         </span>
       </span>
       <span className="flex items-start gap-2 text-sm text-ink-soft">

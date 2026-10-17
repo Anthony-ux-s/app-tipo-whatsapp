@@ -7,6 +7,7 @@ import { JwtAuthGuard } from './http/jwt-auth.guard';
 import { InfraModule } from './infra/infra.module';
 import { CallsModule } from './modules/members/calls/calls.module';
 import { ChatsModule } from './modules/members/chats/chats.module';
+import { AdminModule } from './modules/members/admin/admin.module';
 import { BusinessModule } from './modules/members/business/business.module';
 import { DriverModule } from './modules/members/driver/driver.module';
 import { OrdersModule } from './modules/members/orders/orders.module';
@@ -30,6 +31,7 @@ import { HealthController } from './health.controller';
     OrdersModule,
     BusinessModule,
     DriverModule,
+    AdminModule,
     RealtimeBridgeModule,
     ServicesBridgeModule,
     CallsModule,

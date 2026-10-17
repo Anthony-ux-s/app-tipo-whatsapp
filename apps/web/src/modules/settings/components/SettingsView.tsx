@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, Lock, LogOut } from 'lucide-react';
+import { ChevronRight, ExternalLink, Lock, LogOut, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router';
 import { Avatar } from '@shared/ui/Avatar';
 import { Button } from '@shared/ui/Button';
@@ -34,6 +34,12 @@ export function SettingsView() {
           return <SettingsRow key={id} to={id} icon={section.icon} title={section.title} summary={s.summaries[id] ?? section.summary} />;
         })}
       </SettingsGroup>
+
+      {s.user.isAdmin && (
+        <SettingsGroup>
+          <SettingsRow to="/app/admin" icon={ShieldCheck} title="Soporte Parla" summary="Verificar repartidores y resolver reclamos" />
+        </SettingsGroup>
+      )}
 
       <SettingsGroup>
         {LEGAL_LINKS.map((link) => (

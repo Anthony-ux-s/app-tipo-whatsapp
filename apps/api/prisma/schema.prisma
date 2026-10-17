@@ -39,6 +39,8 @@ model User {
   termsAcceptedAt DateTime?
   /// Cuenta eliminada: se anonimiza (sin nombre, usuario ni teléfono) y no puede volver a entrar.
   deletedAt       DateTime?
+  /// Soporte de Parla: aprueba repartidores y resuelve reclamos.
+  isAdmin         Boolean   @default(false)
 
   participants      ConversationParticipant[]
   wrappedKeys       ConversationParticipant[] @relation("WrappedBy")
@@ -213,6 +215,13 @@ model Order {
   deliveryCode         String
   /// Intentos fallidos del código: al quinto se bloquea la entrega con código.
   deliveryCodeAttempts Int       @default(0)
+  /// Ofertas por cercanía: radio actual (km desde la tienda; null = todos los repartidores) y
+  /// desde cuándo, para ampliarlo por oleadas.
+  offerRadiusKm        Float?
+  offerWaveAt          DateTime?
+  /// Foto de la entrega (opcional con código; obligatoria si se dejó sin código, p. ej. en portería).
+  deliveryPhotoId      String?
+  deliveredWithoutCode Boolean   @default(false)
   /// Calificación del cliente al recibirlo (1 a 5), al repartidor y a la tienda.
   driverStars          Int?
   storeStars           Int?
@@ -225,6 +234,7 @@ model Order {
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  claims   Claim[]
   driver   Driver?   @relation(fields: [driverId], references: [userId], onDelete: SetNull)
 
   @@index([userId, createdAt])
@@ -261,21 +271,30 @@ model Business {
 /// Repartidor de Rapidito: una cuenta de Parla con su vehículo. Toma los pedidos listos, los recoge
 /// en la tienda y los entrega con el código del cliente.
 model Driver {
-  userId         String    @id
+  userId          String    @id
   /// Tipo de vehículo («Moto», «Bicicleta»…).
-  vehicle        String
-  plate          String
+  vehicle         String
+  plate           String
   /// Conectado: recibe ofertas y puede tomar pedidos.
-  online         Boolean   @default(false)
+  online          Boolean   @default(false)
   /// Dejó de repartir: no recibe nada, pero sus entregas quedan en el historial.
-  active         Boolean   @default(true)
+  active          Boolean   @default(true)
   /// Número de PagaYa donde se le depositan sus ganancias (9 dígitos).
-  payoutPhone    String?
+  payoutPhone     String?
+  /// Verificación (como Rappi o PedidosYa): pending (en revisión) | approved | rejected.
+  status          String    @default("pending")
+  dniNumber       String?
+  licenseNumber   String?
+  /// Foto del documento (privada: solo la ven el repartidor y soporte).
+  documentPhotoId String?
+  /// Motivo del rechazo (o nota de soporte) y cuándo se revisó.
+  reviewNote      String?
+  reviewedAt      DateTime?
   /// Última ubicación que mandó su celular (solo mientras reparte).
-  lastLat        Float?
-  lastLng        Float?
-  lastLocationAt DateTime?
-  createdAt      DateTime  @default(now())
+  lastLat         Float?
+  lastLng         Float?
+  lastLocationAt  DateTime?
+  createdAt       DateTime  @default(now())
 
   user   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders Order[]
@@ -335,4 +354,45 @@ model VerificationCode {
   createdAt  DateTime  @default(now())
 
   @@index([target, purpose, createdAt])
+}
+
+/// Foto subida por una persona (documento del repartidor, foto de entrega o de un reclamo). Privada:
+/// se sirve solo a quien participa en el pedido o a soporte; solo su dueño puede adjuntarla.
+model UploadedPhoto {
+  id         String   @id
+  uploaderId String
+  createdAt  DateTime @default(now())
+
+  @@index([uploaderId])
+}
+
+/// Reclamo de un pedido entregado (como en Rappi): faltó algo, llegó mal o no llegó. Soporte lo
+/// resuelve con una devolución parcial (vía gateway y PagaYa) o lo rechaza.
+model Claim {
+  id               String    @id @default(cuid())
+  orderId          String
+  userId           String
+  /// missing_items | damaged | wrong_items | not_delivered | other
+  reason           String
+  comment          String    @default("")
+  /// JSON ClaimItem[]: productos y cantidades afectadas.
+  items            String    @default("[]")
+  photoId          String?
+  /// Devolución sugerida (lo que costaron los productos marcados).
+  suggestedCents   Int
+  /// open | refunding | refunded | rejected
+  status           String    @default("open")
+  refundCents      Int?
+  /// Referencia de la devolución en PagaYa («rf_…»), para que no se devuelva dos veces.
+  refundRef        String?
+  providerRefundId String?
+  resolutionNote   String    @default("")
+  resolvedById     String?
+  createdAt        DateTime  @default(now())
+  resolvedAt       DateTime?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([orderId])
 }

@@ -1,16 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import type { Currency, OrderRating, OrderStatus, OrderTimelineEntry, RatingSummary, ServiceId } from '@parla/types';
-import type { Business as BusinessRow, Order as OrderRow } from '@prisma/client';
+import type { Business as BusinessRow, Claim as ClaimRow, Order as OrderRow } from '@prisma/client';
+import { toClaimRecord } from './prisma-claims.repository';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from './orders.repository';
 
 type OrderWithBusiness = OrderRow & {
   business: BusinessRow | null;
   driver: { lastLat: number | null; lastLng: number | null; lastLocationAt: Date | null } | null;
+  claims: ClaimRow[];
 };
 
-/** El negocio y la última ubicación del repartidor (para el mapa). */
-const WITH_BUSINESS = { business: true, driver: { select: { lastLat: true, lastLng: true, lastLocationAt: true } } } as const;
+/** El negocio, la última ubicación del repartidor (para el mapa) y los reclamos. */
+const WITH_BUSINESS = {
+  business: true,
+  driver: { select: { lastLat: true, lastLng: true, lastLocationAt: true } },
+  claims: { orderBy: { createdAt: 'desc' } },
+} as const;
 
 /** Pedidos que el negocio ve: todo menos los que aún esperan el pago o se vencieron sin pagar. */
 const VISIBLE_TO_BUSINESS: OrderStatus[] = [
@@ -54,6 +60,11 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
     rating: row.ratedAt
       ? { driverStars: row.driverStars, storeStars: row.storeStars, comment: row.ratingComment, at: row.ratedAt.toISOString() }
       : null,
+    offerRadiusKm: row.offerRadiusKm,
+    offerWaveAt: row.offerWaveAt,
+    deliveryPhotoId: row.deliveryPhotoId,
+    deliveredWithoutCode: row.deliveredWithoutCode,
+    claims: row.claims.map(toClaimRecord),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -127,6 +138,11 @@ export class PrismaOrdersRepository implements OrdersRepository {
     return rows.map(toOrderRecord);
   }
 
+  async widenOffer(id: string, radiusKm: number | null, at: Date): Promise<OrderRecord | null> {
+    const { count } = await this.prisma.order.updateMany({ where: { id, status: 'searching_driver', driverId: null }, data: { offerRadiusKm: radiusKm, offerWaveAt: at } });
+    return count === 1 ? this.findById(id) : null;
+  }
+
   async rate(id: string, rating: Omit<OrderRating, 'at'>, at: Date): Promise<OrderRecord | null> {
     const { count } = await this.prisma.order.updateMany({
       where: { id, ratedAt: null },
@@ -164,6 +180,9 @@ export class PrismaOrdersRepository implements OrdersRepository {
         ...(changes.payment ? { payment: JSON.stringify(changes.payment) } : {}),
         ...(changes.delivery !== undefined ? { delivery: changes.delivery ? JSON.stringify(changes.delivery) : null } : {}),
         ...(changes.driverId !== undefined ? { driverId: changes.driverId } : {}),
+        ...(changes.offer ? { offerRadiusKm: changes.offer.radiusKm, offerWaveAt: changes.offer.at } : {}),
+        ...(changes.deliveryPhotoId ? { deliveryPhotoId: changes.deliveryPhotoId } : {}),
+        ...(changes.deliveredWithoutCode !== undefined ? { deliveredWithoutCode: changes.deliveredWithoutCode } : {}),
       },
     });
     return count === 1 ? this.findById(id) : null;

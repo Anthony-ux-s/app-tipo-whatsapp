@@ -1,6 +1,7 @@
 import { Bike, Check, ChefHat, Clock, ExternalLink, KeyRound, MapPin, MessageCircle, PackageCheck, RefreshCw, ShoppingBasket, Smartphone, Store, X } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
+import { PrivatePhoto } from '@shared/ui/PrivatePhoto';
 import { QrCode } from '@shared/ui/QrCode';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatTime } from '@shared/utils/date';
@@ -9,6 +10,7 @@ import { ORDER_STEPS } from '../const/services.const';
 import { useOrderChat } from '../hooks/use-order-chat.hook';
 import { useOrderDetail } from '../hooks/use-orders.hook';
 import { LiveTracking } from './LiveTracking';
+import { ClaimCard } from './ClaimCard';
 import { RateOrderCard } from './RateOrderCard';
 import { AmountRow, OrderStatusBadge, OrderTimeline, PageHeader, ServicePage } from './ServicesUi';
 
@@ -166,8 +168,18 @@ export function OrderDetailView() {
         </section>
       )}
 
+      {order.status === 'delivered' && order.hasDeliveryPhoto && (
+        <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Foto de la entrega" data-testid="delivery-photo">
+          <p className="text-sm font-bold text-ink">
+            {order.deliveredWithoutCode ? 'No pudimos ubicarte: el repartidor dejó tu pedido y tomó esta foto' : 'Foto de la entrega'}
+          </p>
+          <PrivatePhoto path={`/orders/${encodeURIComponent(order.id)}/delivery-photo`} alt="Foto de la entrega" />
+        </section>
+      )}
+
       <LiveTracking order={order} audience="customer" />
       <RateOrderCard order={order} />
+      <ClaimCard order={order} />
 
       {d.canCancel && (
         <Button variant="ghost" className="self-center" icon={<X className="size-4" />} onClick={d.askCancel} data-testid="cancel-order">

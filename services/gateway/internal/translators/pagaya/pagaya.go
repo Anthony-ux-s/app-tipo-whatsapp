@@ -25,6 +25,8 @@ var (
 	ErrAlreadyPaid = errors.New("el cobro ya se pagó")
 	// ErrInvalidDestination: el número de billetera al que se quiso transferir no es válido.
 	ErrInvalidDestination = errors.New("destino de la transferencia inválido")
+	// ErrExceedsCharge: la devolución parcial pasa lo que queda del cobro.
+	ErrExceedsCharge = errors.New("la devolución supera lo cobrado")
 )
 
 // DevAPIKey: clave de la API de transferencias del simulador fuera de producción.
@@ -129,6 +131,33 @@ func (c Client) Refund(ctx context.Context, chargeID string) (time.Time, error) 
 		return time.Time{}, fmt.Errorf("%w: devolución %+v", ErrInvalid, body)
 	}
 	return at, nil
+}
+
+// RefundPartial devuelve parte de un cobro pagado (un reclamo: faltó un producto, llegó mal). Es
+// idempotente por referencia: repetirla con la misma referencia no devuelve dos veces.
+func (c Client) RefundPartial(ctx context.Context, chargeID, reference string, amountCents int) (string, error) {
+	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/pagaya/cobros/"+url.PathEscape(chargeID)+"/devolucion", map[string]any{
+		"monto": soles(amountCents), "referencia": reference,
+	})
+	if err != nil {
+		return "", err
+	}
+	var body struct {
+		ID    string `json:"id_devolucion"`
+		Error string `json:"error"`
+	}
+	if err := providerapi.Decode(raw, &body); err != nil && status == http.StatusOK {
+		return "", err
+	}
+	switch {
+	case status == http.StatusConflict && body.Error == "EXCEDE_COBRO":
+		return "", ErrExceedsCharge
+	case status != http.StatusOK:
+		return "", fmt.Errorf("%w: devolución parcial respondió %d %s", providerapi.ErrUnavailable, status, body.Error)
+	case !services.ValidID.MatchString(body.ID):
+		return "", fmt.Errorf("%w: devolución parcial %+v", ErrInvalid, body)
+	}
+	return body.ID, nil
 }
 
 // Transfer envía dinero de la cuenta de Parla a una billetera PagaYa (las ganancias de un

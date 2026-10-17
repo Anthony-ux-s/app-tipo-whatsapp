@@ -65,6 +65,8 @@ func main() {
 		Core:      core,
 		Payouts:   core,
 		Wallet:    wallet,
+		Claims:    core,
+		Refunds:   wallet,
 		PublicURL: cfg.PublicURL,
 	}
 	servicesAPI := &orders.HTTP{Orch: orch, PagayaSecret: cfg.PagayaSecret}

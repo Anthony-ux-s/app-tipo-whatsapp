@@ -3,10 +3,13 @@ import type { OrderStatus, PushPayload } from '@parla/types';
 import { APP_ENV, type AppEnv, type DeliveryWatchConfig } from '../../../../config/env.validation';
 import { driverOfferPush } from '../../../../kernel/order-rules';
 import { NotificationDispatcher } from '../../messaging/push/use-cases/notification-dispatcher';
+import { DispatchPolicy } from '../dispatch.policy';
 import { DriverPayPolicy } from '../driver-pay.policy';
+import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../infra/realtime/realtime-publisher.port';
+import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { DRIVERS_REPOSITORY, type DriversRepository } from '../drivers.repository';
 import { ORDERS_REPOSITORY, type OrderRecord, type OrdersRepository } from '../orders.repository';
-import { OrderEvents } from './orders.use-cases';
+import { customersOf, OrderEvents, toDriverOrder } from './orders.use-cases';
 
 const MINUTE = 60_000;
 const WATCH_LIMIT = 200;
@@ -27,6 +30,8 @@ function untakenPush(orderId: string, minutes: number): PushPayload {
 }
 
 export interface WatchResult {
+  /** Pedidos cuya oferta por cercanía se amplió al siguiente radio. */
+  widened: string[];
   /** Pedidos sin repartidor que se volvieron a ofrecer. */
   nudged: string[];
   /** Pedidos que se quitaron a un repartidor que no avanzó y se ofrecieron a otros. */
@@ -50,21 +55,43 @@ export class WatchDeliveriesUseCase {
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     private readonly events: OrderEvents,
     private readonly notifications: NotificationDispatcher,
+    @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
+    @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
     private readonly pay: DriverPayPolicy,
+    private readonly dispatch: DispatchPolicy,
   ) {}
 
+  /** Amplía la oferta y avisa solo a los repartidores que ahora la alcanzan (los de antes ya la tenían). */
+  private async widen(order: OrderRecord, now: Date): Promise<boolean> {
+    const radius = this.dispatch.next(order.offerRadiusKm);
+    const widened = await this.orders.widenOffer(order.id, radius, now);
+    if (!widened) return false;
+    const online = await this.drivers.listOnline();
+    const fresh = online.filter((d) => this.dispatch.canSee(widened, d, radius, now) && !this.dispatch.canSee(order, d, order.offerRadiusKm, now));
+    if (fresh.length) {
+      const customers = await customersOf(this.users, [widened]);
+      for (const d of fresh) this.realtime.toUsers([d.userId], 'driver-order:updated', toDriverOrder(widened, d.userId, customers, this.pay, d.location));
+      const offer = driverOfferPush(order.id, order.business?.name ?? 'Una tienda', this.pay.split(order.deliveryFeeCents, order.tipCents).earningsCents);
+      void this.notifications.notify(fresh.map((d) => d.userId), () => offer);
+    }
+    return true;
+  }
+
   async execute(config: DeliveryWatchConfig, now = new Date()): Promise<WatchResult> {
-    const result: WatchResult = { nudged: [], reassigned: [] };
+    const result: WatchResult = { widened: [], nudged: [], reassigned: [] };
     const list = await this.orders.listByStatus(['searching_driver', 'driver_assigned'], WATCH_LIMIT);
     const t = now.getTime();
 
     for (const order of list) {
       if (order.status === 'searching_driver') {
+        // Oferta por cercanía: cada oleada sin repartidor amplía el radio (3 → 6 → 12 km → todos).
+        if (this.dispatch.waveDue(order, now) && (await this.widen(order, now))) result.widened.push(order.id);
         const waiting = t - since(order, 'searching_driver').getTime();
         const last = this.nudgedAt.get(order.id) ?? 0;
         if (waiting < config.untakenMinutes * MINUTE || t - last < config.untakenMinutes * MINUTE) continue;
         this.nudgedAt.set(order.id, t);
-        const drivers = await this.drivers.listUserIds();
+        // Se recuerda a los que alcanza la oleada actual, no a todos.
+        const drivers = (await this.drivers.listOnline()).filter((d) => this.dispatch.canSee(order, d, order.offerRadiusKm, now)).map((d) => d.userId);
         const offer = driverOfferPush(order.id, order.business?.name ?? 'Una tienda', this.pay.split(order.deliveryFeeCents, order.tipCents).earningsCents);
         void this.notifications.notify(drivers, () => offer);
         if (order.business) {
@@ -90,6 +117,7 @@ export class WatchDeliveriesUseCase {
         status: 'searching_driver',
         driverId: null,
         delivery: null,
+        offer: this.dispatch.firstOffer(now),
         note: `Reasignado automáticamente: ${reason}`,
       });
       if (!updated) continue;
@@ -132,8 +160,10 @@ export class DeliveryWatchService implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
-      const { nudged, reassigned } = await this.watch.execute(this.env.deliveryWatch);
-      if (nudged.length || reassigned.length) this.logger.log(`Reofrecidos: ${nudged.length} · reasignados: ${reassigned.length}`);
+      const { widened, nudged, reassigned } = await this.watch.execute(this.env.deliveryWatch);
+      if (widened.length || nudged.length || reassigned.length) {
+        this.logger.log(`Ofertas ampliadas: ${widened.length} · reofrecidos: ${nudged.length} · reasignados: ${reassigned.length}`);
+      }
     } catch (error) {
       this.logger.error(`La vigilancia de deliveries falló: ${(error as Error).message}`);
     } finally {

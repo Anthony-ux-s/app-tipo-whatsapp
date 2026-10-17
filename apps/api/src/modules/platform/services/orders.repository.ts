@@ -12,6 +12,7 @@ import type {
   OrderTimelineEntry,
   ServiceId,
 } from '@parla/types';
+import type { ClaimRecord } from './claims.repository';
 
 /** Pedido tal como lo ven los casos de uso (sin tipos de Prisma). */
 export interface OrderRecord {
@@ -44,13 +45,20 @@ export interface OrderRecord {
   timeline: OrderTimelineEntry[];
   /** Calificación del cliente al recibirlo; null si aún no califica. */
   rating: OrderRating | null;
+  /** Oferta por cercanía: radio actual (null = a todos) y desde cuándo. */
+  offerRadiusKm: number | null;
+  offerWaveAt: Date | null;
+  deliveryPhotoId: string | null;
+  deliveredWithoutCode: boolean;
+  /** Reclamos del pedido, el último primero. */
+  claims: ClaimRecord[];
   createdAt: Date;
   updatedAt: Date;
 }
 
 export type NewOrder = Omit<
   OrderRecord,
-  'createdAt' | 'updatedAt' | 'delivery' | 'business' | 'driverId' | 'driverLocation' | 'deliveryCodeAttempts' | 'timeline' | 'rating'
+  'createdAt' | 'updatedAt' | 'delivery' | 'business' | 'driverId' | 'driverLocation' | 'deliveryCodeAttempts' | 'timeline' | 'rating' | 'offerRadiusKm' | 'offerWaveAt' | 'deliveryPhotoId' | 'deliveredWithoutCode' | 'claims'
 > & { businessId: string | null };
 
 export interface OrderChanges {
@@ -59,6 +67,10 @@ export interface OrderChanges {
   /** null quita al repartidor (lo soltó o la tienda pidió otro). */
   delivery?: OrderDelivery | null;
   driverId?: string | null;
+  /** Al quedar listo (o volver a ofrecerse): primera oleada de la oferta por cercanía. */
+  offer?: { radiusKm: number | null; at: Date };
+  deliveryPhotoId?: string;
+  deliveredWithoutCode?: boolean;
   /**
    * Detalle del paso para la línea de tiempo (p. ej. quién lo entregó y cómo se confirmó). Con el
    * mismo estado (p. ej. una devolución después de cancelar) se anota igual.
@@ -90,6 +102,8 @@ export interface OrdersRepository {
   resetDeliveryCode(id: string, code: string): Promise<OrderRecord>;
   /** Pedidos en estos estados (para la vigilancia de los deliveries), del más viejo al más nuevo. */
   listByStatus(statuses: OrderStatus[], limit: number): Promise<OrderRecord[]>;
+  /** Amplía la oferta de un pedido que sigue sin repartidor (no cambia su estado). */
+  widenOffer(id: string, radiusKm: number | null, at: Date): Promise<OrderRecord | null>;
   /** Guarda la calificación (solo si aún no tenía). Devuelve null si ya estaba calificado. */
   rate(id: string, rating: Omit<OrderRating, 'at'>, at: Date): Promise<OrderRecord | null>;
   /** Promedio de estrellas de un repartidor o de una tienda. */

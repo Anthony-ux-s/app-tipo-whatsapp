@@ -6,7 +6,11 @@
 //	GET  /pagaya/pagar/{id}   → página para pagar (simula la app del banco)
 //	POST /pagaya/pagar/{id}   → confirma el pago (idempotente) y avisa a notificar_a
 //	POST /pagaya/cobros/{id}/anular     → PENDIENTE → ANULADO (idempotente); 409 {"error":"YA_PAGADO"} si ya se pagó
-//	POST /pagaya/cobros/{id}/devolucion → PAGADO → DEVUELTO (idempotente) {"id_cobro","estado","devuelto_en"}; 409 {"error":"NO_PAGADO"}
+//	POST /pagaya/cobros/{id}/devolucion → sin cuerpo: devuelve todo lo que queda, PAGADO → DEVUELTO (idempotente)
+//	                                    {"id_cobro","estado","devuelto_en","devuelto_total"}; 409 {"error":"NO_PAGADO"}
+//	                                    con {"monto","referencia"}: devolución parcial (p. ej. un reclamo), idempotente
+//	                                    por referencia; agrega "id_devolucion". Queda DEVUELTO solo si se devolvió todo;
+//	                                    409 {"error":"EXCEDE_COBRO"} si pasa lo cobrado
 //	POST /pagaya/transferencias {"destino":"9XXXXXXXX","monto","concepto","referencia"} con la clave en x-pagaya-clave
 //	                            → 201 {"id_transferencia","estado":"COMPLETADA","referencia","monto"} (idempotente por referencia)
 //	                            → 400 DESTINO_INVALIDO | MONTO_INVALIDO | SOLICITUD_INVALIDA · 401 CLAVE_INVALIDA
@@ -50,6 +54,15 @@ type cobro struct {
 	ExpiraEn   time.Time
 	PagadoEn   *time.Time
 	DevueltoEn *time.Time
+	// DevueltoCents: lo devuelto hasta ahora (devoluciones parciales y la total).
+	DevueltoCents int
+	// devoluciones parciales por referencia del comercio: repetir una no devuelve dos veces.
+	devoluciones map[string]*devolucion
+}
+
+type devolucion struct {
+	ID    string
+	Cents int
 }
 
 // transferencia: un envío de dinero a otra billetera (p. ej. las ganancias de un repartidor).
@@ -215,23 +228,94 @@ func (s *Service) anular(w http.ResponseWriter, r *http.Request) {
 }
 
 // devolver: el comercio devuelve un cobro pagado (idempotente: devolver dos veces no duplica).
+type devolverRequest struct {
+	Monto      *float64 `json:"monto"`
+	Referencia string   `json:"referencia"`
+}
+
+// devolver: sin cuerpo devuelve todo lo que queda del cobro (cancelar o rechazar un pedido); con
+// monto y referencia, una devolución parcial (un reclamo). Ambas son idempotentes.
 func (s *Service) devolver(w http.ResponseWriter, r *http.Request) {
+	var req devolverRequest
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil && err.Error() != "EOF" {
+			notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "SOLICITUD_INVALIDA"})
+			return
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c, ok := s.cobros[r.PathValue("id")]
-	switch {
-	case !ok:
+	if !ok {
 		notify.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "NO_EXISTE"})
-	case c.Estado == pagado:
+		return
+	}
+	if req.Monto != nil {
+		s.devolverParcial(w, c, *req.Monto, strings.TrimSpace(req.Referencia))
+		return
+	}
+	switch c.Estado {
+	case pagado:
 		now := s.Now()
 		c.Estado = devuelto
 		c.DevueltoEn = &now
+		c.DevueltoCents = c.Cents
 		fallthrough
-	case c.Estado == devuelto:
-		notify.WriteJSON(w, http.StatusOK, map[string]any{"id_cobro": c.ID, "estado": c.Estado, "devuelto_en": formatTime(c.DevueltoEn)})
+	case devuelto:
+		notify.WriteJSON(w, http.StatusOK, devolucionBody(c, nil))
 	default:
 		notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": "NO_PAGADO"})
 	}
+}
+
+func (s *Service) devolverParcial(w http.ResponseWriter, c *cobro, monto float64, referencia string) {
+	cents := int(math.Round(monto * 100))
+	switch {
+	case referencia == "" || utf8.RuneCountInString(referencia) > 64:
+		notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "SOLICITUD_INVALIDA"})
+		return
+	case cents <= 0 || math.IsNaN(monto):
+		notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "MONTO_INVALIDO"})
+		return
+	}
+	if d, ok := c.devoluciones[referencia]; ok {
+		notify.WriteJSON(w, http.StatusOK, devolucionBody(c, d))
+		return
+	}
+	if c.Estado != pagado && c.Estado != devuelto {
+		notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": "NO_PAGADO"})
+		return
+	}
+	if c.DevueltoCents+cents > c.Cents {
+		notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": "EXCEDE_COBRO"})
+		return
+	}
+	if c.devoluciones == nil {
+		c.devoluciones = map[string]*devolucion{}
+	}
+	d := &devolucion{ID: "dv_" + randomHex(8), Cents: cents}
+	c.devoluciones[referencia] = d
+	c.DevueltoCents += cents
+	now := s.Now()
+	c.DevueltoEn = &now
+	if c.DevueltoCents == c.Cents {
+		c.Estado = devuelto
+	}
+	notify.WriteJSON(w, http.StatusOK, devolucionBody(c, d))
+}
+
+func devolucionBody(c *cobro, d *devolucion) map[string]any {
+	body := map[string]any{
+		"id_cobro":       c.ID,
+		"estado":         c.Estado,
+		"devuelto_en":    formatTime(c.DevueltoEn),
+		"devuelto_total": float64(c.DevueltoCents) / 100,
+	}
+	if d != nil {
+		body["id_devolucion"] = d.ID
+		body["monto"] = float64(d.Cents) / 100
+	}
+	return body
 }
 
 // Celular peruano de una billetera: 9 dígitos que empiezan en 9.

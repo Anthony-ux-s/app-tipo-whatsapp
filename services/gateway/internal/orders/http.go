@@ -144,6 +144,26 @@ func (h *HTTP) Payout(w http.ResponseWriter, r *http.Request, userID string) {
 	WriteJSON(w, http.StatusOK, payout)
 }
 
+// RefundClaim: soporte aprueba un reclamo y devuelve parte del pedido en la billetera del cliente.
+func (h *HTTP) RefundClaim(w http.ResponseWriter, r *http.Request, userID string) {
+	var body struct {
+		AmountCents *int `json:"amountCents"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBody))
+	if err := decoder.Decode(&body); err != nil || body.AmountCents == nil {
+		writeError(w, invalid("Indica el monto a devolver"))
+		return
+	}
+	claim, err := h.Orch.RefundClaim(r.Context(), userID, r.PathValue("id"), *body.AmountCents)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(claim)
+}
+
 // PagayaHook: aviso firmado de la billetera.
 func (h *HTTP) PagayaHook(w http.ResponseWriter, r *http.Request) {
 	body, ok := readWebhook(w, r)

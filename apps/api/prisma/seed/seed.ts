@@ -54,6 +54,8 @@ const USERS: SeedUser[] = [
   // Repartidores de Rapidito: toman los pedidos listos, los recogen en la tienda y los entregan.
   { key: 'repartidor', username: 'repartidor', phone: '+573005550107', displayName: 'Carlos Huamán', about: 'Repartidor de Rapidito 🛵', avatarColor: 'emerald-dark' },
   { key: 'repartidora', username: 'repartidora', phone: '+573005550108', displayName: 'Lucía Ramos', about: 'Repartidora de Rapidito 🛵', avatarColor: 'teal-dark' },
+  // Soporte de Parla: aprueba repartidores y resuelve reclamos (panel de administración).
+  { key: 'soporte', username: 'soporte', phone: '+573005550109', displayName: 'Soporte Parla', about: 'Atención de reclamos y repartidores', avatarColor: 'cyan-dark' },
 ];
 
 /** Negocio de ejemplo: atiende los pedidos del Mercado con delivery Rapidito. */
@@ -62,8 +64,8 @@ const BUSINESS = { owner: 'tienda', name: 'Bodega MercaYa', service: 'mercado', 
 
 /** Repartidores de Rapidito con su vehículo y su PagaYa (conectados, para probar sin pasos extra). */
 const DRIVERS = [
-  { user: 'repartidor', vehicle: 'Moto', plate: 'B7K-482', payoutPhone: '987654321' },
-  { user: 'repartidora', vehicle: 'Moto', plate: 'D5T-663', payoutPhone: '912345678' },
+  { user: 'repartidor', vehicle: 'Moto', plate: 'B7K-482', payoutPhone: '987654321', dniNumber: '45871236', licenseNumber: 'Q45871236' },
+  { user: 'repartidora', vehicle: 'Moto', plate: 'D5T-663', payoutPhone: '912345678', dniNumber: '70214598', licenseNumber: 'Q70214598' },
 ] as const;
 
 type Media = { kind: 'image' | 'audio'; file: 'packaging' | 'route' | 'wireframe' | 'voice' };
@@ -242,6 +244,7 @@ async function main(): Promise<void> {
         phoneVerifiedAt: u.phone ? new Date(Date.now() - 30 * 24 * 3600_000) : null,
         // Laura ya agregó su correo: puede restablecer la contraseña desde «¿Olvidaste tu contraseña?».
         email: u.key === 'laura' ? 'laura@example.com' : null,
+        isAdmin: u.key === 'soporte',
         emailVerifiedAt: u.key === 'laura' ? new Date(Date.now() - 29 * 24 * 3600_000) : null,
         displayName: u.displayName,
         about: u.about,
@@ -271,7 +274,18 @@ async function main(): Promise<void> {
     data: { name: BUSINESS.name, service: BUSINESS.service, address: BUSINESS.address, lat: BUSINESS.lat, lng: BUSINESS.lng, opensAt: BUSINESS.opensAt, closesAt: BUSINESS.closesAt, ownerId: person(BUSINESS.owner).id },
   });
   for (const d of DRIVERS) {
-    await prisma.driver.create({ data: { userId: person(d.user).id, vehicle: d.vehicle, plate: d.plate, payoutPhone: d.payoutPhone, online: true } });
+    await prisma.driver.create({ data: {
+        userId: person(d.user).id,
+        vehicle: d.vehicle,
+        plate: d.plate,
+        payoutPhone: d.payoutPhone,
+        dniNumber: d.dniNumber,
+        licenseNumber: d.licenseNumber,
+        // Ya verificados por soporte (los nuevos quedan en revisión).
+        status: 'approved',
+        online: true,
+      },
+    });
   }
 
   console.log('Cifrando conversaciones y mensajes…');
@@ -383,6 +397,7 @@ async function main(): Promise<void> {
     { usuario: 'tienda', quién: 'Elena Condori · dueña de Bodega MercaYa: acepta, prepara y entrega al repartidor' },
     { usuario: 'repartidor', quién: 'Carlos Huamán · repartidor de Rapidito (moto B7K-482)' },
     { usuario: 'repartidora', quién: 'Lucía Ramos · repartidora de Rapidito (moto D5T-663)' },
+    { usuario: 'soporte', quién: 'Soporte Parla · aprueba repartidores y resuelve reclamos' },
     { usuario: '+57 300 123 4567', quién: 'Sofía Ramírez (entra con su teléfono)' },
   ]);
 }

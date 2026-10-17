@@ -99,6 +99,8 @@ func New(opts Options) http.Handler {
 		mux.HandleFunc("PATCH /api/business/catalog/{sku}", authed(svc.UpdateStoreProduct))
 		// Retiro de ganancias: lo hace el gateway porque mueve dinero en la billetera.
 		mux.HandleFunc("POST /api/driver/payouts", authed(svc.Payout))
+		// Soporte aprueba un reclamo: el core decide cuánto y si puede; aquí se devuelve en PagaYa.
+		mux.HandleFunc("POST /api/admin/claims/{id}/refund", authed(svc.RefundClaim))
 		mux.HandleFunc("POST /hooks/pagaya", svc.PagayaHook)
 	}
 	mux.HandleFunc("/api/", limited(proxy.ServeHTTP))

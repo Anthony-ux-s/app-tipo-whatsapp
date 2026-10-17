@@ -11,6 +11,7 @@ function toBusinessRecord(row: BusinessRow): BusinessRecord {
     service: row.service as ServiceId,
     ownerId: row.ownerId,
     address: row.address,
+    location: row.lat !== null && row.lng !== null ? { lat: row.lat, lng: row.lng } : null,
     acceptingOrders: row.acceptingOrders,
     opensAt: row.opensAt,
     closesAt: row.closesAt,

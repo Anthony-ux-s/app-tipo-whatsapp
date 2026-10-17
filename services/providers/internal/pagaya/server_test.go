@@ -260,3 +260,65 @@ func TestTransferenciaValidaClaveDestinoYMonto(t *testing.T) {
 		}
 	}
 }
+
+func postBody(t *testing.T, url, body string) (int, map[string]any) {
+	t.Helper()
+	resp, err := http.Post(url, "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	return resp.StatusCode, out
+}
+
+func TestDevolucionParcialIdempotenteYSinPasarseDelCobro(t *testing.T) {
+	srv := pagaya(t, time.Minute)
+	hook, in := callback(t)
+	out := crear(t, srv, hook.URL) // S/ 23.40
+	id := out["id_cobro"].(string)
+	url := srv.URL + "/pagaya/cobros/" + id + "/devolucion"
+	if status, body := postBody(t, url, `{"monto":5,"referencia":"rf_1"}`); status != 409 || body["error"] != "NO_PAGADO" {
+		t.Fatalf("sin pagar no se devuelve: %d %v", status, body)
+	}
+	post(t, out["url_pago"].(string))
+	wait(t, in)
+
+	status, first := postBody(t, url, `{"monto":5.50,"referencia":"rf_1"}`)
+	if status != 200 || first["estado"] != "PAGADO" || first["devuelto_total"] != 5.5 || first["id_devolucion"] == nil {
+		t.Fatalf("devolución parcial: %d %v", status, first)
+	}
+	// La misma referencia no devuelve dos veces.
+	if status, again := postBody(t, url, `{"monto":5.50,"referencia":"rf_1"}`); status != 200 || again["id_devolucion"] != first["id_devolucion"] || again["devuelto_total"] != 5.5 {
+		t.Fatalf("repetir debe ser idempotente: %d %v", status, again)
+	}
+	if status, body := postBody(t, url, `{"monto":20,"referencia":"rf_2"}`); status != 409 || body["error"] != "EXCEDE_COBRO" {
+		t.Fatalf("no se puede devolver más de lo cobrado: %d %v", status, body)
+	}
+	if status, body := postBody(t, url, `{"monto":0,"referencia":"rf_3"}`); status != 400 || body["error"] != "MONTO_INVALIDO" {
+		t.Fatalf("monto cero: %d %v", status, body)
+	}
+	// Lo que queda se devuelve por partes hasta completar: recién ahí queda DEVUELTO.
+	if status, rest := postBody(t, url, `{"monto":17.90,"referencia":"rf_4"}`); status != 200 || rest["estado"] != "DEVUELTO" || rest["devuelto_total"] != 23.4 {
+		t.Fatalf("completar la devolución: %d %v", status, rest)
+	}
+	// La devolución total (sin cuerpo) sobre un cobro ya devuelto sigue siendo idempotente.
+	if status, full := post(t, url); status != 200 || full["estado"] != "DEVUELTO" {
+		t.Fatalf("devolución total idempotente: %d %v", status, full)
+	}
+}
+
+func TestDevolucionTotalDespuesDeUnaParcialDevuelveLoQueQueda(t *testing.T) {
+	srv := pagaya(t, time.Minute)
+	hook, in := callback(t)
+	out := crear(t, srv, hook.URL)
+	id := out["id_cobro"].(string)
+	post(t, out["url_pago"].(string))
+	wait(t, in)
+	url := srv.URL + "/pagaya/cobros/" + id + "/devolucion"
+	postBody(t, url, `{"monto":3.40,"referencia":"rf_a"}`)
+	if status, full := post(t, url); status != 200 || full["estado"] != "DEVUELTO" || full["devuelto_total"] != 23.4 {
+		t.Fatalf("la total completa lo que faltaba: %d %v", status, full)
+	}
+}

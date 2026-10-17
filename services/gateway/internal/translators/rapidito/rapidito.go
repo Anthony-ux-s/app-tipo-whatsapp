@@ -32,6 +32,8 @@ type Quote struct {
 	ID         string
 	FeeCents   int
 	ETAMinutes int
+	// DistanceKm: la distancia que cobró Rapidito (con el factor de calles); nil si cotizó sin coordenadas.
+	DistanceKm *float64
 }
 
 var amountPattern = regexp.MustCompile(`^\d{1,6}(\.\d{1,2})?$`)
@@ -53,10 +55,18 @@ func parseAmount(s string) (int, error) {
 	return soles*100 + cents, nil
 }
 
-func (c Client) Quote(ctx context.Context, address services.Address) (Quote, error) {
-	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/rapidito/api/quotes", map[string]any{
-		"dropoff": map[string]string{"address": address.Line, "notes": address.Reference},
-	})
+// Quote cotiza el delivery. Con el punto de recojo (la tienda) y el de entrega, Rapidito cobra por
+// distancia; sin alguno de los dos, por su tarifa de referencia.
+func (c Client) Quote(ctx context.Context, pickup *services.GeoPoint, address services.Address) (Quote, error) {
+	dropoff := map[string]any{"address": address.Line, "notes": address.Reference}
+	if address.Location != nil {
+		dropoff["lat"], dropoff["lng"] = address.Location.Lat, address.Location.Lng
+	}
+	payload := map[string]any{"dropoff": dropoff}
+	if pickup != nil {
+		payload["pickup"] = map[string]float64{"lat": pickup.Lat, "lng": pickup.Lng}
+	}
+	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/rapidito/api/quotes", payload)
 	if err != nil {
 		return Quote{}, err
 	}
@@ -69,7 +79,8 @@ func (c Client) Quote(ctx context.Context, address services.Address) (Quote, err
 			Amount   string `json:"amount"`
 			Currency string `json:"currency"`
 		} `json:"fee"`
-		ETAMinutes *int `json:"eta_minutes"`
+		ETAMinutes *int     `json:"eta_minutes"`
+		DistanceKm *float64 `json:"distancia_km"`
 	}
 	if err := providerapi.Decode(raw, &body); err != nil {
 		return Quote{}, err
@@ -79,5 +90,9 @@ func (c Client) Quote(ctx context.Context, address services.Address) (Quote, err
 		!services.ValidID.MatchString(body.QuoteID) || body.ETAMinutes == nil || *body.ETAMinutes <= 0 || *body.ETAMinutes > 600 {
 		return Quote{}, fmt.Errorf("%w: cotización %+v", ErrInvalid, body)
 	}
-	return Quote{ID: body.QuoteID, FeeCents: fee, ETAMinutes: *body.ETAMinutes}, nil
+	q := Quote{ID: body.QuoteID, FeeCents: fee, ETAMinutes: *body.ETAMinutes}
+	if d := body.DistanceKm; d != nil && *d >= 0 && *d <= 500 {
+		q.DistanceKm = d
+	}
+	return q, nil
 }

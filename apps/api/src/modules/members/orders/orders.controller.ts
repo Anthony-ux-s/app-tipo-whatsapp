@@ -1,9 +1,25 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
-import type { Order, OrderContactRole, PublicUser, RateOrderRequest } from '@parla/types';
+import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, StreamableFile } from '@nestjs/common';
+import type { ClaimReason, CreateClaimRequest, Order, OrderClaim, OrderContactRole, PublicUser, RateOrderRequest } from '@parla/types';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsIn, ValidateNested } from 'class-validator';
+import { CreateClaimUseCase } from '../../platform/services/use-cases/claims.use-cases';
+import { GetOrderPhotoUseCase, ReadPhotoUseCase } from '../../platform/services/use-cases/photos.use-cases';
 import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../../../http/current-user.decorator';
 import { GetOrderContactUseCase } from '../../platform/services/use-cases/business-orders.use-cases';
 import { GetMyOrderUseCase, ListMyOrdersUseCase, RateOrderUseCase, RenewDeliveryCodeUseCase } from '../../platform/services/use-cases/orders.use-cases';
+
+class ClaimItemDto {
+  @IsString() @MaxLength(64) productId: string;
+  @IsInt() @Min(1) @Max(50) quantity: number;
+}
+
+class CreateClaimDto implements CreateClaimRequest {
+  @IsIn(['missing_items', 'damaged', 'wrong_items', 'not_delivered', 'other']) reason: ClaimReason;
+  @IsOptional() @IsArray() @ArrayMaxSize(30) @ValidateNested({ each: true }) @Type(() => ClaimItemDto) items?: ClaimItemDto[];
+  @IsOptional() @IsString() @MaxLength(500) comment?: string;
+  @IsOptional() @IsString() @MaxLength(40) photoId?: string;
+}
 
 class RateOrderDto implements RateOrderRequest {
   @IsOptional() @IsInt() @Min(1) @Max(5) driverStars?: number | null;
@@ -23,6 +39,9 @@ export class OrdersController {
     private readonly getContact: GetOrderContactUseCase,
     private readonly renewCode: RenewDeliveryCodeUseCase,
     private readonly rate: RateOrderUseCase,
+    private readonly createClaim: CreateClaimUseCase,
+    private readonly orderPhoto: GetOrderPhotoUseCase,
+    private readonly readPhoto: ReadPhotoUseCase,
   ) {}
 
   @Get()
@@ -40,6 +59,31 @@ export class OrdersController {
   @Post(':id/rating')
   rateOrder(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: RateOrderDto): Promise<Order> {
     return this.rate.execute(user.userId, id, body);
+  }
+
+  /** «Tengo un problema con mi pedido»: reclamo hasta 48 h después de recibirlo. */
+  @HttpCode(201)
+  @Post(':id/claims')
+  claim(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: CreateClaimDto): Promise<OrderClaim> {
+    return this.createClaim.execute(user.userId, id, body);
+  }
+
+  /** Foto de la entrega (cliente, tienda, repartidor del pedido y soporte). */
+  @Get(':id/delivery-photo')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  async deliveryPhoto(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<StreamableFile> {
+    const photoId = await this.orderPhoto.execute(user.userId, id);
+    return new StreamableFile(await this.readPhoto.execute(photoId), { type: 'image/jpeg', disposition: 'inline' });
+  }
+
+  /** Foto de un reclamo (cliente, tienda y soporte). */
+  @Get(':id/claims/:claimId/photo')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  async claimPhoto(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('claimId') claimId: string): Promise<StreamableFile> {
+    const photoId = await this.orderPhoto.execute(user.userId, id, claimId);
+    return new StreamableFile(await this.readPhoto.execute(photoId), { type: 'image/jpeg', disposition: 'inline' });
   }
 
   /** Código de entrega nuevo cuando el anterior se bloqueó por intentos equivocados. */

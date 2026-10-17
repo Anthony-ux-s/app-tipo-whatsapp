@@ -43,7 +43,8 @@ type Commerce interface {
 
 // Delivery: la tarifa y el tiempo estimado del delivery.
 type Delivery interface {
-	Quote(ctx context.Context, address services.Address) (rapidito.Quote, error)
+	// Quote: pickup es la tienda (nil si no se conoce su ubicación) y address trae el punto de entrega.
+	Quote(ctx context.Context, pickup *services.GeoPoint, address services.Address) (rapidito.Quote, error)
 }
 
 // Payments: lo que necesita de la billetera.
@@ -80,6 +81,9 @@ type Orchestrator struct {
 	// Payouts y Wallet: retiros de las ganancias de los repartidores a su billetera.
 	Payouts PayoutCore
 	Wallet  Wallet
+	// Claims y Refunds: devoluciones parciales por reclamos que aprueba soporte.
+	Claims  ClaimsCore
+	Refunds PartialRefunds
 	// PublicURL es la dirección pública del gateway, para los avisos de los proveedores.
 	PublicURL string
 	Now       func() time.Time
@@ -164,10 +168,12 @@ func validateRequest(req services.QuoteRequest) (services.QuoteRequest, error) {
 // quote calcula el pedido con los precios vigentes de la tienda (nunca los del navegador) y la
 // tarifa del delivery, y devuelve también la cotización del delivery (el core la guarda con el pedido).
 func (o *Orchestrator) quote(ctx context.Context, req services.QuoteRequest) (services.OrderQuote, services.QuoteRequest, rapidito.Quote, error) {
-	if err := o.storeOpen(ctx, services.Mercado); err != nil {
+	// Una sola consulta al core: si la tienda atiende y desde dónde sale el repartidor.
+	pickup, err := o.storeOpen(ctx, services.Mercado)
+	if err != nil {
 		return services.OrderQuote{}, req, rapidito.Quote{}, err
 	}
-	req, err := validateRequest(req)
+	req, err = validateRequest(req)
 	if err != nil {
 		return services.OrderQuote{}, req, rapidito.Quote{}, err
 	}
@@ -202,7 +208,7 @@ func (o *Orchestrator) quote(ctx context.Context, req services.QuoteRequest) (se
 		q.SubtotalCents += line.TotalCents
 	}
 
-	delivery, err := o.Delivery.Quote(ctx, req.Address)
+	delivery, err := o.Delivery.Quote(ctx, pickup, req.Address)
 	if err != nil {
 		slog.Warn("cotización del delivery falló", "error", err)
 		return q, req, rapidito.Quote{}, unavailable("El delivery")
@@ -212,6 +218,7 @@ func (o *Orchestrator) quote(ctx context.Context, req services.QuoteRequest) (se
 	q.TipCents = req.TipCents
 	q.TotalCents = q.SubtotalCents + q.DeliveryFeeCents + q.TipCents
 	q.ETAMinutes = delivery.ETAMinutes
+	q.DistanceKm = delivery.DistanceKm
 	return q, req, delivery, nil
 }
 
@@ -468,23 +475,24 @@ func conflict(message string) error {
 }
 
 // storeOpen: con la tienda cerrada (por horario o porque la dueña la cerró) no se cotiza ni se pide.
-// Si ningún negocio atiende el servicio, se vende igual (la tienda externa siempre atiende).
-func (o *Orchestrator) storeOpen(ctx context.Context, service services.ServiceID) error {
+// Si ningún negocio atiende el servicio, se vende igual (la tienda externa siempre atiende). Devuelve
+// la ubicación de la tienda (punto de recojo para la tarifa por distancia), o nil si no se conoce.
+func (o *Orchestrator) storeOpen(ctx context.Context, service services.ServiceID) (*services.GeoPoint, error) {
 	business, err := o.Core.BusinessByService(ctx, service)
 	switch {
 	case errors.Is(err, ErrNotFound):
-		return nil
+		return nil, nil
 	case err != nil:
 		slog.Error("no se pudo consultar el horario de la tienda", "servicio", service, "error", err)
-		return unavailable("Parla")
+		return nil, unavailable("Parla")
 	case business.Open:
-		return nil
+		return business.Location, nil
 	}
 	message := "La tienda está cerrada ahora"
 	if business.ClosedMessage != nil && strings.TrimSpace(*business.ClosedMessage) != "" {
 		message = *business.ClosedMessage
 	}
-	return conflict(message)
+	return nil, conflict(message)
 }
 
 // ── Catálogo de la tienda (lo administra la dueña) ────────────────────────────

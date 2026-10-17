@@ -2,7 +2,7 @@ import type { DeliveryStatus, PresenceStatus } from './enums.types';
 import type { CallAck, CallEndReason, CallInfo, CallStartRequest, SignalData } from './calls.types';
 import type { ConversationSummary, Message } from './messaging.types';
 import type { PublicUser } from './identity.types';
-import type { BusinessOrder, DriverLocation, DriverOrder, Order } from './services.types';
+import type { BusinessOrder, DriverInfo, DriverLocation, DriverOrder, Order } from './services.types';
 
 /** Eventos que el servidor emite por el socket. */
 export interface ServerToClientEvents {
@@ -16,6 +16,8 @@ export interface ServerToClientEvents {
   'business-order:updated': (order: BusinessOrder) => void;
   /** A los repartidores: un pedido listo para recoger, o cambió uno que tomaron (o que otro tomó). */
   'driver-order:updated': (order: DriverOrder) => void;
+  /** Al repartidor: soporte aprobó o rechazó su registro. */
+  'driver:updated': (driver: DriverInfo) => void;
   /** El repartidor se movió (al cliente y a la tienda del pedido que lleva). */
   'delivery:location': (location: DriverLocation) => void;
   /** Alguien cambió su foto, nombre o usuario: los demás actualizan su vista. */

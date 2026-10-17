@@ -47,6 +47,8 @@ export interface SessionUser extends UserProfile {
   preferences: UserPreferences;
   publicKey: string;
   keyBackup: EncryptedKeyBackup;
+  /** Soporte de Parla (panel de administración). */
+  isAdmin: boolean;
 }
 
 export interface RegisterRequest {

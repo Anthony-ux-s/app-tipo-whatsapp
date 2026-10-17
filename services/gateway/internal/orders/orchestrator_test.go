@@ -75,9 +75,17 @@ func (f *fakeCommerce) Reserve(_ context.Context, ref string, items []services.C
 	return nil
 }
 
-type fakeDelivery struct{}
+// fakeDelivery: tarifa fija sin coordenadas; con tienda y punto de entrega, por distancia (como Rapidito).
+type fakeDelivery struct {
+	pickup *services.GeoPoint
+}
 
-func (f *fakeDelivery) Quote(context.Context, services.Address) (rapidito.Quote, error) {
+func (f *fakeDelivery) Quote(_ context.Context, pickup *services.GeoPoint, address services.Address) (rapidito.Quote, error) {
+	f.pickup = pickup
+	if pickup != nil && address.Location != nil {
+		km := 2.5
+		return rapidito.Quote{ID: "q_1", FeeCents: 600, ETAMinutes: 18, DistanceKm: &km}, nil
+	}
 	return rapidito.Quote{ID: "q_1", FeeCents: 650, ETAMinutes: 30}, nil
 }
 
@@ -719,5 +727,31 @@ func TestLaUbicacionDelMapaLlegaAlCoreYSeValida(t *testing.T) {
 	bad.Address.Location = &services.GeoPoint{Lat: 120, Lng: 0}
 	if _, err := w.orch.Quote(ctx, bad); status(err) != http.StatusBadRequest {
 		t.Fatalf("un punto fuera del mapa debía rechazarse, obtuve %v", err)
+	}
+}
+
+func TestLaTarifaSaleDeLaDistanciaDeLaTiendaAlPuntoDeEntrega(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	store := &services.GeoPoint{Lat: -12.1268, Lng: -77.0195}
+	w.core.business = &services.Business{ID: "biz_1", Name: "Bodega", Service: services.Mercado, OwnerID: "dueña", Open: true, Location: store}
+
+	// Sin punto en el mapa: tarifa de referencia y sin distancia.
+	q, err := w.orch.Quote(ctx, cart)
+	if err != nil || q.DeliveryFeeCents != 650 || q.DistanceKm != nil || w.delivery.pickup == nil || *w.delivery.pickup != *store {
+		t.Fatalf("sin punto de entrega: %+v %v (recojo %v)", q, err, w.delivery.pickup)
+	}
+	// Con el punto marcado: por distancia, y el total la suma.
+	req := cart
+	req.Address.Location = &services.GeoPoint{Lat: -12.1191, Lng: -77.0349}
+	q, err = w.orch.Quote(ctx, req)
+	if err != nil || q.DeliveryFeeCents != 600 || q.DistanceKm == nil || *q.DistanceKm != 2.5 || q.ETAMinutes != 18 ||
+		q.TotalCents != q.SubtotalCents+600 {
+		t.Fatalf("con punto de entrega: %+v %v", q, err)
+	}
+	// Sin ubicación de la tienda en el core, no se manda recojo.
+	w.core.business.Location = nil
+	if q, _ := w.orch.Quote(ctx, req); q.DistanceKm != nil || w.delivery.pickup != nil {
+		t.Fatalf("sin tienda en el mapa no hay distancia: %+v", q)
 	}
 }

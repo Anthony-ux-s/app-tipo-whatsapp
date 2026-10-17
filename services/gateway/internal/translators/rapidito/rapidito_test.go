@@ -2,6 +2,7 @@ package rapidito
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -36,7 +37,7 @@ func quoteServer(t *testing.T, body string) Client {
 func TestCotizacionValidaYAbsurda(t *testing.T) {
 	ctx := context.Background()
 	address := services.Address{Line: "Av. Larco 123"}
-	q, err := quoteServer(t, `{"quote_id":"q_1","fee":{"amount":"6.50","currency":"PEN"},"eta_minutes":30}`).Quote(ctx, address)
+	q, err := quoteServer(t, `{"quote_id":"q_1","fee":{"amount":"6.50","currency":"PEN"},"eta_minutes":30}`).Quote(ctx, nil, address)
 	if err != nil || q.FeeCents != 650 || q.ETAMinutes != 30 || q.ID != "q_1" {
 		t.Fatalf("cotización inesperada: %+v %v", q, err)
 	}
@@ -46,8 +47,34 @@ func TestCotizacionValidaYAbsurda(t *testing.T) {
 		`{"quote_id":"q_1","fee":{"amount":"6.50","currency":"PEN"}}`,
 		`{"fee":{"amount":"6.50","currency":"PEN"},"eta_minutes":30}`,
 	} {
-		if _, err := quoteServer(t, body).Quote(ctx, address); !errors.Is(err, ErrInvalid) {
+		if _, err := quoteServer(t, body).Quote(ctx, nil, address); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s debía rechazarse, obtuve %v", body, err)
 		}
+	}
+}
+
+func TestConCoordenadasMandaRecojoYEntregaYLeeLaDistancia(t *testing.T) {
+	var sent map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sent = nil
+		_ = json.NewDecoder(r.Body).Decode(&sent)
+		_, _ = io.WriteString(w, `{"quote_id":"q_2","fee":{"amount":"6.00","currency":"PEN"},"eta_minutes":18,"distancia_km":2.5}`)
+	}))
+	t.Cleanup(srv.Close)
+	c := Client{BaseURL: srv.URL, HTTP: srv.Client()}
+	store := &services.GeoPoint{Lat: -12.1268, Lng: -77.0195}
+	home := services.Address{Line: "Calle Berlín 300", Location: &services.GeoPoint{Lat: -12.1191, Lng: -77.0349}}
+	q, err := c.Quote(context.Background(), store, home)
+	if err != nil || q.FeeCents != 600 || q.DistanceKm == nil || *q.DistanceKm != 2.5 {
+		t.Fatalf("cotización inesperada: %+v %v", q, err)
+	}
+	pickup := sent["pickup"].(map[string]any)
+	dropoff := sent["dropoff"].(map[string]any)
+	if pickup["lat"] != -12.1268 || dropoff["lng"] != -77.0349 || dropoff["address"] != "Calle Berlín 300" {
+		t.Fatalf("no mandó los puntos: %v", sent)
+	}
+	// Sin la ubicación de la tienda no manda recojo.
+	if _, err := c.Quote(context.Background(), nil, home); err != nil || sent["pickup"] != nil {
+		t.Fatalf("sin tienda no debía mandar recojo: %v %v", sent, err)
 	}
 }

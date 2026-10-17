@@ -27,6 +27,15 @@ type ConflictError struct{ Message string }
 func (e *ConflictError) Error() string        { return e.Message }
 func (e *ConflictError) Is(target error) bool { return target == ErrConflict }
 
+// CoreError: otro error del core con su mensaje para la persona (p. ej. un 403 «Solo soporte puede
+// aprobar reclamos»), que se pasa tal cual.
+type CoreError struct {
+	Status  int
+	Message string
+}
+
+func (e *CoreError) Error() string { return e.Message }
+
 // Core guarda los pedidos (el core NestJS es la fuente de verdad) y avisa al cliente.
 type Core interface {
 	CreateOrder(ctx context.Context, order services.InternalCreateOrder) (services.InternalOrder, error)
@@ -104,6 +113,17 @@ func (c HTTPCore) StuckPayouts(ctx context.Context, olderThanMinutes int) ([]ser
 	return out, c.call(ctx, http.MethodGet, fmt.Sprintf("/api/internal/payouts/stuck?olderThanMinutes=%d", olderThanMinutes), nil, &out)
 }
 
+func (c HTTPCore) ReserveClaimRefund(ctx context.Context, claimID, adminUserID string, amountCents int) (services.ClaimRefundReservation, error) {
+	var out services.ClaimRefundReservation
+	return out, c.call(ctx, http.MethodPost, "/api/internal/claims/"+url.PathEscape(claimID)+"/refund-reservations",
+		map[string]any{"adminUserId": adminUserID, "amountCents": amountCents}, &out)
+}
+
+func (c HTTPCore) SettleClaimRefund(ctx context.Context, claimID string, settle services.ClaimRefundSettle) (json.RawMessage, error) {
+	var out json.RawMessage
+	return out, c.call(ctx, http.MethodPatch, "/api/internal/claims/"+url.PathEscape(claimID)+"/refund", settle, &out)
+}
+
 func (c HTTPCore) call(ctx context.Context, method, path string, in, out any) error {
 	var body io.Reader
 	if in != nil {
@@ -142,6 +162,16 @@ func (c HTTPCore) call(ctx context.Context, method, path string, in, out any) er
 			return &ConflictError{Message: body.Message}
 		}
 		return ErrConflict
+	case resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnprocessableEntity || resp.StatusCode == http.StatusBadRequest:
+		var body struct {
+			Message any `json:"message"`
+		}
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&body)
+		message, _ := body.Message.(string)
+		if message == "" {
+			message = http.StatusText(resp.StatusCode)
+		}
+		return &CoreError{Status: resp.StatusCode, Message: message}
 	case resp.StatusCode >= 300:
 		return fmt.Errorf("core respondió %d", resp.StatusCode)
 	}

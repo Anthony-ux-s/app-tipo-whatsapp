@@ -1,32 +1,53 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { DriverEarnings, DriverInfo, DriverLocation, DriverProfileRequest, GeoPoint } from '@parla/types';
 import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../infra/realtime/realtime-publisher.port';
-import { ConflictError, ForbiddenError } from '../../../../kernel/domain-error';
-import { assertPoint, normalizeDriverProfile } from '../../../../kernel/geo';
+import { ConflictError } from '../../../../kernel/domain-error';
+import { assertPoint, normalizeDriverDocuments, normalizeDriverProfile } from '../../../../kernel/geo';
 import { DRIVERS_REPOSITORY, type DriverRecord, type DriversRepository } from '../drivers.repository';
 import { DRIVER_LEDGER_REPOSITORY, type DriverLedgerRepository } from '../driver-ledger.repository';
 import { ORDERS_REPOSITORY, type OrdersRepository } from '../orders.repository';
+import { PHOTOS_REPOSITORY, type PhotosRepository } from '../photos.repository';
+import { requireDriver, toDriverInfo } from './driver-orders.use-cases';
+import { assertOwnPhoto } from './photos.use-cases';
 
 /** Cada cuánto, como mucho, se guarda y se reparte la ubicación (el celular puede mandar más seguido). */
 const LOCATION_MIN_INTERVAL_MS = 3_000;
 
-const toInfo = (d: DriverRecord): DriverInfo => ({ vehicle: d.vehicle, plate: d.plate, online: d.online });
+const toInfo = toDriverInfo;
+/** Activo, esté o no aprobado (para su perfil y sus documentos). */
+const requireActiveDriver = (drivers: DriversRepository, userId: string): Promise<DriverRecord> => requireDriver(drivers, userId, false);
 
-async function requireActiveDriver(drivers: DriversRepository, userId: string): Promise<DriverRecord> {
-  const driver = await drivers.findByUser(userId);
-  if (!driver?.active) throw new ForbiddenError('Tu cuenta no es de repartidor de Rapidito');
-  return driver;
-}
-
-/** «Trabaja con Rapidito»: cualquier cuenta se registra como repartidor (o vuelve, si lo había dejado). */
+/**
+ * «Trabaja con Rapidito»: cualquier cuenta se registra como repartidor con su DNI (y su licencia si
+ * maneja moto o auto). Queda en revisión hasta que soporte revise sus datos y la foto de su documento,
+ * como en Rappi o PedidosYa; si ya había sido aprobado y vuelve, sigue aprobado.
+ */
 @Injectable()
 export class RegisterDriverUseCase {
   constructor(@Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository) {}
 
   async execute(userId: string, input: DriverProfileRequest): Promise<DriverInfo> {
     const profile = normalizeDriverProfile(input.vehicle, input.plate);
+    const docs = normalizeDriverDocuments(profile.vehicle, input.dniNumber, input.licenseNumber);
     if ((await this.drivers.findByUser(userId))?.active) throw new ConflictError('Ya eres repartidor de Rapidito');
-    return toInfo(await this.drivers.register(userId, profile));
+    return toInfo(await this.drivers.register(userId, { ...profile, ...docs }));
+  }
+}
+
+/** La foto del documento (DNI o licencia) para la verificación; volver a subirla la reemplaza. */
+@Injectable()
+export class SetDriverDocumentUseCase {
+  constructor(
+    @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
+    @Inject(PHOTOS_REPOSITORY) private readonly photos: PhotosRepository,
+  ) {}
+
+  async execute(userId: string, photoId: string): Promise<DriverInfo> {
+    const driver = await requireActiveDriver(this.drivers, userId);
+    await assertOwnPhoto(this.photos, userId, photoId);
+    // Un rechazado que corrige su documento vuelve a revisión.
+    const status = driver.status === 'rejected' ? 'pending' : driver.status;
+    return toInfo(await this.drivers.update(userId, { documentPhotoId: photoId, status }));
   }
 }
 
@@ -36,8 +57,11 @@ export class UpdateDriverProfileUseCase {
   constructor(@Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository) {}
 
   async execute(userId: string, input: DriverProfileRequest): Promise<DriverInfo> {
-    await requireActiveDriver(this.drivers, userId);
-    return toInfo(await this.drivers.update(userId, normalizeDriverProfile(input.vehicle, input.plate)));
+    const driver = await requireActiveDriver(this.drivers, userId);
+    const profile = normalizeDriverProfile(input.vehicle, input.plate);
+    // Pasar a moto o auto pide licencia (si no la tenía).
+    const docs = normalizeDriverDocuments(profile.vehicle, driver.dniNumber ?? input.dniNumber, input.licenseNumber ?? driver.licenseNumber ?? undefined);
+    return toInfo(await this.drivers.update(userId, { ...profile, licenseNumber: docs.licenseNumber }));
   }
 }
 
@@ -47,7 +71,9 @@ export class SetDriverOnlineUseCase {
   constructor(@Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository) {}
 
   async execute(userId: string, online: boolean): Promise<DriverInfo> {
-    await requireActiveDriver(this.drivers, userId);
+    // Solo los aprobados se conectan; desconectarse, siempre.
+    if (online) await requireDriver(this.drivers, userId);
+    else await requireActiveDriver(this.drivers, userId);
     return toInfo(await this.drivers.update(userId, { online }));
   }
 }
@@ -105,9 +131,9 @@ export class GetDriverEarningsUseCase {
 }
 
 /**
- * El celular del repartidor manda su ubicación mientras reparte. Se guarda y se reparte en vivo solo
- * al cliente y a la tienda de los pedidos que lleva (nadie más la ve). Sin entrega en curso, no se
- * guarda nada.
+ * El celular del repartidor manda su ubicación mientras está conectado. Libre, solo se guarda (para
+ * ofrecerle los pedidos cercanos; nadie la ve). Con una entrega en curso, además se reparte en vivo
+ * al cliente y a la tienda de ese pedido.
  */
 @Injectable()
 export class ReportDriverLocationUseCase {
@@ -121,7 +147,7 @@ export class ReportDriverLocationUseCase {
     assertPoint(point);
     const driver = await requireActiveDriver(this.drivers, userId);
     const active = await this.orders.listActiveForDriver(userId);
-    if (active.length === 0) return { shared: 0 };
+    if (active.length === 0 && !driver.online) return { shared: 0 };
     if (driver.location && now.getTime() - driver.location.at.getTime() < LOCATION_MIN_INTERVAL_MS) return { shared: 0 };
     await this.drivers.saveLocation(userId, point, now);
     for (const order of active) {

@@ -1,12 +1,14 @@
 import { LogOut, Save } from 'lucide-react';
 import { Navigate } from 'react-router';
 import { Button } from '@shared/ui/Button';
+import { Field } from '@shared/ui/Field';
 import { Modal } from '@shared/ui/Modal';
 import { Stars } from '@shared/ui/Stars';
 import { Toggle } from '@shared/ui/Toggle';
 import { formatSoles } from '@shared/utils/money';
 import { PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { useDriverProfile } from '../hooks/use-driver-profile.hook';
+import { DriverReviewCard } from './DriverReviewCard';
 import { DriverWalletCard } from './DriverWalletCard';
 import { VehiclePicker } from './VehiclePicker';
 
@@ -48,13 +50,15 @@ export function DriverProfileView() {
         </p>
       )}
 
+      <DriverReviewCard driver={p.driver} />
+
       <DriverWalletCard />
 
       <section className="rounded-2xl bg-surface p-4 shadow-float md:p-5">
         <Toggle
           checked={p.driver.online}
           onChange={p.toggleOnline}
-          disabled={p.busy === 'online'}
+          disabled={p.busy === 'online' || p.driver.status !== 'approved'}
           label="Conectado"
           description="Conectado te llegan los pedidos listos para recoger. Desconéctate al terminar tu jornada."
         />
@@ -63,6 +67,9 @@ export function DriverProfileView() {
       <form onSubmit={p.save} className="flex flex-col gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Vehículo">
         <h2 className="font-bold text-ink">Tu vehículo</h2>
         <VehiclePicker vehicle={p.vehicle} plate={p.plate} needsPlate={p.needsPlate} onVehicle={p.selectVehicle} onPlate={p.onPlate} />
+        {p.needsPlate && p.vehicle !== p.driver.vehicle && (
+          <Field label="Licencia de conducir" hint="Si no la registraste antes" placeholder="ej. Q12345678" value={p.licenseNumber} onChange={(e) => p.onLicense(e.target.value)} autoCapitalize="characters" />
+        )}
         {p.error && <p role="alert" className="text-sm font-semibold text-rose-700 dark:text-rose-400">{p.error}</p>}
         {p.changed && (
           <Button type="submit" icon={<Save className="size-4" />} loading={p.busy === 'save'} className="self-start" data-testid="save-vehicle">

@@ -65,6 +65,9 @@ export function useDriverOrderDetail() {
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState<string | null>(null);
+  /** Foto de la entrega: opcional con código; obligatoria si el cliente no responde. */
+  const [photoId, setPhotoId] = useState<string | null>(null);
+  const [noAnswer, setNoAnswer] = useState(false);
 
   const retry = () => {
     setError(null);
@@ -79,6 +82,13 @@ export function useDriverOrderDetail() {
     retry,
     code,
     codeError,
+    photoId,
+    setPhotoId,
+    noAnswer,
+    toggleNoAnswer: () => {
+      setNoAnswer((v) => !v);
+      setCodeError(null);
+    },
     onCodeChange: (value: string) => {
       setCode(value.replace(/\D/g, '').slice(0, 4));
       setCodeError(null);
@@ -109,14 +119,14 @@ export function useDriverOrderDetail() {
     },
     deliver: async (event?: FormEvent) => {
       event?.preventDefault();
-      if (code.length !== 4) {
-        setCodeError('Pídele al cliente su código de 4 dígitos');
+      if (noAnswer ? !photoId : code.length !== 4) {
+        setCodeError(noAnswer ? 'Toma una foto del pedido donde lo dejaste' : 'Pídele al cliente su código de 4 dígitos');
         return;
       }
       setBusy(true);
       try {
-        await useDriverStore.getState().deliver(orderId, code);
-        toast('Entrega confirmada. ¡Buen trabajo!', 'success');
+        await useDriverStore.getState().deliver(orderId, noAnswer ? { photoId: photoId! } : { code, ...(photoId ? { photoId } : {}) });
+        toast(noAnswer ? 'Listo: lo dejaste con foto como prueba.' : 'Entrega confirmada. ¡Buen trabajo!', 'success');
       } catch (err) {
         setCodeError(errorMessage(err));
       } finally {

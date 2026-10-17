@@ -1,10 +1,11 @@
-import type { BusinessInfo, ServiceId, UpdateBusinessRequest } from '@parla/types';
+import type { BusinessInfo, GeoPoint, ServiceId, UpdateBusinessRequest } from '@parla/types';
 
 /** Negocio tal como lo ven los casos de uso: atiende un servicio y tiene un dueño en Parla. */
 export interface BusinessRecord extends BusinessInfo {
   ownerId: string;
-  /** Dónde recoge el repartidor. */
+  /** Dónde recoge el repartidor, y su punto en el mapa (para la tarifa y las ofertas por cercanía). */
   address: string;
+  location: GeoPoint | null;
 }
 
 export interface BusinessesRepository {

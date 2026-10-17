@@ -86,6 +86,7 @@ export function useRealtime(userId: string | undefined) {
     socket.on('order:updated', (order) => useOrdersStore.getState().upsert(order));
     socket.on('business-order:updated', (order) => useBusinessStore.getState().upsert(order));
     socket.on('driver-order:updated', (order) => useDriverStore.getState().upsert(order));
+    socket.on('driver:updated', (driver) => useDriverStore.setState({ driver }));
     socket.on('delivery:location', (location) => {
       useOrdersStore.getState().applyLocation(location);
       useBusinessStore.getState().applyLocation(location);

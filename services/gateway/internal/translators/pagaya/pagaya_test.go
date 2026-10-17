@@ -2,6 +2,7 @@ package pagaya
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -131,5 +132,28 @@ func TestTransferEnviaConClaveYTraduceErrores(t *testing.T) {
 	}
 	if _, err := c.Transfer(ctx, "po_caido", "987654321", 100, "x"); err == nil || errors.Is(err, ErrInvalidDestination) {
 		t.Fatalf("la billetera caída debe fallar como no disponible, obtuve %v", err)
+	}
+}
+
+func TestDevolucionParcialTraduceMontoReferenciaYExcedente(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = nil
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		if got["referencia"] == "rf_mucho" {
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `{"error":"EXCEDE_COBRO"}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"id_cobro":"cob_1","estado":"PAGADO","devuelto_total":5.5,"id_devolucion":"dv_1"}`)
+	}))
+	t.Cleanup(srv.Close)
+	c := Client{BaseURL: srv.URL, HTTP: srv.Client()}
+	id, err := c.RefundPartial(context.Background(), "cob_1", "rf_1", 550)
+	if err != nil || id != "dv_1" || got["monto"] != 5.5 || got["referencia"] != "rf_1" {
+		t.Fatalf("devolución parcial: %q %v %v", id, err, got)
+	}
+	if _, err := c.RefundPartial(context.Background(), "cob_1", "rf_mucho", 99999); !errors.Is(err, ErrExceedsCharge) {
+		t.Fatalf("debía avisar que excede el cobro: %v", err)
 	}
 }

@@ -1,8 +1,9 @@
-import { Ban, Bike, KeyRound, MapPin, MessageCircle, Navigation, PackageCheck, ShieldCheck, Store, Undo2 } from 'lucide-react';
+import { Ban, Bike, Camera, KeyRound, MapPin, MessageCircle, Navigation, PackageCheck, ShieldCheck, Store, Undo2 } from 'lucide-react';
 import { useDriverStore } from '@shared/stores/driver.store';
 import { LazyDeliveryMap } from '@shared/ui/LazyDeliveryMap';
 import { useRoute } from '../../services/hooks/use-route.hook';
 import { Button } from '@shared/ui/Button';
+import { PhotoPicker, PrivatePhoto } from '@shared/ui/PrivatePhoto';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatTime } from '@shared/utils/date';
 import { formatSoles } from '@shared/utils/money';
@@ -128,7 +129,19 @@ export function DriverOrderDetailView() {
       )}
 
       {order.mine && order.status === 'on_the_way' && (
-        <form onSubmit={d.deliver} className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Entregar con código">
+        <form onSubmit={d.deliver} className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label={d.noAnswer ? 'Dejar con foto' : 'Entregar con código'}>
+          {d.noAnswer ? (
+            <>
+              <p className="flex items-center gap-2 font-bold text-ink">
+                <Camera className="size-5 text-brand" /> {order.customerName} no responde: déjalo con una foto
+              </p>
+              <p className="text-sm text-ink-soft">
+                Escríbele por el chat antes. Deja el pedido en un lugar seguro (portería, recepción) y toma una foto donde se vea el pedido y la puerta. {order.customerName} y la tienda la verán.
+              </p>
+              <PhotoPicker key="no-answer" label="Foto del pedido entregado" onChange={d.setPhotoId} testId="delivery-photo-input" />
+            </>
+          ) : (
+            <>
           <p className="flex items-center gap-2 font-bold text-ink">
             <KeyRound className="size-5 text-brand" /> Pídele a {order.customerName} su código de entrega
           </p>
@@ -141,19 +154,28 @@ export function DriverOrderDetailView() {
             placeholder="0000"
             className="h-14 w-full rounded-2xl bg-surface-3 text-center font-mono text-3xl font-extrabold tracking-[0.5em] text-ink outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-teal-500/40"
           />
+              <PhotoPicker key="with-code" label="Foto de la entrega (opcional)" onChange={d.setPhotoId} />
+            </>
+          )}
           {d.codeError && <p role="alert" className="text-sm font-semibold text-rose-700 dark:text-rose-400">{d.codeError}</p>}
-          <Button type="submit" size="lg" icon={<ShieldCheck className="size-5" />} loading={d.busy} data-testid="deliver-order">
-            Confirmar entrega
+          <Button type="submit" size="lg" icon={d.noAnswer ? <Camera className="size-5" /> : <ShieldCheck className="size-5" />} loading={d.busy} data-testid="deliver-order">
+            {d.noAnswer ? 'Dejar con foto' : 'Confirmar entrega'}
           </Button>
+          <button type="button" onClick={d.toggleNoAnswer} className="self-center text-sm font-semibold text-ink-soft underline-offset-2 hover:text-ink hover:underline" data-testid="toggle-no-answer">
+            {d.noAnswer ? 'Volver a entregar con código' : 'El cliente no responde'}
+          </button>
         </form>
       )}
 
       {delivered && (
         <section className="flex items-center gap-4 rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200 md:p-5 dark:bg-emerald-950/40 dark:ring-emerald-900" aria-label="Entregado" data-testid="delivery-proof">
           <ShieldCheck className="size-6 shrink-0 text-emerald-700 dark:text-emerald-300" />
-          <p className="text-sm font-semibold text-ink">Entregado a {order.customerName} a las {formatTime(delivered.at)} · confirmado con su código.</p>
+          <p className="text-sm font-semibold text-ink">
+            Entregado a {order.customerName} a las {formatTime(delivered.at)} · {delivered.note?.startsWith('Dejado sin código') ? 'dejado con foto' : 'confirmado con su código'}.
+          </p>
         </section>
       )}
+      {delivered && order.hasDeliveryPhoto && <PrivatePhoto path={`/orders/${encodeURIComponent(order.id)}/delivery-photo`} alt="Foto de la entrega" />}
 
       <section className="flex flex-col gap-1.5 rounded-2xl bg-surface p-4 text-sm shadow-float md:p-5" aria-label="Lo que ganas" data-testid="driver-split">
         <h2 className="mb-1 text-sm font-bold text-ink-soft">Lo que ganas</h2>

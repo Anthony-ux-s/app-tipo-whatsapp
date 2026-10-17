@@ -16,6 +16,7 @@ export const VEHICLES: { id: DriverVehicle; label: string; needsPlate: boolean }
 function useVehicleForm(initial: { vehicle: DriverVehicle; plate: string }) {
   const [vehicle, setVehicle] = useState<DriverVehicle>(initial.vehicle);
   const [plate, setPlate] = useState(initial.plate);
+  const [licenseNumber, setLicense] = useState('');
   const [error, setError] = useState<string | null>(null);
   const needsPlate = VEHICLES.find((v) => v.id === vehicle)?.needsPlate ?? false;
   return {
@@ -32,11 +33,16 @@ function useVehicleForm(initial: { vehicle: DriverVehicle; plate: string }) {
       setPlate(value.toUpperCase());
       setError(null);
     },
+    licenseNumber,
+    onLicense: (value: string) => {
+      setLicense(value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 9));
+      setError(null);
+    },
     reset: (v: DriverVehicle, p: string) => {
       setVehicle(v);
       setPlate(p);
     },
-    profile: () => ({ vehicle, plate: needsPlate ? plate : '' }),
+    profile: () => ({ vehicle, plate: needsPlate ? plate : '', ...(needsPlate && licenseNumber ? { licenseNumber } : {}) }),
   };
 }
 
@@ -45,19 +51,33 @@ export function useDriverRegister() {
   const driver = useDriverStore((s) => s.driver);
   const register = useDriverStore((s) => s.register);
   const form = useVehicleForm({ vehicle: 'Moto', plate: '' });
+  const [dniNumber, setDni] = useState('');
+  const [documentPhotoId, setDocumentPhotoId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   return {
     ...form,
+    dniNumber,
+    onDni: (value: string) => {
+      setDni(value.replace(/\D/g, '').slice(0, 8));
+      form.setError(null);
+    },
+    documentPhotoId,
+    setDocumentPhotoId,
     alreadyDriver: !!driver,
     saving,
     back: () => navigate('/app/pedidos'),
     submit: async (event?: FormEvent) => {
       event?.preventDefault();
+      if (!documentPhotoId) {
+        form.setError(form.needsPlate ? 'Sube una foto de tu licencia de conducir' : 'Sube una foto de tu DNI');
+        return;
+      }
       setSaving(true);
       try {
-        await register(form.profile());
-        toast('¡Bienvenido a Rapidito! Conéctate para recibir pedidos.', 'success');
+        await register({ ...form.profile(), dniNumber });
+        await useDriverStore.getState().setDocument(documentPhotoId);
+        toast('¡Listo! Revisaremos tus datos y te avisaremos cuando puedas conectarte.', 'success');
         navigate('/app/rapidito');
       } catch (err) {
         form.setError(errorMessage(err));

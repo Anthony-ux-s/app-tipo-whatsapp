@@ -1,4 +1,4 @@
-import type { DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, DriverWallet, GeoPoint, PayoutResult } from '@parla/types';
+import type { DeliverOrderRequest, DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, DriverWallet, GeoPoint, PayoutResult } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
 
@@ -17,6 +17,8 @@ interface DriverState {
   /** «Trabaja con Rapidito»: alta (o vuelta) como repartidor. */
   register: (profile: DriverProfileRequest) => Promise<void>;
   updateProfile: (profile: DriverProfileRequest) => Promise<void>;
+  /** La foto del DNI o la licencia para la verificación (subida antes con POST /photos). */
+  setDocument: (photoId: string) => Promise<void>;
   setOnline: (online: boolean) => Promise<void>;
   /** «Dejar de repartir». */
   leave: () => Promise<void>;
@@ -33,8 +35,8 @@ interface DriverState {
   accept: (id: string) => Promise<void>;
   /** «No puedo llevarlo»: lo suelta antes de recogerlo. */
   release: (id: string) => Promise<void>;
-  /** Entrega con el código que dicta el cliente. */
-  deliver: (id: string, code: string) => Promise<void>;
+  /** Entrega con el código que dicta el cliente o, si no responde, con una foto como prueba. */
+  deliver: (id: string, proof: DeliverOrderRequest) => Promise<void>;
   reset: () => void;
 }
 
@@ -90,6 +92,7 @@ export const useDriverStore = create<DriverState>((set, get) => ({
     await get().loadOrders();
   },
   updateProfile: async (profile) => set({ driver: await http.patch<DriverInfo>('/driver', profile) }),
+  setDocument: async (photoId) => set({ driver: await http.post<DriverInfo>('/driver/document', { photoId }) }),
   setOnline: async (online) => {
     set({ driver: await http.post<DriverInfo>('/driver/online', { online }) });
     if (online) await get().loadOrders();
@@ -115,7 +118,7 @@ export const useDriverStore = create<DriverState>((set, get) => ({
 
   accept: async (id) => get().upsert(await http.post<DriverOrder>(`${path(id)}/accept`)),
   release: async (id) => get().upsert(await http.post<DriverOrder>(`${path(id)}/release`)),
-  deliver: async (id, code) => get().upsert(await http.post<DriverOrder>(`${path(id)}/deliver`, { code })),
+  deliver: async (id, proof) => get().upsert(await http.post<DriverOrder>(`${path(id)}/deliver`, proof)),
 
   reset: () => set({ driver: undefined, orders: {}, status: 'idle', earnings: null, wallet: null, sharing: 'off', myLocation: null }),
 }));

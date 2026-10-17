@@ -1,6 +1,7 @@
 import type { CallIceConfig } from '@parla/types';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { parseDispatch, type DispatchConfig } from '../kernel/dispatch';
 import { parseDriverPay, type DriverPayConfig } from '../kernel/driver-earnings';
 
 export interface AppEnv {
@@ -28,6 +29,8 @@ export interface AppEnv {
   deliveryWatch: DeliveryWatchConfig;
   /** Cuánto gana el repartidor (porcentaje de la tarifa) y mínimos para depositarle. */
   driverPay: DriverPayConfig;
+  /** Ofertas por cercanía (radios por oleada). */
+  dispatch: DispatchConfig;
 }
 
 export interface DeliveryWatchConfig {
@@ -108,6 +111,7 @@ export function loadEnv(): AppEnv {
     internalToken,
     oneSignal,
     driverPay: parseDriverPay(env),
+    dispatch: parseDispatch(env),
     deliveryWatch: {
       intervalMs: Number(env.DELIVERY_WATCH_INTERVAL_MS ?? 60_000),
       untakenMinutes: Number(env.DELIVERY_UNTAKEN_MINUTES ?? 5),

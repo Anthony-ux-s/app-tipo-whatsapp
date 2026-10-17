@@ -1,5 +1,6 @@
 import { Bike, Check, MapPin, MessageCircle, PackageCheck, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { Avatar } from '@shared/ui/Avatar';
+import { PrivatePhoto } from '@shared/ui/PrivatePhoto';
 import { Stars } from '@shared/ui/Stars';
 import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
@@ -9,6 +10,7 @@ import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { AmountRow, OrderStatusBadge, OrderTimeline, PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { LiveTracking } from '../../services/components/LiveTracking';
 import { useOrderChat } from '../../services/hooks/use-order-chat.hook';
+import { CLAIM_REASON_LABEL, CLAIM_STATUS_LABEL } from '../../services/const/services.const';
 import { BUSINESS_STATUS_HINTS } from '../const/business.const';
 import { useBusinessOrderDetail } from '../hooks/use-business.hook';
 
@@ -52,6 +54,21 @@ export function BusinessOrderDetailView() {
           </div>
         </section>
       )}
+
+      {delivered && order.hasDeliveryPhoto && <PrivatePhoto path={`/orders/${encodeURIComponent(order.id)}/delivery-photo`} alt="Foto de la entrega" />}
+
+      {(order.claims ?? []).map((claim) => (
+        <section key={claim.id} className="flex flex-col gap-1.5 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200 md:p-5 dark:bg-amber-950/40 dark:ring-amber-900" aria-label="Reclamo del cliente" data-testid="business-claim">
+          <p className="flex items-center justify-between gap-3 font-bold text-ink">
+            Reclamo · {CLAIM_REASON_LABEL[claim.reason]}
+            <span className="shrink-0 text-xs font-bold text-ink-soft">{CLAIM_STATUS_LABEL[claim.status]}</span>
+          </p>
+          {claim.items.length > 0 && <p className="text-sm text-ink-soft">{claim.items.map((i) => `${i.quantity}× ${i.name}`).join(' · ')}</p>}
+          {claim.comment && <p className="text-sm text-ink">«{claim.comment}»</p>}
+          {claim.status === 'refunded' && <p className="text-sm text-ink-soft">Soporte le devolvió {formatSoles(claim.refundCents ?? 0)} al cliente.</p>}
+          {claim.hasPhoto && <PrivatePhoto path={`/orders/${encodeURIComponent(order.id)}/claims/${encodeURIComponent(claim.id)}/photo`} alt="Foto del reclamo" />}
+        </section>
+      ))}
 
       {order.rating?.storeStars && (
         <section className="flex flex-col gap-1 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Calificación del cliente" data-testid="business-rating">
