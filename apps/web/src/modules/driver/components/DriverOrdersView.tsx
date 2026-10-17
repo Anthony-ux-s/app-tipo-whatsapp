@@ -112,7 +112,7 @@ function DriverOrderCard({ order, onOpen }: { order: DriverOrder; onOpen: () => 
     >
       <span className="flex items-center justify-between gap-3">
         <span className="text-lg font-extrabold text-ink">
-          Ganas {formatSoles(order.deliveryFeeCents + order.tipCents)}
+          Ganas {formatSoles(order.earningsCents)}
           {order.tipCents > 0 && <span className="ml-1.5 align-middle text-xs font-bold text-emerald-700 dark:text-emerald-400">incluye {formatSoles(order.tipCents)} de propina</span>}
         </span>
         {order.mine ? <OrderStatusBadge status={order.status} /> : <span className="text-xs text-ink-faint">{formatListTimestamp(order.updatedAt)}</span>}

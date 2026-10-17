@@ -269,14 +269,46 @@ model Driver {
   online         Boolean   @default(false)
   /// Dejó de repartir: no recibe nada, pero sus entregas quedan en el historial.
   active         Boolean   @default(true)
+  /// Número de PagaYa donde se le depositan sus ganancias (9 dígitos).
+  payoutPhone    String?
   /// Última ubicación que mandó su celular (solo mientras reparte).
   lastLat        Float?
   lastLng        Float?
   lastLocationAt DateTime?
   createdAt      DateTime  @default(now())
 
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders Order[]
+  ledger DriverLedgerEntry[]
+}
+
+/// Movimientos del saldo del repartidor. Por cada entrega: + tarifa, − comisión de Rapidito (5 %) y
+/// + propina; por cada depósito: − monto (pendiente mientras se transfiere; si falla, deja de contar).
+/// El saldo es la suma de los movimientos que no fallaron.
+model DriverLedgerEntry {
+  /// Los depósitos usan «po_…» como id (es la referencia de la transferencia en PagaYa).
+  id            String    @id @default(cuid())
+  driverId      String
+  /// Pedido de la entrega; null en los depósitos.
+  orderId       String?
+  /// delivery_fee | commission | tip | payout
+  kind          String
+  /// En céntimos, con signo: positivo suma al saldo, negativo resta.
+  amountCents   Int
+  /// posted (cuenta) | pending | paid | failed (depósitos)
+  status        String    @default("posted")
+  transferId    String?
+  failureReason String?
+  /// manual | auto (depósitos)
+  reason        String?
+  createdAt     DateTime  @default(now())
+  settledAt     DateTime?
+
+  driver Driver @relation(fields: [driverId], references: [userId], onDelete: Cascade)
+
+  /// Una entrega se anota una sola vez aunque el aviso se repita.
+  @@unique([orderId, kind])
+  @@index([driverId, createdAt])
 }
 
 /**

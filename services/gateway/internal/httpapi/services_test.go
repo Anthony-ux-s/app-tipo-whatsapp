@@ -138,6 +138,10 @@ func TestServiciosExigenSesion(t *testing.T) {
 			t.Errorf("%s con token falso: esperaba 401, obtuve %d", path, status)
 		}
 	}
+	// El retiro de ganancias mueve dinero: sin sesión no existe.
+	if status, _ := call(t, http.MethodPost, gw.URL+"/api/driver/payouts", "", "", nil); status != http.StatusUnauthorized {
+		t.Errorf("retiro sin sesión: esperaba 401, obtuve %d", status)
+	}
 	status, body := call(t, http.MethodGet, gw.URL+"/api/services", jwt("u_1"), "", nil)
 	var catalog []services.ServiceInfo
 	_ = json.Unmarshal([]byte(body), &catalog)

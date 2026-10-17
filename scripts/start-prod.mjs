@@ -67,6 +67,7 @@ const env = {
   INTERNAL_TOKEN: secret('internal-token', process.env.INTERNAL_TOKEN, 24),
   PAGAYA_WEBHOOK_SECRET: secret('pagaya-webhook-secret', process.env.PAGAYA_WEBHOOK_SECRET, 24),
   MERCAYA_ADMIN_KEY: secret('mercaya-admin-key', process.env.MERCAYA_ADMIN_KEY, 24),
+  PAGAYA_API_KEY: secret('pagaya-api-key', process.env.PAGAYA_API_KEY, 24),
   GATEWAY_PUBLIC_URL: process.env.GATEWAY_PUBLIC_URL ?? `http://localhost:${port}`,
   WEB_ORIGIN: process.env.WEB_ORIGIN ?? origin,
   PUBLIC_WEB_URL: origin,

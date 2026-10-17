@@ -259,7 +259,48 @@ export interface DriverEarnings {
   totalDeliveries: number;
   /** De lo ganado, cuánto fue propina. */
   tipsCents: number;
+  /** Comisión de Rapidito descontada en total (5 % de las tarifas). */
+  commissionCents: number;
   rating: RatingSummary;
+}
+
+export type LedgerEntryKind = 'delivery_fee' | 'commission' | 'tip' | 'payout';
+export type PayoutStatus = 'pending' | 'paid' | 'failed';
+
+/** Un movimiento del saldo del repartidor (positivo suma, negativo resta). */
+export interface LedgerEntry {
+  id: string;
+  kind: LedgerEntryKind;
+  amountCents: number;
+  orderId: string | null;
+  /** Solo en retiros: si ya se depositó, está en curso o falló (y el saldo volvió). */
+  status: PayoutStatus | null;
+  createdAt: string;
+}
+
+/** La billetera del repartidor: saldo, cuenta de depósito y movimientos. */
+export interface DriverWallet {
+  /** Lo que se le puede depositar ahora. */
+  balanceCents: number;
+  /** Reservado en un depósito en curso. */
+  pendingPayoutCents: number;
+  /** Número de PagaYa donde se le deposita (9 dígitos); null si no lo puso. */
+  payoutPhone: string | null;
+  /** Hora del depósito automático diario (hora de Lima). */
+  autoPayoutAt: string;
+  /** Mínimo para el depósito automático. */
+  minAutoPayoutCents: number;
+  /** Porcentaje de la tarifa de delivery que gana el repartidor. */
+  driverSharePercent: number;
+  entries: LedgerEntry[];
+}
+
+/** Resultado de un retiro (lo hace el gateway con PagaYa). */
+export interface PayoutResult {
+  payoutId: string;
+  amountCents: number;
+  status: PayoutStatus;
+  transferId: string | null;
 }
 
 /** Ubicación del repartidor durante una entrega (la ven el cliente y la tienda de ese pedido). */
@@ -277,9 +318,13 @@ export interface DriverOrder {
   address: DeliveryAddress;
   customerName: string;
   lines: OrderLine[];
-  /** Lo que gana el repartidor por la entrega (la tarifa de delivery) más la propina. */
+  /** Tarifa de delivery del pedido (lo que pagó el cliente por el envío). */
   deliveryFeeCents: number;
   tipCents: number;
+  /** Comisión de Rapidito (5 % de la tarifa). */
+  commissionCents: number;
+  /** Lo que gana el repartidor: 95 % de la tarifa + la propina completa. */
+  earningsCents: number;
   /** Lo tiene este repartidor (si no, es una oferta disponible). */
   mine: boolean;
   timeline: OrderTimelineEntry[];

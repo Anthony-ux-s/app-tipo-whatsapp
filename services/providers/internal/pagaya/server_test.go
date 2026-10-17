@@ -207,3 +207,56 @@ func TestDevolverUnCobroPagado(t *testing.T) {
 		t.Fatalf("un cobro devuelto no se vuelve a pagar: %d", status)
 	}
 }
+
+func transferir(t *testing.T, srv *httptest.Server, key, body string) (int, map[string]any) {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/pagaya/transferencias", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if key != "" {
+		req.Header.Set("x-pagaya-clave", key)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	return resp.StatusCode, out
+}
+
+func TestTransferenciaIdempotentePorReferencia(t *testing.T) {
+	srv := pagaya(t, time.Minute)
+	body := `{"destino":"987654321","monto":12.34,"concepto":"Rapidito · tus ganancias","referencia":"po_1"}`
+	status, first := transferir(t, srv, DevAPIKey, body)
+	if status != 201 || first["estado"] != "COMPLETADA" || first["monto"] != 12.34 || first["referencia"] != "po_1" {
+		t.Fatalf("transferencia inesperada: %d %v", status, first)
+	}
+	// Repetir la misma referencia no paga dos veces: devuelve la misma transferencia.
+	status, again := transferir(t, srv, DevAPIKey, `{"destino":"987654321","monto":99,"referencia":"po_1"}`)
+	if status != 201 || again["id_transferencia"] != first["id_transferencia"] || again["monto"] != 12.34 {
+		t.Fatalf("debía devolver la misma transferencia: %d %v", status, again)
+	}
+}
+
+func TestTransferenciaValidaClaveDestinoYMonto(t *testing.T) {
+	srv := pagaya(t, time.Minute)
+	cases := []struct {
+		key, body string
+		status    int
+		err       string
+	}{
+		{"", `{"destino":"987654321","monto":5,"referencia":"a"}`, 401, "CLAVE_INVALIDA"},
+		{"otra", `{"destino":"987654321","monto":5,"referencia":"a"}`, 401, "CLAVE_INVALIDA"},
+		{DevAPIKey, `{"destino":"887654321","monto":5,"referencia":"b"}`, 400, "DESTINO_INVALIDO"},
+		{DevAPIKey, `{"destino":"98765432","monto":5,"referencia":"c"}`, 400, "DESTINO_INVALIDO"},
+		{DevAPIKey, `{"destino":"987654321","monto":0,"referencia":"d"}`, 400, "MONTO_INVALIDO"},
+		{DevAPIKey, `{"destino":"987654321","monto":5}`, 400, "SOLICITUD_INVALIDA"},
+	}
+	for _, c := range cases {
+		status, out := transferir(t, srv, c.key, c.body)
+		if status != c.status || out["error"] != c.err {
+			t.Errorf("%s: esperaba %d %s, obtuve %d %v", c.body, c.status, c.err, status, out)
+		}
+	}
+}

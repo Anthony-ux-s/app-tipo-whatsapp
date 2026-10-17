@@ -23,11 +23,18 @@ var (
 	ErrUnknownStatus = errors.New("estado de cobro desconocido")
 	// ErrAlreadyPaid: se quiso anular un cobro que la persona ya pagó (hay que devolverlo).
 	ErrAlreadyPaid = errors.New("el cobro ya se pagó")
+	// ErrInvalidDestination: el número de billetera al que se quiso transferir no es válido.
+	ErrInvalidDestination = errors.New("destino de la transferencia inválido")
 )
+
+// DevAPIKey: clave de la API de transferencias del simulador fuera de producción.
+const DevAPIKey = "pagaya-dev-clave"
 
 type Client struct {
 	BaseURL string
 	HTTP    *http.Client
+	// APIKey autoriza las transferencias (salida de dinero), en la cabecera x-pagaya-clave.
+	APIKey string
 }
 
 // ChargeRequest: lo que Parla cobra.
@@ -122,6 +129,32 @@ func (c Client) Refund(ctx context.Context, chargeID string) (time.Time, error) 
 		return time.Time{}, fmt.Errorf("%w: devolución %+v", ErrInvalid, body)
 	}
 	return at, nil
+}
+
+// Transfer envía dinero de la cuenta de Parla a una billetera PagaYa (las ganancias de un
+// repartidor). Es idempotente por referencia: repetirla con la misma referencia no paga dos veces.
+func (c Client) Transfer(ctx context.Context, reference, destination string, amountCents int, concept string) (string, error) {
+	status, raw, err := providerapi.CallWithHeaders(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/pagaya/transferencias", map[string]any{
+		"destino": destination, "monto": soles(amountCents), "concepto": concept, "referencia": reference,
+	}, map[string]string{"x-pagaya-clave": c.APIKey})
+	if err != nil {
+		return "", err
+	}
+	var body struct {
+		ID     string `json:"id_transferencia"`
+		Estado string `json:"estado"`
+		Error  string `json:"error"`
+	}
+	_ = json.Unmarshal(raw, &body)
+	switch {
+	case status == http.StatusBadRequest && body.Error == "DESTINO_INVALIDO":
+		return "", ErrInvalidDestination
+	case status != http.StatusCreated:
+		return "", fmt.Errorf("%w: transferencia respondió %d %s", providerapi.ErrUnavailable, status, body.Error)
+	case body.Estado != "COMPLETADA" || !services.ValidID.MatchString(body.ID):
+		return "", fmt.Errorf("%w: transferencia %+v", ErrInvalid, body)
+	}
+	return body.ID, nil
 }
 
 func httpURL(raw string) bool {

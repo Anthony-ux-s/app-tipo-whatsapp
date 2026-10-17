@@ -18,6 +18,7 @@ import type { PushPayload } from '@parla/types';
 import type { UpdateBusinessRequest } from '@parla/types';
 import type { BusinessesRepository, BusinessRecord } from '../modules/platform/services/businesses.repository';
 import type { DriverProfileRequest, GeoPoint, OrderRating } from '@parla/types';
+import type { DriverLedgerRepository, LedgerEntryRecord } from '../modules/platform/services/driver-ledger.repository';
 import type { DriverRecord, DriversRepository } from '../modules/platform/services/drivers.repository';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
 import type { AppEnv } from '../config/env.validation';
@@ -305,10 +306,10 @@ export class InMemoryDriversRepository implements DriversRepository {
   async register(userId: string, profile: Required<DriverProfileRequest>) {
     const existing = this.drivers.find((d) => d.userId === userId);
     if (existing) Object.assign(existing, profile, { active: true, online: false });
-    else this.drivers.push({ userId, ...profile, active: true, online: false, location: null });
+    else this.drivers.push({ userId, ...profile, active: true, online: false, location: null, payoutPhone: null });
     return (await this.findByUser(userId))!;
   }
-  async update(userId: string, changes: Partial<Pick<DriverRecord, 'vehicle' | 'plate' | 'online' | 'active'>>) {
+  async update(userId: string, changes: Partial<Pick<DriverRecord, 'vehicle' | 'plate' | 'online' | 'active' | 'payoutPhone'>>) {
     Object.assign(this.drivers.find((d) => d.userId === userId)!, changes);
     return (await this.findByUser(userId))!;
   }
@@ -364,14 +365,6 @@ export class InMemoryOrdersRepository implements OrdersRepository {
   }
   async listActiveForDriver(driverId: string) {
     return this.orders.filter((o) => o.driverId === driverId && (o.status === 'driver_assigned' || o.status === 'on_the_way')).map((o) => this.withLocation(o));
-  }
-  async driverEarnings(driverId: string, since: { today: Date; week: Date }) {
-    const done = this.orders.filter((o) => o.driverId === driverId && o.status === 'delivered');
-    const sum = (from?: Date): [number, number] => {
-      const list = done.filter((o) => !from || o.updatedAt >= from);
-      return [list.reduce((s, o) => s + o.deliveryFeeCents + o.tipCents, 0), list.length];
-    };
-    return { today: sum(since.today), week: sum(since.week), total: sum(), tipsCents: done.reduce((s, o) => s + o.tipCents, 0) };
   }
   async listByStatus(statuses: OrderStatus[], limit: number) {
     return this.orders.filter((o) => statuses.includes(o.status)).slice(0, limit).map((o) => this.withLocation(o));
@@ -479,5 +472,64 @@ export class RecordingVerificationSender implements VerificationSender {
   }
   lastEmailCode() {
     return this.emails.at(-1)!.subject.match(/(\d{6})/)![1];
+  }
+}
+
+export class InMemoryDriverLedger implements DriverLedgerRepository {
+  entries: LedgerEntryRecord[] = [];
+  constructor(private readonly drivers?: InMemoryDriversRepository) {}
+  private counts = (e: LedgerEntryRecord) => e.status !== 'failed';
+  async recordDelivery(e: { driverId: string; orderId: string; feeCents: number; commissionCents: number; tipCents: number }) {
+    if (this.entries.some((x) => x.orderId === e.orderId && x.kind === 'delivery_fee')) return false;
+    const base = { driverId: e.driverId, orderId: e.orderId, status: 'posted' as const, transferId: null, failureReason: null, reason: null, createdAt: new Date() };
+    this.entries.push({ ...base, id: nextId('le'), kind: 'delivery_fee', amountCents: e.feeCents });
+    this.entries.push({ ...base, id: nextId('le'), kind: 'commission', amountCents: -e.commissionCents });
+    if (e.tipCents > 0) this.entries.push({ ...base, id: nextId('le'), kind: 'tip', amountCents: e.tipCents });
+    return true;
+  }
+  async balance(driverId: string) {
+    const mine = this.entries.filter((e) => e.driverId === driverId);
+    return {
+      availableCents: mine.filter(this.counts).reduce((s, e) => s + e.amountCents, 0),
+      pendingPayoutCents: 0 - mine.filter((e) => e.kind === 'payout' && e.status === 'pending').reduce((s, e) => s + e.amountCents, 0),
+    };
+  }
+  async totals(driverId: string, since?: Date) {
+    const mine = this.entries.filter((e) => e.driverId === driverId && e.kind !== 'payout' && (!since || e.createdAt >= since));
+    const sum = (kind: string) => mine.filter((e) => e.kind === kind).reduce((s, e) => s + e.amountCents, 0);
+    return { netCents: sum('delivery_fee') + sum('commission') + sum('tip'), deliveries: mine.filter((e) => e.kind === 'delivery_fee').length, tipsCents: sum('tip'), commissionCents: -sum('commission') };
+  }
+  async list(driverId: string, limit: number) {
+    return this.entries.filter((e) => e.driverId === driverId).reverse().slice(0, limit);
+  }
+  async reservePayout(driverId: string, minCents: number, reason: 'manual' | 'auto') {
+    if (this.entries.some((e) => e.driverId === driverId && e.kind === 'payout' && e.status === 'pending')) return 'pending' as const;
+    const { availableCents } = await this.balance(driverId);
+    if (availableCents < minCents) return 'no_balance' as const;
+    const entry: LedgerEntryRecord = { id: nextId('po'), driverId, orderId: null, kind: 'payout', amountCents: -availableCents, status: 'pending', transferId: null, failureReason: null, reason, createdAt: new Date() };
+    this.entries.push(entry);
+    return { ...entry };
+  }
+  async findPayout(id: string) {
+    const e = this.entries.find((x) => x.id === id && x.kind === 'payout');
+    return e ? { ...e } : null;
+  }
+  async settlePayout(id: string, status: 'paid' | 'failed', transferId: string | null, failureReason: string | null) {
+    const e = this.entries.find((x) => x.id === id && x.kind === 'payout' && x.status === 'pending');
+    if (!e) return null;
+    Object.assign(e, { status, transferId, failureReason });
+    return { ...e };
+  }
+  async stuckPayouts(before: Date) {
+    return this.entries.filter((e) => e.kind === 'payout' && e.status === 'pending' && e.createdAt < before).map((e) => ({ ...e }));
+  }
+  async duePayouts(minCents: number) {
+    const ids = (this.drivers?.drivers ?? []).filter((d) => d.active && d.payoutPhone).map((d) => d.userId);
+    const due: string[] = [];
+    for (const id of ids) {
+      if (this.entries.some((e) => e.driverId === id && e.kind === 'payout' && e.status === 'pending')) continue;
+      if ((await this.balance(id)).availableCents >= minCents) due.push(id);
+    }
+    return due;
   }
 }

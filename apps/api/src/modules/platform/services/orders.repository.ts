@@ -78,11 +78,6 @@ export interface OrdersRepository {
   /** Entregas en curso del repartidor (tomadas y aún no entregadas). */
   countActiveForDriver(driverId: string): Promise<number>;
   listActiveForDriver(driverId: string): Promise<OrderRecord[]>;
-  /** [céntimos, entregas] de las entregas terminadas del repartidor: desde hoy, desde la semana y en total. */
-  driverEarnings(
-    driverId: string,
-    since: { today: Date; week: Date },
-  ): Promise<{ today: [number, number]; week: [number, number]; total: [number, number]; tipsCents: number }>;
   /**
    * Aplica el cambio solo si el pedido sigue en `expected` (comparar y cambiar atómico) y, si cambia
    * de estado, lo anota en la línea de tiempo. Devuelve el pedido actualizado, o null si otro cambio

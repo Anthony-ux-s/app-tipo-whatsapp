@@ -126,6 +126,17 @@ pones tu nombre, un usuario opcional y la contraseña.
     y puede **dejar de repartir** (su historial queda y puede volver).
   - **Propina**: en el carrito el cliente elige S/ 1, 2, 3, 5 u otro monto; se cobra en el mismo QR
     y va completa al repartidor (que la ve en la oferta y en sus ganancias).
+  - **Ganancias del repartidor y comisión automática**: el repartidor gana el **95 % de la tarifa de
+    delivery** y el **100 % de la propina**; Rapidito se queda con el 5 %. El cliente paga todo en un
+    solo cobro a la plataforma, así que la comisión **se descuenta sola**: cada entrega anota en el
+    libro de movimientos del repartidor + tarifa, − comisión y + propina (una sola vez, aunque se
+    confirme dos veces). En la oferta y en la entrega ve el detalle («Para ti S/ …»).
+  - **Depósitos a PagaYa**: en su perfil el repartidor pone su número de PagaYa, ve su **saldo** y
+    sus movimientos, y puede **retirar ahora**. Además, el gateway le **deposita automáticamente cada
+    día a las 23:00** (hora de Lima) si tiene S/ 5 o más (`RAPIDITO_PAYOUT_AT`). El retiro primero
+    reserva el saldo en el core, luego transfiere con PagaYa usando el id del depósito como referencia
+    (PagaYa no la paga dos veces) y recién entonces lo confirma; si PagaYa falla, el saldo vuelve. Cada
+    hora se concilian los depósitos que quedaron sin confirmar.
   - **Calificaciones**: al recibir el pedido, el cliente califica al repartidor y a la tienda (1 a 5
     estrellas y un comentario). La tienda la ve en el pedido y su promedio en «Mi tienda»; el
     repartidor, su promedio en su perfil.
@@ -320,8 +331,8 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 - **Probado en esta PC sin Docker**: los `Dockerfile` y el `docker-compose.yml` no se pudieron
   construir aquí; el modo producción sí se probó sin Docker.
 - **Llamadas**: TURN propio para redes muy restrictivas, compartir pantalla, SFU para grupos grandes.
-- **Delivery**: liquidación (pago) de las ganancias al repartidor; en producción, un servidor de
-  mapas y de rutas propio o con clave (las teselas y OSRM públicos tienen límites de uso).
+- **Delivery**: en producción, un servidor de mapas y de rutas propio o con clave (las teselas y OSRM
+  públicos tienen límites de uso), y la billetera real de pagos (PagaYa es un simulador).
 - **Negocios**: se registran y administran en el sistema de producción de cada negocio; Parla solo
   los consulta y procesa sus pedidos.
 - **Ofertas de restaurantes y salud**: son una vitrina de ejemplo; todavía no se pueden pedir.

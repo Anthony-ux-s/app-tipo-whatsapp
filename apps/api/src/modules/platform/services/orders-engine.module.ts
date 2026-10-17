@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../identity/auth/auth.module';
 import { PushEngineModule } from '../messaging/push/push-engine.module';
 import { BUSINESSES_REPOSITORY } from './businesses.repository';
+import { DRIVER_LEDGER_REPOSITORY } from './driver-ledger.repository';
 import { DRIVERS_REPOSITORY } from './drivers.repository';
+import { PrismaDriverLedgerRepository } from './prisma-driver-ledger.repository';
 import { ORDERS_REPOSITORY } from './orders.repository';
 import { PrismaBusinessesRepository } from './prisma-businesses.repository';
 import { PrismaDriversRepository } from './prisma-drivers.repository';
@@ -44,6 +46,14 @@ import {
   UpdateOrderUseCase,
 } from './use-cases/orders.use-cases';
 import { DeliveryWatchService, WatchDeliveriesUseCase } from './use-cases/delivery-watch.use-cases';
+import {
+  DuePayoutsUseCase,
+  GetDriverWalletUseCase,
+  ReservePayoutUseCase,
+  SetPayoutPhoneUseCase,
+  SettlePayoutUseCase,
+  StuckPayoutsUseCase,
+} from './use-cases/driver-wallet.use-cases';
 
 const USE_CASES = [
   CreateOrderUseCase,
@@ -73,6 +83,12 @@ const USE_CASES = [
   GetDriverEarningsUseCase,
   ReportDriverLocationUseCase,
   RateOrderUseCase,
+  GetDriverWalletUseCase,
+  SetPayoutPhoneUseCase,
+  ReservePayoutUseCase,
+  SettlePayoutUseCase,
+  DuePayoutsUseCase,
+  StuckPayoutsUseCase,
 ];
 
 /** El MOTOR de pedidos de Servicios: lo comparten la puerta del gateway, la del cliente, la del negocio y la del repartidor. */
@@ -82,6 +98,7 @@ const USE_CASES = [
     { provide: ORDERS_REPOSITORY, useClass: PrismaOrdersRepository },
     { provide: BUSINESSES_REPOSITORY, useClass: PrismaBusinessesRepository },
     { provide: DRIVERS_REPOSITORY, useClass: PrismaDriversRepository },
+    { provide: DRIVER_LEDGER_REPOSITORY, useClass: PrismaDriverLedgerRepository },
     OrderEvents,
     WatchDeliveriesUseCase,
     DeliveryWatchService,

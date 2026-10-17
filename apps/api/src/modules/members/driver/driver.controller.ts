@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
-import type { DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, DriverVehicle, GeoPoint } from '@parla/types';
+import type { DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, DriverVehicle, DriverWallet, GeoPoint } from '@parla/types';
 import { IsBoolean, IsLatitude, IsLongitude, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../../../http/current-user.decorator';
 import {
@@ -18,6 +18,7 @@ import {
   SetDriverOnlineUseCase,
   UpdateDriverProfileUseCase,
 } from '../../platform/services/use-cases/driver-profile.use-cases';
+import { GetDriverWalletUseCase, SetPayoutPhoneUseCase } from '../../platform/services/use-cases/driver-wallet.use-cases';
 
 class DeliverDto {
   @IsString() @Matches(/^\s*\d{4}\s*$/, { message: 'El código tiene 4 dígitos' }) code: string;
@@ -30,6 +31,10 @@ class DriverProfileDto implements DriverProfileRequest {
 
 class OnlineDto {
   @IsBoolean() online: boolean;
+}
+
+class PayoutAccountDto {
+  @IsString() @MaxLength(20) phone: string;
 }
 
 class LocationDto implements GeoPoint {
@@ -57,6 +62,8 @@ export class DriverController {
     private readonly leave: LeaveDriverUseCase,
     private readonly earnings: GetDriverEarningsUseCase,
     private readonly reportLocation: ReportDriverLocationUseCase,
+    private readonly wallet: GetDriverWalletUseCase,
+    private readonly setPayoutPhone: SetPayoutPhoneUseCase,
   ) {}
 
   @Get()
@@ -92,6 +99,20 @@ export class DriverController {
   @Get('earnings')
   earned(@CurrentUser() user: AuthUser): Promise<DriverEarnings> {
     return this.earnings.execute(user.userId);
+  }
+
+  /**
+   * Saldo (95 % de las tarifas + propinas, ya descontada la comisión), número de PagaYa y movimientos.
+   * Retirar (POST /api/driver/payouts) lo atiende el gateway, que transfiere con PagaYa.
+   */
+  @Get('wallet')
+  myWallet(@CurrentUser() user: AuthUser): Promise<DriverWallet> {
+    return this.wallet.execute(user.userId);
+  }
+
+  @Patch('payout-account')
+  payoutAccount(@CurrentUser() user: AuthUser, @Body() body: PayoutAccountDto): Promise<{ payoutPhone: string }> {
+    return this.setPayoutPhone.execute(user.userId, body.phone);
   }
 
   /** Ubicación del celular mientras reparte; solo la ven el cliente y la tienda del pedido. */

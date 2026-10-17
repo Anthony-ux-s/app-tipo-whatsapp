@@ -77,6 +77,9 @@ type Orchestrator struct {
 	Delivery Delivery
 	Payments Payments
 	Core     Core
+	// Payouts y Wallet: retiros de las ganancias de los repartidores a su billetera.
+	Payouts PayoutCore
+	Wallet  Wallet
 	// PublicURL es la dirección pública del gateway, para los avisos de los proveedores.
 	PublicURL string
 	Now       func() time.Time

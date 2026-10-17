@@ -4,6 +4,7 @@ import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../infra/re
 import { ConflictError, ForbiddenError } from '../../../../kernel/domain-error';
 import { assertPoint, normalizeDriverProfile } from '../../../../kernel/geo';
 import { DRIVERS_REPOSITORY, type DriverRecord, type DriversRepository } from '../drivers.repository';
+import { DRIVER_LEDGER_REPOSITORY, type DriverLedgerRepository } from '../driver-ledger.repository';
 import { ORDERS_REPOSITORY, type OrdersRepository } from '../orders.repository';
 
 /** Cada cuánto, como mucho, se guarda y se reparte la ubicación (el celular puede mandar más seguido). */
@@ -66,12 +67,16 @@ export class LeaveDriverUseCase {
   }
 }
 
-/** Lo ganado: tarifas de las entregas terminadas hoy, en los últimos 7 días y en total. */
+/**
+ * Lo ganado (neto: 95 % de la tarifa + propinas, ya descontada la comisión de Rapidito) hoy, en los
+ * últimos 7 días y en total, según su libro de movimientos.
+ */
 @Injectable()
 export class GetDriverEarningsUseCase {
   constructor(
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
+    @Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger: DriverLedgerRepository,
   ) {}
 
   async execute(userId: string, now = new Date()): Promise<DriverEarnings> {
@@ -79,15 +84,21 @@ export class GetDriverEarningsUseCase {
     const today = new Date(now);
     today.setHours(0, 0, 0, 0);
     const week = new Date(today.getTime() - 6 * 24 * 3_600_000);
-    const [e, rating] = await Promise.all([this.orders.driverEarnings(userId, { today, week }), this.orders.ratingSummary({ driverId: userId })]);
+    const [d, w, t, rating] = await Promise.all([
+      this.ledger.totals(userId, today),
+      this.ledger.totals(userId, week),
+      this.ledger.totals(userId),
+      this.orders.ratingSummary({ driverId: userId }),
+    ]);
     return {
-      todayCents: e.today[0],
-      todayDeliveries: e.today[1],
-      weekCents: e.week[0],
-      weekDeliveries: e.week[1],
-      totalCents: e.total[0],
-      totalDeliveries: e.total[1],
-      tipsCents: e.tipsCents,
+      todayCents: d.netCents,
+      todayDeliveries: d.deliveries,
+      weekCents: w.netCents,
+      weekDeliveries: w.deliveries,
+      totalCents: t.netCents,
+      totalDeliveries: t.deliveries,
+      tipsCents: t.tipsCents,
+      commissionCents: t.commissionCents,
       rating,
     };
   }

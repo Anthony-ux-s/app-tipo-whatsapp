@@ -1,4 +1,4 @@
-import type { DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, GeoPoint } from '@parla/types';
+import type { DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, DriverWallet, GeoPoint, PayoutResult } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
 
@@ -8,6 +8,7 @@ interface DriverState {
   orders: Record<string, DriverOrder>;
   status: 'idle' | 'loading' | 'ready' | 'error';
   earnings: DriverEarnings | null;
+  wallet: DriverWallet | null;
   /** Compartir ubicación mientras reparte: apagado, compartiendo o sin permiso del navegador. */
   sharing: 'off' | 'sharing' | 'denied' | 'unavailable';
   /** Última ubicación propia (para el mapa del repartidor). */
@@ -20,6 +21,10 @@ interface DriverState {
   /** «Dejar de repartir». */
   leave: () => Promise<void>;
   loadEarnings: () => Promise<void>;
+  loadWallet: () => Promise<void>;
+  setPayoutPhone: (phone: string) => Promise<void>;
+  /** «Retirar ahora»: el gateway transfiere todo el saldo a su PagaYa. */
+  withdraw: () => Promise<PayoutResult>;
   setSharing: (sharing: DriverState['sharing'], at?: GeoPoint) => void;
   loadOrders: () => Promise<void>;
   loadOrder: (id: string) => Promise<DriverOrder>;
@@ -41,6 +46,7 @@ export const useDriverStore = create<DriverState>((set, get) => ({
   orders: {},
   status: 'idle',
   earnings: null,
+  wallet: null,
   sharing: 'off',
   myLocation: null,
 
@@ -93,13 +99,25 @@ export const useDriverStore = create<DriverState>((set, get) => ({
     set({ driver: null, orders: {}, status: 'idle', earnings: null });
   },
   loadEarnings: async () => set({ earnings: await http.get<DriverEarnings>('/driver/earnings') }),
+  loadWallet: async () => set({ wallet: await http.get<DriverWallet>('/driver/wallet') }),
+  setPayoutPhone: async (phone) => {
+    await http.patch('/driver/payout-account', { phone });
+    await get().loadWallet();
+  },
+  withdraw: async () => {
+    try {
+      return await http.post<PayoutResult>('/driver/payouts');
+    } finally {
+      await get().loadWallet();
+    }
+  },
   setSharing: (sharing, at) => set({ sharing, ...(at ? { myLocation: at } : {}) }),
 
   accept: async (id) => get().upsert(await http.post<DriverOrder>(`${path(id)}/accept`)),
   release: async (id) => get().upsert(await http.post<DriverOrder>(`${path(id)}/release`)),
   deliver: async (id, code) => get().upsert(await http.post<DriverOrder>(`${path(id)}/deliver`, { code })),
 
-  reset: () => set({ driver: undefined, orders: {}, status: 'idle', earnings: null, sharing: 'off', myLocation: null }),
+  reset: () => set({ driver: undefined, orders: {}, status: 'idle', earnings: null, wallet: null, sharing: 'off', myLocation: null }),
 }));
 
 /** Ofertas para recoger (sin repartidor), de la más antigua a la más nueva. */

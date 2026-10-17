@@ -134,6 +134,16 @@ func (h *HTTP) respond(w http.ResponseWriter) func(services.Order, error) {
 	}
 }
 
+// Payout: «Retirar ahora» — el repartidor retira su saldo a su billetera PagaYa.
+func (h *HTTP) Payout(w http.ResponseWriter, r *http.Request, userID string) {
+	payout, err := h.Orch.Payout(r.Context(), userID, "manual")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, payout)
+}
+
 // PagayaHook: aviso firmado de la billetera.
 func (h *HTTP) PagayaHook(w http.ResponseWriter, r *http.Request) {
 	body, ok := readWebhook(w, r)

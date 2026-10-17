@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/parla/gateway/internal/services"
 )
@@ -19,6 +20,13 @@ var (
 	ErrNotFound = errors.New("pedido no encontrado")
 )
 
+// ConflictError: un 409 del core con su mensaje para la persona (p. ej. «No tienes saldo para
+// retirar»). errors.Is(err, ErrConflict) sigue valiendo.
+type ConflictError struct{ Message string }
+
+func (e *ConflictError) Error() string        { return e.Message }
+func (e *ConflictError) Is(target error) bool { return target == ErrConflict }
+
 // Core guarda los pedidos (el core NestJS es la fuente de verdad) y avisa al cliente.
 type Core interface {
 	CreateOrder(ctx context.Context, order services.InternalCreateOrder) (services.InternalOrder, error)
@@ -28,6 +36,20 @@ type Core interface {
 	BusinessByService(ctx context.Context, service services.ServiceID) (services.Business, error)
 	// BusinessByOwner: el negocio de una persona (ErrNotFound si no es dueña de ninguno).
 	BusinessByOwner(ctx context.Context, userID string) (services.Business, error)
+}
+
+// PayoutCore: las ganancias de los repartidores, que lleva el core (saldo = 95 % del delivery +
+// propinas, menos lo ya retirado). El gateway solo mueve el dinero en la billetera.
+type PayoutCore interface {
+	// ReservePayout aparta todo el saldo disponible como un retiro pendiente. 409 (ConflictError) si
+	// no hay saldo, falta el número de PagaYa o ya hay un retiro en curso.
+	ReservePayout(ctx context.Context, userID, reason string) (services.PayoutReservation, error)
+	// SettlePayout cierra el retiro: pagado, o fallido (el dinero vuelve al saldo). Idempotente.
+	SettlePayout(ctx context.Context, payoutID string, settle services.PayoutSettle) (services.Payout, error)
+	// DuePayouts: repartidores con saldo suficiente para el retiro automático.
+	DuePayouts(ctx context.Context) ([]services.DuePayout, error)
+	// StuckPayouts: retiros que siguen pendientes hace más de N minutos (para conciliarlos).
+	StuckPayouts(ctx context.Context, olderThanMinutes int) ([]services.PayoutReservation, error)
 }
 
 // HTTPCore habla con las rutas internas del core con el token entre servicios.
@@ -62,6 +84,26 @@ func (c HTTPCore) BusinessByOwner(ctx context.Context, userID string) (services.
 	return out, c.call(ctx, http.MethodGet, "/api/internal/businesses/by-owner/"+url.PathEscape(userID), nil, &out)
 }
 
+func (c HTTPCore) ReservePayout(ctx context.Context, userID, reason string) (services.PayoutReservation, error) {
+	var out services.PayoutReservation
+	return out, c.call(ctx, http.MethodPost, "/api/internal/drivers/"+url.PathEscape(userID)+"/payouts", map[string]string{"reason": reason}, &out)
+}
+
+func (c HTTPCore) SettlePayout(ctx context.Context, payoutID string, settle services.PayoutSettle) (services.Payout, error) {
+	var out services.Payout
+	return out, c.call(ctx, http.MethodPatch, "/api/internal/payouts/"+url.PathEscape(payoutID), settle, &out)
+}
+
+func (c HTTPCore) DuePayouts(ctx context.Context) ([]services.DuePayout, error) {
+	var out []services.DuePayout
+	return out, c.call(ctx, http.MethodGet, "/api/internal/payouts/due", nil, &out)
+}
+
+func (c HTTPCore) StuckPayouts(ctx context.Context, olderThanMinutes int) ([]services.PayoutReservation, error) {
+	var out []services.PayoutReservation
+	return out, c.call(ctx, http.MethodGet, fmt.Sprintf("/api/internal/payouts/stuck?olderThanMinutes=%d", olderThanMinutes), nil, &out)
+}
+
 func (c HTTPCore) call(ctx context.Context, method, path string, in, out any) error {
 	var body io.Reader
 	if in != nil {
@@ -71,7 +113,11 @@ func (c HTTPCore) call(ctx context.Context, method, path string, in, out any) er
 		}
 		body = bytes.NewReader(raw)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL.JoinPath(path).String(), body)
+	// JoinPath escaparía el «?»: la consulta va aparte.
+	path, query, _ := strings.Cut(path, "?")
+	target := c.BaseURL.JoinPath(path)
+	target.RawQuery = query
+	req, err := http.NewRequestWithContext(ctx, method, target.String(), body)
 	if err != nil {
 		return err
 	}
@@ -89,6 +135,12 @@ func (c HTTPCore) call(ctx context.Context, method, path string, in, out any) er
 	case resp.StatusCode == http.StatusNotFound:
 		return ErrNotFound
 	case resp.StatusCode == http.StatusConflict:
+		var body struct {
+			Message string `json:"message"`
+		}
+		if json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&body) == nil && body.Message != "" {
+			return &ConflictError{Message: body.Message}
+		}
 		return ErrConflict
 	case resp.StatusCode >= 300:
 		return fmt.Errorf("core respondió %d", resp.StatusCode)

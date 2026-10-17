@@ -7,6 +7,8 @@ export interface DriverRecord extends DriverInfo {
   active: boolean;
   /** Última ubicación que mandó su celular; null si nunca mandó. */
   location: (GeoPoint & { at: Date }) | null;
+  /** Número de PagaYa donde se le depositan sus ganancias; null si no lo puso. */
+  payoutPhone: string | null;
 }
 
 export interface DriversRepository {
@@ -15,7 +17,7 @@ export interface DriversRepository {
   listUserIds(): Promise<string[]>;
   /** Alta (o vuelta, si había dejado de repartir): queda activo y desconectado. */
   register(userId: string, profile: Required<DriverProfileRequest>): Promise<DriverRecord>;
-  update(userId: string, changes: Partial<Pick<DriverRecord, 'vehicle' | 'plate' | 'online' | 'active'>>): Promise<DriverRecord>;
+  update(userId: string, changes: Partial<Pick<DriverRecord, 'vehicle' | 'plate' | 'online' | 'active' | 'payoutPhone'>>): Promise<DriverRecord>;
   saveLocation(userId: string, point: GeoPoint, at: Date): Promise<void>;
 }
 

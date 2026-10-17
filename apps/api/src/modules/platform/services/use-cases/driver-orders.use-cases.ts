@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { DriverInfo, DriverOrder, DriverOrders } from '@parla/types';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
+import { splitDelivery } from '../../../../kernel/driver-earnings';
 import { MAX_DELIVERY_CODE_ATTEMPTS } from '../../../../kernel/order-rules';
+import { DRIVER_LEDGER_REPOSITORY, type DriverLedgerRepository } from '../driver-ledger.repository';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { DRIVERS_REPOSITORY, type DriverRecord, type DriversRepository } from '../drivers.repository';
 import { ORDERS_REPOSITORY, type OrderRecord, type OrdersRepository } from '../orders.repository';
@@ -154,6 +156,7 @@ export class DeliverOrderUseCase {
     @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
     private readonly events: OrderEvents,
+    @Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger: DriverLedgerRepository,
   ) {}
 
   async execute(userId: string, id: string, code: string): Promise<DriverOrder> {
@@ -179,6 +182,10 @@ export class DeliverOrderUseCase {
       this.events.changed(updated);
       order = updated;
     }
+    // A su saldo: tarifa, menos la comisión de Rapidito (5 %), más la propina. Se descuenta sola y,
+    // si la entrega se confirma dos veces, no se anota dos veces.
+    const split = splitDelivery(order.deliveryFeeCents, order.tipCents);
+    await this.ledger.recordDelivery({ driverId: userId, orderId: order.id, feeCents: order.deliveryFeeCents, commissionCents: split.commissionCents, tipCents: order.tipCents });
     return toDriverOrder(order, userId, await customersOf(this.users, [order]));
   }
 }

@@ -102,3 +102,34 @@ func TestAnularYDevolver(t *testing.T) {
 		t.Fatal("la billetera caída debe fallar")
 	}
 }
+
+func TestTransferEnviaConClaveYTraduceErrores(t *testing.T) {
+	var gotKey, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		gotKey, gotBody = r.Header.Get("x-pagaya-clave"), string(body)
+		switch {
+		case strings.Contains(gotBody, `"destino":"123"`):
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"error":"DESTINO_INVALIDO"}`)
+		case strings.Contains(gotBody, `"referencia":"po_caido"`):
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"id_transferencia":"tr_1","estado":"COMPLETADA","referencia":"po_1","monto":12.34}`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := Client{BaseURL: srv.URL, HTTP: srv.Client(), APIKey: "clave"}
+	ctx := context.Background()
+	id, err := c.Transfer(ctx, "po_1", "987654321", 1234, "Rapidito · tus ganancias")
+	if err != nil || id != "tr_1" || gotKey != "clave" || !strings.Contains(gotBody, `"monto":12.34`) {
+		t.Fatalf("transferencia: %q %v (clave %q, cuerpo %s)", id, err, gotKey, gotBody)
+	}
+	if _, err := c.Transfer(ctx, "po_2", "123", 100, "x"); !errors.Is(err, ErrInvalidDestination) {
+		t.Fatalf("esperaba ErrInvalidDestination, obtuve %v", err)
+	}
+	if _, err := c.Transfer(ctx, "po_caido", "987654321", 100, "x"); err == nil || errors.Is(err, ErrInvalidDestination) {
+		t.Fatalf("la billetera caída debe fallar como no disponible, obtuve %v", err)
+	}
+}

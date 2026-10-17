@@ -11,6 +11,7 @@ import type {
   RateOrderRequest,
 } from '@parla/types';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
+import { splitDelivery } from '../../../../kernel/driver-earnings';
 import {
   assertOrderTotals,
   assertOrderTransition,
@@ -92,6 +93,7 @@ export function toBusinessOrder(order: OrderRecord, customers: Map<string, Order
 
 /** Pedido para un repartidor: qué recoge, dónde y adónde va. Solo el nombre de pila del cliente. */
 export function toDriverOrder(order: OrderRecord, driverId: string, customers: Map<string, OrderCustomer>): DriverOrder {
+  const split = splitDelivery(order.deliveryFeeCents, order.tipCents);
   return {
     id: order.id,
     status: order.status,
@@ -101,6 +103,8 @@ export function toDriverOrder(order: OrderRecord, driverId: string, customers: M
     lines: order.lines,
     deliveryFeeCents: order.deliveryFeeCents,
     tipCents: order.tipCents,
+    commissionCents: split.commissionCents,
+    earningsCents: split.earningsCents,
     mine: order.driverId === driverId,
     timeline: order.timeline,
     createdAt: order.createdAt.toISOString(),
@@ -159,7 +163,7 @@ export class OrderEvents {
     const lost = statusChanged && lostBy ? driverLostPush(order.id, order.status, order.business?.name ?? 'La tienda') : null;
     if (lostBy && lost) void this.notifications.notify([lostBy], () => lost);
     if (offerChanged && order.status === 'searching_driver') {
-      const offer = driverOfferPush(order.id, order.business?.name ?? 'Una tienda', order.deliveryFeeCents);
+      const offer = driverOfferPush(order.id, order.business?.name ?? 'Una tienda', splitDelivery(order.deliveryFeeCents, order.tipCents).earningsCents);
       // A quien lo acaba de soltar no se le vuelve a ofrecer por push.
       void this.notifications.notify([...driverIds].filter((id) => id !== previousDriverId), () => offer);
     }

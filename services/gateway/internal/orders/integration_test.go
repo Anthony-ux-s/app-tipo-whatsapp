@@ -2,6 +2,7 @@ package orders
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -147,5 +148,28 @@ func TestIntegracionLaDuenaCambiaUnPrecio(t *testing.T) {
 	found, err := orch.Products(ctx, "sal de mesa")
 	if err != nil || len(found) == 0 || found[0].PriceCents != price {
 		t.Fatalf("la búsqueda debía traer el precio nuevo %d: %+v %v", price, found, err)
+	}
+}
+
+// La transferencia a un repartidor es idempotente por referencia contra el simulador real: repetirla
+// (p. ej. tras un fallo al cerrar el retiro en el core) no le paga dos veces.
+func TestIntegracionTransferenciaIdempotente(t *testing.T) {
+	base := os.Getenv("PARLA_PROVIDERS_URL")
+	if base == "" {
+		t.Skip("define PARLA_PROVIDERS_URL para probar contra los simuladores")
+	}
+	wallet := pagaya.Client{BaseURL: base, HTTP: &http.Client{Timeout: 10 * time.Second}, APIKey: pagaya.DevAPIKey}
+	ctx := context.Background()
+	ref := "po_test_" + time.Now().Format("150405.000000")
+	first, err := wallet.Transfer(ctx, ref, "987654321", 1234, "Rapidito · tus ganancias")
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := wallet.Transfer(ctx, ref, "987654321", 1234, "Rapidito · tus ganancias")
+	if err != nil || again != first {
+		t.Fatalf("la misma referencia debía devolver la misma transferencia: %s vs %s (%v)", first, again, err)
+	}
+	if _, err := wallet.Transfer(ctx, ref+"_b", "123", 100, "x"); !errors.Is(err, pagaya.ErrInvalidDestination) {
+		t.Fatalf("esperaba ErrInvalidDestination, obtuve %v", err)
 	}
 }

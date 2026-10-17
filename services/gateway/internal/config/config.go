@@ -7,12 +7,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const devInternalToken = "parla-dev-internal-token"
 const devJWTSecret = "parla-dev-secret-cambiar-en-produccion"
 const devPagayaSecret = "pagaya-dev-secret"
 const devMercayaKey = "mercaya-dev-clave"
+const devPagayaAPIKey = "pagaya-dev-clave"
 
 type Config struct {
 	Production bool
@@ -34,6 +36,10 @@ type Config struct {
 	PagayaSecret string
 	// MercayaAdminKey: clave de la API de administración de la tienda (catálogo de la dueña).
 	MercayaAdminKey string
+	// PagayaAPIKey: clave de la API de transferencias de la billetera (retiros de los repartidores).
+	PagayaAPIKey string
+	// PayoutAt: hora de Lima («HH:MM») del retiro automático diario a los repartidores; vacío = apagado.
+	PayoutAt string
 }
 
 func env(key, fallback string) string {
@@ -81,6 +87,12 @@ func Load() (Config, error) {
 		PublicURL:       strings.TrimRight(public.String(), "/"),
 		PagayaSecret:    env("PAGAYA_WEBHOOK_SECRET", devPagayaSecret),
 		MercayaAdminKey: env("MERCAYA_ADMIN_KEY", devMercayaKey),
+		PagayaAPIKey:    env("PAGAYA_API_KEY", devPagayaAPIKey),
+		// Se lee tal cual: RAPIDITO_PAYOUT_AT="" (definida y vacía) apaga el retiro automático.
+		PayoutAt: payoutAt(),
+	}
+	if _, err := time.Parse("15:04", cfg.PayoutAt); cfg.PayoutAt != "" && err != nil {
+		return Config{}, errors.New("RAPIDITO_PAYOUT_AT debe tener el formato HH:MM (p. ej. 23:00)")
 	}
 
 	if production {
@@ -96,8 +108,19 @@ func Load() (Config, error) {
 		if cfg.MercayaAdminKey == devMercayaKey || len(cfg.MercayaAdminKey) < 24 {
 			return Config{}, errors.New("en producción MERCAYA_ADMIN_KEY debe ser una clave propia de al menos 24 caracteres")
 		}
+		if cfg.PagayaAPIKey == devPagayaAPIKey || len(cfg.PagayaAPIKey) < 24 {
+			return Config{}, errors.New("en producción PAGAYA_API_KEY debe ser una clave propia de al menos 24 caracteres")
+		}
 	}
 	return cfg, nil
+}
+
+// payoutAt: RAPIDITO_PAYOUT_AT, «23:00» si no está definida (definida y vacía la apaga).
+func payoutAt() string {
+	if v, ok := os.LookupEnv("RAPIDITO_PAYOUT_AT"); ok {
+		return strings.TrimSpace(v)
+	}
+	return "23:00"
 }
 
 // originHosts convierte "http://a:3100,https://b.com" en ["a:3100", "b.com"].

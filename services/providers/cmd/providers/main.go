@@ -58,9 +58,16 @@ func main() {
 	}
 	store.Routes(mux)
 	rapidito.New().Routes(mux)
-	pagaya.New(publicURL, millis("PAGAYA_EXPIRY_MS", 15*60*1000), notify.Notifier{
+	wallet := pagaya.New(publicURL, millis("PAGAYA_EXPIRY_MS", 15*60*1000), notify.Notifier{
 		Secret: env("PAGAYA_WEBHOOK_SECRET", "pagaya-dev-secret"), Header: "x-pagaya-firma", Retries: 4, Backoff: time.Second,
-	}).Routes(mux)
+	})
+	// Las transferencias sacan dinero de la cuenta del comercio: se protegen con su propia clave.
+	wallet.APIKey = env("PAGAYA_API_KEY", pagaya.DevAPIKey)
+	if production && (wallet.APIKey == pagaya.DevAPIKey || len(wallet.APIKey) < 24) {
+		slog.Error("en producción PAGAYA_API_KEY debe ser una clave propia de al menos 24 caracteres")
+		os.Exit(1)
+	}
+	wallet.Routes(mux)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

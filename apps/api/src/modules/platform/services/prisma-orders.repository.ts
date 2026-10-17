@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Currency, OrderRating, OrderStatus, OrderTimelineEntry, RatingSummary, ServiceId } from '@parla/types';
-import type { Business as BusinessRow, Order as OrderRow, Prisma } from '@prisma/client';
+import type { Business as BusinessRow, Order as OrderRow } from '@prisma/client';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from './orders.repository';
 
@@ -120,17 +120,6 @@ export class PrismaOrdersRepository implements OrdersRepository {
   async listActiveForDriver(driverId: string): Promise<OrderRecord[]> {
     const rows = await this.prisma.order.findMany({ where: { driverId, status: { in: ['driver_assigned', 'on_the_way'] } }, include: WITH_BUSINESS });
     return rows.map(toOrderRecord);
-  }
-
-  async driverEarnings(driverId: string, since: { today: Date; week: Date }) {
-    const sum = async (from?: Date): Promise<[number, number, number]> => {
-      const where: Prisma.OrderWhereInput = { driverId, status: 'delivered', ...(from ? { updatedAt: { gte: from } } : {}) };
-      const r = await this.prisma.order.aggregate({ where, _sum: { deliveryFeeCents: true, tipCents: true }, _count: true });
-      const tips = r._sum.tipCents ?? 0;
-      return [(r._sum.deliveryFeeCents ?? 0) + tips, r._count, tips];
-    };
-    const [today, week, total] = await Promise.all([sum(since.today), sum(since.week), sum()]);
-    return { today: [today[0], today[1]] as [number, number], week: [week[0], week[1]] as [number, number], total: [total[0], total[1]] as [number, number], tipsCents: total[2] };
   }
 
   async listByStatus(statuses: OrderStatus[], limit: number): Promise<OrderRecord[]> {

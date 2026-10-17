@@ -197,3 +197,33 @@ type Business struct {
 	Open          bool      `json:"open"`
 	ClosedMessage *string   `json:"closedMessage"`
 }
+
+// ── Retiros de los repartidores (gateway ↔ core) ──────────────────────────────
+
+// PayoutReservation: el saldo apartado para transferir a la billetera del repartidor.
+type PayoutReservation struct {
+	PayoutID    string `json:"payoutId"`
+	AmountCents int    `json:"amountCents"`
+	// Destination: número de la billetera PagaYa del repartidor (9 dígitos).
+	Destination string `json:"destination"`
+}
+
+// PayoutSettle: cómo terminó la transferencia.
+type PayoutSettle struct {
+	Status        string `json:"status"` // paid | failed
+	TransferID    string `json:"transferId,omitempty"`
+	FailureReason string `json:"failureReason,omitempty"`
+}
+
+// Payout: el retiro tal como lo ve el repartidor.
+type Payout struct {
+	PayoutID    string `json:"payoutId"`
+	AmountCents int    `json:"amountCents"`
+	Status      string `json:"status"`
+	TransferID  string `json:"transferId"`
+}
+
+// DuePayout: repartidor con saldo para el retiro automático.
+type DuePayout struct {
+	UserID string `json:"userId"`
+}

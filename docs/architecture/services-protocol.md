@@ -97,6 +97,42 @@ un negocio del Mercado responde 404 «No tienes un negocio en Parla». En el `PA
 ser mayor que el de oferta). Validaciones (400): precio entre 10 y 1 000 000 céntimos, stock entre 0 y
 100 000, y «No hay cambios» si el cuerpo viene vacío. Producto desconocido → 404; tienda caída → 502.
 
+## Ganancias y retiros de los repartidores (gateway)
+
+**Reparto**: de cada entrega, el repartidor gana el **95 % de la tarifa de delivery** y el **100 % de la
+propina**; Rapidito se queda con el 5 % de la tarifa. Lo calcula y lo guarda el core (saldo = ganado −
+retirado − retiro en curso); el gateway nunca calcula montos, solo mueve el dinero en la billetera.
+
+`POST /api/driver/payouts` («Retirar ahora», con sesión) → 200 `{"payoutId","amountCents","status":"paid","transferId"}`:
+
+1. **Apartar**: `POST /api/internal/drivers/:userId/payouts` `{"reason":"manual"|"auto"}` → 201
+   `{"payoutId":"po_…","amountCents","destination":"9XXXXXXXX"}`. El core aparta **todo** el saldo
+   disponible como un retiro pendiente. 409 con mensaje para la persona («No tienes saldo para
+   retirar», «Agrega tu número de PagaYa en tu perfil», «Ya tienes un retiro en curso»), que el gateway
+   devuelve tal cual; 404 si no es repartidor.
+2. **Transferir** en PagaYa a `destination`, con `payoutId` como **referencia** (idempotente: repetirla
+   no paga dos veces) y el concepto «Rapidito · tus ganancias».
+3. **Cerrar**: `PATCH /api/internal/payouts/:payoutId` `{"status":"paid","transferId"}` →
+   `{"payoutId","amountCents","status","transferId"}`. Si la transferencia falla se cierra
+   `{"status":"failed","failureReason"}` y el dinero vuelve al saldo: 502 «PagaYa no responde. Tu saldo
+   sigue disponible.», o 400 «Tu número de PagaYa no es válido. Corrígelo en tu perfil.».
+
+Nunca hay dos retiros a la vez (el core lo impide al apartar). Si el dinero salió pero cerrar el retiro
+en el core falla, el gateway lo registra y responde éxito: el retiro queda pendiente para conciliarlo.
+
+**Conciliación** (cada hora y al empezar el retiro automático): el gateway pide
+`GET /api/internal/payouts/stuck?olderThanMinutes=10` → `[{"payoutId","amountCents","destination"}]`
+(retiros que siguen pendientes hace más de 10 minutos) y reintenta cada transferencia con la **misma
+referencia**. Como PagaYa es idempotente, si ya se hizo devuelve la misma transferencia y si no, la hace
+ahora: nunca se paga dos veces. Con éxito cierra el retiro `paid` con ese `transferId`; con destino
+inválido lo cierra `failed` («Número de PagaYa inválido», el dinero vuelve al saldo); si PagaYa no
+responde, lo deja pendiente para la próxima vuelta.
+
+**Retiro automático diario**: a la hora `RAPIDITO_PAYOUT_AT` (por defecto `23:00`, hora de Lima; vacío lo
+apaga) el gateway pide `GET /api/internal/payouts/due` → `[{"userId"}]` (saldo ≥ S/ 5, número de PagaYa
+puesto y sin retiro en curso) y hace el mismo retiro (`"reason":"auto"`) para cada uno. Revisa cada
+minuto y corre una vez por día; lo que no se pudo pagar queda en el saldo para la próxima vez.
+
 ## Rutas internas del core (token entre servicios, nunca expuestas)
 
 | Ruta | Para qué |
@@ -105,6 +141,10 @@ ser mayor que el de oferta). Validaciones (400): precio entre 10 y 1 000 000 cé
 | `GET /api/internal/orders/:id` | Lee el pedido (con `userId`, `deliveryQuoteId` y `businessOwnerId`) → `InternalOrder` |
 | `GET /api/internal/businesses/by-service/:service` | El negocio que atiende un servicio → `{"id","name","service","ownerId","open","closedMessage"}`; 404 si ninguno |
 | `GET /api/internal/businesses/by-owner/:userId` | El negocio de una persona, con la misma forma; 404 si no es dueña |
+| `POST /api/internal/drivers/:userId/payouts` `{"reason"}` | Aparta todo el saldo como retiro pendiente → 201 `{"payoutId","amountCents","destination"}`; 409 con mensaje; 404 |
+| `PATCH /api/internal/payouts/:payoutId` `{"status":"paid"\|"failed","transferId"?,"failureReason"?}` | Cierra el retiro (fallido: el dinero vuelve al saldo); idempotente → `{"payoutId","amountCents","status","transferId"}` |
+| `GET /api/internal/payouts/due` | Repartidores para el retiro automático → `[{"userId"}]` |
+| `GET /api/internal/payouts/stuck?olderThanMinutes=N` | Retiros pendientes hace más de N minutos, para conciliarlos → `[{"payoutId","amountCents","destination"}]` |
 | `PATCH /api/internal/orders/:id` `InternalUpdateOrder` | Cambia estado/pago/delivery (`paidAt`, `refundedAt`, `note` para la línea de tiempo). Con `expectStatus`, si el estado actual no coincide responde **409** sin cambiar nada. Acepta el mismo estado (p. ej. la devolución de un pago tardío). Publica `order:updated` al dueño. |
 
 ## APIs externas (simuladas en `services/providers`, puerto 4103)
@@ -128,8 +168,12 @@ Formatos distintos a propósito: así es en la vida real y es lo que justifica l
   `{"id_cobro","referencia","estado":"PAGADO"|"EXPIRADO","pagado_en"}`. Un cobro `ANULADO` o `DEVUELTO` no se puede pagar: 409 `{"error":"ANULADO"|"DEVUELTO"}` (la página dice «Este cobro fue anulado»).
 - `POST /pagaya/cobros/{id}/anular` → `PENDIENTE` → `ANULADO`: 200 `{"id_cobro","estado":"ANULADO"}` (idempotente); 409 `{"error":"YA_PAGADO"}` si ya se pagó; 404 si no existe.
 - `POST /pagaya/cobros/{id}/devolucion` → `PAGADO` → `DEVUELTO`: 200 `{"id_cobro","estado":"DEVUELTO","devuelto_en"}` (idempotente: repetirlo devuelve la misma fecha); 409 `{"error":"NO_PAGADO"}` si no se pagó.
+- `POST /pagaya/transferencias`, con la clave en `x-pagaya-clave` (`PAGAYA_API_KEY`): `{"destino":"9XXXXXXXX","monto":12.34,"concepto","referencia"}`
+  → 201 `{"id_transferencia","estado":"COMPLETADA","referencia","monto"}`. **Idempotente por `referencia`**:
+  repetirla devuelve la misma transferencia (no paga dos veces). 400 `{"error":"DESTINO_INVALIDO"}` (no es
+  `^9\d{8}$`), `{"error":"MONTO_INVALIDO"}` (≤ 0) o `{"error":"SOLICITUD_INVALIDA"}`; 401 `{"error":"CLAVE_INVALIDA"}`.
 
 La firma de los avisos de PagaYa es `hex(HMAC-SHA256(secreto, cuerpo))`. Secreto por variable de entorno
 (`PAGAYA_WEBHOOK_SECRET`); en desarrollo hay un valor por defecto y en
 producción el gateway no arranca sin secretos propios. Lo mismo con la clave de administración de
-MercaYa (`MERCAYA_ADMIN_KEY`, 24+ caracteres en producción).
+MercaYa (`MERCAYA_ADMIN_KEY`) y la de transferencias de PagaYa (`PAGAYA_API_KEY`), 24+ caracteres en producción.

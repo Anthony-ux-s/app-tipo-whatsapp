@@ -11,6 +11,7 @@ function toDriverRecord(row: DriverRow): DriverRecord {
     plate: row.plate,
     online: row.online,
     active: row.active,
+    payoutPhone: row.payoutPhone,
     location: row.lastLat !== null && row.lastLng !== null && row.lastLocationAt ? { lat: row.lastLat, lng: row.lastLng, at: row.lastLocationAt } : null,
   };
 }
@@ -34,7 +35,7 @@ export class PrismaDriversRepository implements DriversRepository {
     return toDriverRecord(await this.prisma.driver.upsert({ where: { userId }, create: { userId, ...data }, update: data }));
   }
 
-  async update(userId: string, changes: Partial<Pick<DriverRecord, 'vehicle' | 'plate' | 'online' | 'active'>>): Promise<DriverRecord> {
+  async update(userId: string, changes: Partial<Pick<DriverRecord, 'vehicle' | 'plate' | 'online' | 'active' | 'payoutPhone'>>): Promise<DriverRecord> {
     return toDriverRecord(await this.prisma.driver.update({ where: { userId }, data: changes }));
   }
 

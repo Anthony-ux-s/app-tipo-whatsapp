@@ -97,6 +97,8 @@ func New(opts Options) http.Handler {
 		// Catálogo de la tienda: precios, ofertas y stock viven en MercaYa; la dueña los cambia por aquí.
 		mux.HandleFunc("GET /api/business/catalog", authed(svc.StoreCatalog))
 		mux.HandleFunc("PATCH /api/business/catalog/{sku}", authed(svc.UpdateStoreProduct))
+		// Retiro de ganancias: lo hace el gateway porque mueve dinero en la billetera.
+		mux.HandleFunc("POST /api/driver/payouts", authed(svc.Payout))
 		mux.HandleFunc("POST /hooks/pagaya", svc.PagayaHook)
 	}
 	mux.HandleFunc("/api/", limited(proxy.ServeHTTP))

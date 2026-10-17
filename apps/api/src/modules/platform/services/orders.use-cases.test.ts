@@ -5,6 +5,7 @@ import { PresenceRegistry } from '../../../infra/realtime/presence.registry';
 import {
   InMemoryAuthRepository,
   InMemoryBusinessesRepository,
+  InMemoryDriverLedger,
   InMemoryDriversRepository,
   InMemoryOrdersRepository,
   InMemoryPushSubscriptions,
@@ -14,6 +15,14 @@ import {
 } from '../../../testing/in-memory.fakes';
 import { NotificationDispatcher } from '../messaging/push/use-cases/notification-dispatcher';
 import { WatchDeliveriesUseCase } from './use-cases/delivery-watch.use-cases';
+import {
+  DuePayoutsUseCase,
+  GetDriverWalletUseCase,
+  ReservePayoutUseCase,
+  SetPayoutPhoneUseCase,
+  SettlePayoutUseCase,
+  StuckPayoutsUseCase,
+} from './use-cases/driver-wallet.use-cases';
 import {
   DecideBusinessOrderUseCase,
   GetBusinessOrderUseCase,
@@ -56,6 +65,7 @@ describe('pedidos de Servicios (core)', () => {
   let users: InMemoryAuthRepository;
   let businesses: InMemoryBusinessesRepository;
   let drivers: InMemoryDriversRepository;
+  let ledger: InMemoryDriverLedger;
   let orders: InMemoryOrdersRepository;
   let events: OrderEvents;
   let realtime: RecordingRealtime;
@@ -103,9 +113,10 @@ describe('pedidos de Servicios (core)', () => {
     businesses.businesses.push({ id: 'biz_1', name: 'Bodega MercaYa', service: 'mercado', ownerId: rosa.id, address: 'Av. Benavides 1180', acceptingOrders: true, opensAt: '08:00', closesAt: '22:00' });
     drivers = new InMemoryDriversRepository();
     drivers.drivers.push(
-      { userId: carlos.id, vehicle: 'Moto', plate: 'B7K-482', online: true, active: true, location: null },
-      { userId: lucia.id, vehicle: 'Moto', plate: 'D5T-663', online: true, active: true, location: null },
+      { userId: carlos.id, vehicle: 'Moto', plate: 'B7K-482', online: true, active: true, location: null, payoutPhone: '987654321' },
+      { userId: lucia.id, vehicle: 'Moto', plate: 'D5T-663', online: true, active: true, location: null, payoutPhone: null },
     );
+    ledger = new InMemoryDriverLedger(drivers);
     orders = new InMemoryOrdersRepository(businesses, drivers);
     realtime = new RecordingRealtime();
     const subs = new InMemoryPushSubscriptions();
@@ -119,7 +130,7 @@ describe('pedidos de Servicios (core)', () => {
     update = new UpdateOrderUseCase(orders, events);
     decide = new DecideBusinessOrderUseCase(orders, users, events);
     take = new AcceptDeliveryUseCase(drivers, orders, users, events);
-    deliver = new DeliverOrderUseCase(drivers, orders, users, events);
+    deliver = new DeliverOrderUseCase(drivers, orders, users, events, ledger);
   });
 
   it('guarda el pedido pendiente de pago con su código de entrega, y se lo avisa solo a su dueña', async () => {
@@ -357,9 +368,10 @@ describe('pedidos de Servicios (core)', () => {
       await take.execute(carlos.id, ID);
       await decide.execute(rosa.id, ID, 'handoff');
       await deliver.execute(carlos.id, ID, await codeOf());
-      expect(await new GetDriverEarningsUseCase(drivers, orders).execute(carlos.id)).toEqual({
-        todayCents: 650, todayDeliveries: 1, weekCents: 650, weekDeliveries: 1, totalCents: 650, totalDeliveries: 1,
-        tipsCents: 0, rating: { average: null, count: 0 },
+      expect(await new GetDriverEarningsUseCase(drivers, orders, ledger).execute(carlos.id)).toEqual({
+        // 95 % de S/ 6.50: Rapidito descuenta S/ 0.33 de comisión
+        todayCents: 617, todayDeliveries: 1, weekCents: 617, weekDeliveries: 1, totalCents: 617, totalDeliveries: 1,
+        tipsCents: 0, commissionCents: 33, rating: { average: null, count: 0 },
       });
     });
 
@@ -389,11 +401,17 @@ describe('pedidos de Servicios (core)', () => {
     await pay();
     await decide.execute(rosa.id, ID, 'accept');
     await decide.execute(rosa.id, ID, 'ready');
-    expect((await new ListDriverOrdersUseCase(drivers, orders, users).execute(carlos.id)).available[0]).toMatchObject({ deliveryFeeCents: 650, tipCents: 200 });
+    expect((await new ListDriverOrdersUseCase(drivers, orders, users).execute(carlos.id)).available[0]).toMatchObject({
+      deliveryFeeCents: 650,
+      tipCents: 200,
+      commissionCents: 33,
+      earningsCents: 817,
+    });
     await take.execute(carlos.id, ID);
     await decide.execute(rosa.id, ID, 'handoff');
     await deliver.execute(carlos.id, ID, await codeOf());
-    expect(await new GetDriverEarningsUseCase(drivers, orders).execute(carlos.id)).toMatchObject({ totalCents: 850, tipsCents: 200 });
+    // La propina va completa: 617 (95 % de la tarifa) + 200
+    expect(await new GetDriverEarningsUseCase(drivers, orders, ledger).execute(carlos.id)).toMatchObject({ totalCents: 817, tipsCents: 200, commissionCents: 33 });
     await expect(create.execute(newOrder({ id: 'ord_toobig12', tipCents: 10_001, totalCents: 12_071 }))).rejects.toThrow('propina');
   });
 
@@ -410,7 +428,7 @@ describe('pedidos de Servicios (core)', () => {
     const rated = await rate.execute(ana.id, ID, { driverStars: 5, storeStars: 4, comment: '  ¡Rapidísimo!  ' });
     expect(rated.rating).toMatchObject({ driverStars: 5, storeStars: 4, comment: '¡Rapidísimo!' });
     await expect(rate.execute(ana.id, ID, { driverStars: 1 })).rejects.toThrow('Ya calificaste');
-    expect((await new GetDriverEarningsUseCase(drivers, orders).execute(carlos.id)).rating).toEqual({ average: 5, count: 1 });
+    expect((await new GetDriverEarningsUseCase(drivers, orders, ledger).execute(carlos.id)).rating).toEqual({ average: 5, count: 1 });
     expect((await new GetBusinessStatusUseCase(businesses, orders).execute('mercado'))?.rating).toEqual({ average: 4, count: 1 });
     // La tienda ve la calificación en su pedido
     expect((realtime.events('business-order:updated').at(-1)!.payload as BusinessOrder).rating?.storeStars).toBe(4);
@@ -452,6 +470,68 @@ describe('pedidos de Servicios (core)', () => {
       expect((await watch.execute(config, later(20))).reassigned).toEqual([]);
       expect((await watch.execute(config, later(26))).reassigned).toEqual([ID]);
       expect((await orders.findById(ID))!.timeline.at(-1)?.note).toContain('no lo recogió en 25 minutos');
+    });
+  });
+
+  describe('billetera del repartidor', () => {
+    const deliverOne = async (id: string, tipCents = 0) => {
+      await create.execute(newOrder({ id, tipCents, totalCents: 2070 + tipCents }));
+      await update.execute(id, { expectStatus: 'pending_payment', status: 'paid' });
+      await decide.execute(rosa.id, id, 'accept');
+      await decide.execute(rosa.id, id, 'ready');
+      await take.execute(carlos.id, id);
+      await decide.execute(rosa.id, id, 'handoff');
+      await deliver.execute(carlos.id, id, (await orders.findById(id))!.deliveryCode);
+    };
+
+    it('cada entrega suma tarifa − 5 % + propina una sola vez, y el saldo se ve en la billetera', async () => {
+      await deliverOne('ord_wallet0001', 300);
+      // Confirmar la entrega otra vez no la anota dos veces
+      await deliver.execute(carlos.id, 'ord_wallet0001', (await orders.findById('ord_wallet0001'))!.deliveryCode);
+      const wallet = await new GetDriverWalletUseCase(drivers, ledger).execute(carlos.id);
+      expect(wallet).toMatchObject({ balanceCents: 917, pendingPayoutCents: 0, payoutPhone: '987654321', driverSharePercent: 95 });
+      expect(wallet.entries.map((e) => [e.kind, e.amountCents]).sort()).toEqual([['commission', -33], ['delivery_fee', 650], ['tip', 300]]);
+    });
+
+    it('el retiro reserva el saldo, no se duplica, y si PagaYa falla el dinero vuelve', async () => {
+      await deliverOne('ord_wallet0002');
+      const reserve = new ReservePayoutUseCase(drivers, ledger);
+      const settle = new SettlePayoutUseCase(ledger, dispatcher);
+      await expect(reserve.execute(lucia.id, 'manual')).rejects.toThrow('número de PagaYa');
+      const first = await reserve.execute(carlos.id, 'manual');
+      expect(first).toMatchObject({ amountCents: 617, destination: '987654321' });
+      await expect(reserve.execute(carlos.id, 'manual')).rejects.toThrow('retiro en curso');
+      expect(await new GetDriverWalletUseCase(drivers, ledger).execute(carlos.id)).toMatchObject({ balanceCents: 0, pendingPayoutCents: 617 });
+      // Falla la transferencia: vuelve al saldo y se puede reintentar
+      expect((await settle.execute(first.payoutId, 'failed', null, 'PagaYa no responde')).status).toBe('failed');
+      expect((await new GetDriverWalletUseCase(drivers, ledger).execute(carlos.id)).balanceCents).toBe(617);
+      const second = await reserve.execute(carlos.id, 'manual');
+      expect(await settle.execute(second.payoutId, 'paid', 'tr_1', null)).toMatchObject({ status: 'paid', transferId: 'tr_1', amountCents: 617 });
+      expect((await settle.execute(second.payoutId, 'paid', 'tr_1', null)).status).toBe('paid'); // idempotente
+      await expect(settle.execute(second.payoutId, 'failed', null, 'x')).rejects.toThrow(ConflictError);
+      expect((await new GetDriverWalletUseCase(drivers, ledger).execute(carlos.id)).balanceCents).toBe(0);
+      await expect(reserve.execute(carlos.id, 'manual')).rejects.toThrow('No tienes saldo');
+      await flush();
+      expect(push.sent.filter((x) => x.target.endpoint.endsWith('/carlos')).map((x) => x.payload.title)).toContain('Te depositamos tus ganancias');
+    });
+
+    it('el depósito automático solo incluye a quien tiene S/ 5+, PagaYa y nada en curso', async () => {
+      await deliverOne('ord_wallet0003');
+      const due = new DuePayoutsUseCase(ledger);
+      expect(await due.execute()).toEqual([{ userId: carlos.id }]);
+      await new SetPayoutPhoneUseCase(drivers).execute(lucia.id, '912 345 678');
+      expect(await due.execute()).toEqual([{ userId: carlos.id }]); // Lucía no tiene saldo
+      await expect(new SetPayoutPhoneUseCase(drivers).execute(lucia.id, '123')).rejects.toThrow(ValidationError);
+      await new ReservePayoutUseCase(drivers, ledger).execute(carlos.id, 'auto');
+      expect(await due.execute()).toEqual([]);
+    });
+
+    it('un depósito que quedó pendiente aparece para conciliar pasados los minutos', async () => {
+      await deliverOne('ord_wallet0004');
+      const { payoutId } = await new ReservePayoutUseCase(drivers, ledger).execute(carlos.id, 'manual');
+      const stuck = new StuckPayoutsUseCase(drivers, ledger);
+      expect(await stuck.execute(10)).toEqual([]);
+      expect(await stuck.execute(10, new Date(Date.now() + 11 * 60_000))).toEqual([{ payoutId, amountCents: 617, destination: '987654321' }]);
     });
   });
 

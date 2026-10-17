@@ -104,7 +104,8 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     await carlos.page.getByTestId('my-rapidito').click();
     await expect(carlos.page.getByRole('heading', { name: 'Rapidito' })).toBeVisible();
     const offer = carlos.page.getByTestId('driver-order-item').filter({ hasText: 'Laura · Av. Larco 123' }).last();
-    await expect(offer).toContainText(`Ganas S/ ${((deliveryCents + 200) / 100).toFixed(2)}`);
+    // 95 % de la tarifa (Rapidito descuenta el 5 %) + la propina completa
+    await expect(offer).toContainText(`Ganas S/ ${((deliveryCents - Math.round(deliveryCents * 0.05) + 200) / 100).toFixed(2)}`);
     await expect(offer).toContainText('incluye S/ 2.00 de propina');
     await offer.click();
     await carlos.page.getByTestId('take-order').click();
@@ -145,6 +146,20 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     await page.getByTestId('send-rating').click();
     await expect(page.getByTestId('order-rated')).toContainText('¡Gracias por calificar!');
     await expect(elena.page.getByTestId('business-rating')).toContainText('Llegó rapidísimo', { timeout: 15_000 });
+
+    // Carlos ve lo que gana (95 % de la tarifa + la propina completa) y retira su saldo a PagaYa
+    const split = carlos.page.getByTestId('driver-split');
+    await expect(split).toContainText('Comisión Rapidito (5 %)');
+    await expect(split).toContainText('+ S/ 2.00');
+    const expected = deliveryCents - Math.round(deliveryCents * 0.05) + 200;
+    await expect(split).toContainText(`Para tiS/ ${(expected / 100).toFixed(2)}`);
+    await carlos.page.goto('/app/rapidito/perfil');
+    const carlosWallet = carlos.page.getByTestId('driver-wallet');
+    await expect(carlosWallet.getByTestId('ledger-entry').filter({ hasText: 'Comisión Rapidito' }).first()).toBeVisible();
+    expect(soles(await carlosWallet.getByTestId('wallet-balance').textContent())).toBeGreaterThanOrEqual(expected);
+    await carlosWallet.getByTestId('withdraw').click();
+    await expect(carlosWallet.getByTestId('wallet-balance')).toHaveText('S/ 0.00', { timeout: 15_000 });
+    await expect(carlosWallet.getByTestId('ledger-entry').first()).toContainText('Depósito a tu PagaYa');
     expect(elena.consoleErrors).toEqual([]);
     // El único error esperado es el 400 del código equivocado que se probó a propósito.
     expect(carlos.consoleErrors.filter((e) => !e.includes('status of 400'))).toEqual([]);
