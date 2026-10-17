@@ -124,7 +124,7 @@ test.describe('Fase 3: menciones, hilos, tareas y notificaciones', () => {
     expect(off.status()).toBe(204);
 
     // La pantalla de ajustes ofrece activar las notificaciones en este dispositivo
-    await laura.page.goto(laura.page.url().replace(/\/app\/w\/([^/]+).*/, '/app/w/$1/ajustes'));
+    await laura.page.goto(laura.page.url().replace(/\/app\/w\/([^/]+).*/, '/app/w/$1/ajustes/notificaciones'));
     await expect(laura.page.getByRole('switch', { name: /Notificaciones push en este dispositivo/ })).toBeVisible();
     await laura.context.close();
   });

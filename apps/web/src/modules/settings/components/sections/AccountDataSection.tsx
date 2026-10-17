@@ -1,31 +1,43 @@
-import { Download, FileLock2, KeyRound, Trash2 } from 'lucide-react';
+import { Download, KeyRound, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@shared/ui/Button';
 import { Field, FieldError } from '@shared/ui/Field';
 import { Modal } from '@shared/ui/Modal';
-import { useAccountData } from '../hooks/use-account-data.hook';
+import { useAccountData } from '../../hooks/use-account-data.hook';
+import { SettingsBlock, SettingsGroup } from '../SettingsUi';
 
-/** "Tus datos": descargar una copia y eliminar la cuenta (Ley 1581 / LGPD). */
-export function AccountDataCard() {
+/** Derechos sobre los datos: descargar una copia y eliminar la cuenta (Ley 1581 / LGPD). */
+export function AccountDataSection() {
   const data = useAccountData();
   return (
-    <section className="rounded-2xl bg-surface p-4 shadow-float md:p-6">
-      <h2 className="mb-2 flex items-center gap-2 text-base font-bold text-ink">
-        <FileLock2 className="size-5 text-brand dark:text-teal-300" /> Tus datos
-      </h2>
-      <p className="text-sm text-ink-soft">
-        Puedes descargar una copia de tus datos o eliminar tu cuenta cuando quieras. Lee la{' '}
-        <Link to="/legal/privacidad" className="font-semibold text-brand hover:underline dark:text-teal-300">política de privacidad</Link> y los{' '}
-        <Link to="/legal/terminos" className="font-semibold text-brand hover:underline dark:text-teal-300">términos</Link>.
-      </p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="secondary" size="sm" icon={<Download className="size-4" />} loading={data.exporting} onClick={data.exportData}>
-          Descargar mis datos
-        </Button>
-        <Button variant="danger" size="sm" icon={<Trash2 className="size-4" />} onClick={data.openDelete}>
-          Eliminar mi cuenta
-        </Button>
-      </div>
+    <>
+      <SettingsGroup title="Copia de tus datos">
+        <SettingsBlock>
+          <p className="text-sm text-ink-soft">
+            Un archivo JSON con tu perfil, tus preferencias, los espacios y chats en los que participas y un resumen de tu actividad.
+          </p>
+          <Button className="mt-4" variant="secondary" size="sm" icon={<Download className="size-4" />} loading={data.exporting} onClick={data.exportData}>
+            Descargar mis datos
+          </Button>
+        </SettingsBlock>
+      </SettingsGroup>
+
+      <SettingsGroup
+        title="Eliminar la cuenta"
+        footer={
+          <>
+            Más detalles en la{' '}
+            <Link to="/legal/privacidad" className="font-semibold text-brand hover:underline dark:text-teal-300">política de privacidad</Link>.
+          </>
+        }
+      >
+        <SettingsBlock>
+          <p className="text-sm text-ink-soft">Borra tu nombre, usuario, teléfono, contraseña y claves, y te saca de todos tus espacios. No se puede deshacer.</p>
+          <Button className="mt-4" variant="danger" size="sm" icon={<Trash2 className="size-4" />} onClick={data.openDelete}>
+            Eliminar mi cuenta
+          </Button>
+        </SettingsBlock>
+      </SettingsGroup>
 
       <Modal
         open={data.deleteOpen}
@@ -60,6 +72,6 @@ export function AccountDataCard() {
           {data.error && <FieldError message={data.error} />}
         </form>
       </Modal>
-    </section>
+    </>
   );
 }

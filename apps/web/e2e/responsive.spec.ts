@@ -13,7 +13,14 @@ test('en el celular la lista ocupa la pantalla y el chat se abre a pantalla comp
   await expect(page.getByTestId('chat-list')).toBeVisible();
 
   await page.getByRole('link', { name: 'Ajustes' }).click();
+  await expect(page.getByRole('heading', { name: 'Ajustes' })).toBeVisible();
+  // Cada sección abre su propia pantalla, sin la barra inferior, y se vuelve con la flecha
+  await page.getByRole('link', { name: 'Perfil' }).click();
   await expect(page.getByRole('heading', { name: 'Perfil' })).toBeVisible();
+  await expect(page.getByLabel('Nombre')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Equipo' })).toBeHidden();
+  await page.getByRole('link', { name: 'Volver a Ajustes' }).click();
+  await expect(page.getByRole('heading', { name: 'Ajustes' })).toBeVisible();
   await page.getByRole('link', { name: 'Equipo' }).click();
   await expect(page.getByRole('heading', { name: 'Miembros' })).toBeVisible();
 });

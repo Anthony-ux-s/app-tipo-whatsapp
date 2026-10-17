@@ -72,7 +72,7 @@ test.describe('Fase 4: planes, pagos, legal y datos personales', () => {
     await page.getByLabel('Nombre del espacio').fill('Espacio temporal');
     await page.locator('button[type=submit]', { hasText: 'Crear espacio' }).click();
     await expect(page).toHaveURL(/\/equipo/);
-    await page.goto(page.url().replace(/\/equipo.*/, '/ajustes'));
+    await page.goto(page.url().replace(/\/equipo.*/, '/ajustes/datos'));
 
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Descargar mis datos' }).click();

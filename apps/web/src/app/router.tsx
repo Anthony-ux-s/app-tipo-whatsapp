@@ -3,6 +3,7 @@ import { LoginView } from '../modules/auth/components/LoginView';
 import { RegisterView } from '../modules/auth/components/RegisterView';
 import { ConversationView } from '../modules/chats/components/ConversationView';
 import { NoChatSelected } from '../modules/chats/components/NoChatSelected';
+import { SettingsSectionView } from '../modules/settings/components/SettingsSectionView';
 import { SettingsView } from '../modules/settings/components/SettingsView';
 import { AppHomeRedirect } from '../modules/shell/components/AppHomeRedirect';
 import { AppShellView } from '../modules/shell/components/AppShellView';
@@ -49,6 +50,7 @@ export const router = createBrowserRouter([
               { path: 'tareas', element: <MyTasksView /> },
               { path: 'plan', element: <PlanView /> },
               { path: 'ajustes', element: <SettingsView /> },
+              { path: 'ajustes/:section', element: <SettingsSectionView /> },
             ],
           },
         ],
