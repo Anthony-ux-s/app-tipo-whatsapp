@@ -2,13 +2,16 @@ import { useEffect } from 'react';
 import { useBusinessStore } from '@shared/stores/business.store';
 import { useCallStore } from '@shared/stores/call.store';
 import { useChatStore } from '@shared/stores/chat.store';
+import { useEffectsStore } from '@shared/stores/effects.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { useOrdersStore } from '@shared/stores/orders.store';
 import { usePeopleStore } from '@shared/stores/people.store';
+import { detectEffect } from '@shared/utils/chat-effects';
 import { tokenStorage } from '@shared/utils/http';
 import { connectSocket, disconnectSocket } from '@shared/utils/socket';
 import { showLocalNotification } from '@shared/utils/push';
 import { playMessageSound } from '@shared/utils/sound';
+import { stickerEffect } from '@shared/utils/sticker-codec';
 import { localNotificationFor } from '../utils/notification.utils';
 
 const isFocused = () => document.visibilityState === 'visible' && document.hasFocus();
@@ -54,6 +57,18 @@ export function useRealtime(userId: string | undefined) {
     socket.on('reconnecting', onReconnecting);
     socket.on('message:new', async (message) => {
       const result = await useChatStore.getState().receiveMessage(message, { focused: isFocused() });
+      // En el chat abierto, el efecto (confeti, corazones…) se calcula con el mensaje ya descifrado.
+      if (result === 'active') {
+        const { texts, stickers } = useChatStore.getState();
+        const decrypted = texts[message.clientId];
+        const effect =
+          message.kind === 'sticker'
+            ? stickerEffect(stickers[message.clientId] ?? null)
+            : message.kind === 'text' && decrypted?.ok
+              ? detectEffect(decrypted.text)
+              : null;
+        useEffectsStore.getState().play(effect);
+      }
       const sound = useSessionStore.getState().user?.preferences.notificationSound;
       if (result === 'background' && sound) playMessageSound();
       // Con la pestaña oculta, aviso del sistema con el texto ya descifrado en el navegador.

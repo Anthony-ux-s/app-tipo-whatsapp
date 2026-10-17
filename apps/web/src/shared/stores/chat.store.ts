@@ -17,6 +17,7 @@ import { createWrappedKeys, openText, sealFile, sealText, wrapExistingKey, conve
 import { http } from '../utils/http';
 import { newClientId } from '../utils/ids';
 import { getSocket } from '../utils/socket';
+import { decodeSticker, encodeSticker, stickerLabel, type StickerRef } from '../utils/sticker-codec';
 
 const TYPING_TTL = 5000;
 const STATUS_RANK = { sent: 0, delivered: 1, read: 2 } as const;
@@ -49,11 +50,13 @@ interface ChatState {
   listStatus: 'idle' | 'loading' | 'ready' | 'error';
   threads: Record<string, MessageThread>;
   texts: Record<string, DecryptedText>;
+  /** Stickers descifrados, por clientId (en `texts` queda su etiqueta legible: «Sticker «¡Hola!»»). */
+  stickers: Record<string, StickerRef | null>;
   typing: Record<string, Record<string, number>>;
   activeId: string | null;
   connection: ConnectionState;
   /** Retiene el último mensaje pendiente de enviar cuando falla, para reintentar. */
-  outbox: Record<string, { conversationId: string; text?: string; media?: OutgoingMedia; options?: SendOptions }>;
+  outbox: Record<string, { conversationId: string; kind?: SendMessageRequest['kind']; media?: OutgoingMedia; options?: SendOptions }>;
   /** Mensaje al que se está respondiendo en cada conversación. */
   replyDraft: Record<string, ChatMessage | null>;
   /** Hilos abiertos en el panel lateral, por mensaje raíz. */
@@ -77,6 +80,7 @@ interface ChatState {
   reshareKey: (conversationId: string, me: PublicUser) => Promise<void>;
   markRead: (conversationId: string) => Promise<void>;
   sendText: (conversationId: string, text: string, options?: SendOptions) => Promise<void>;
+  sendSticker: (conversationId: string, sticker: StickerRef, options?: SendOptions) => Promise<void>;
   setReplyDraft: (conversationId: string, message: ChatMessage | null) => void;
   loadThread: (conversationId: string, rootId: string) => Promise<void>;
   applyReplies: (payload: { conversationId: string; messageId: string; replyCount: number }) => void;
@@ -98,6 +102,7 @@ const initialState = {
   listStatus: 'idle' as const,
   threads: {},
   texts: {},
+  stickers: {},
   typing: {},
   activeId: null,
   connection: 'connecting' as const,
@@ -112,9 +117,12 @@ export const useChatStore = create<ChatState>((set, get) => {
   const decryptAll = async (conversation: ConversationSummary, messages: Message[]) => {
     // Cuerpos de mensajes y citas de respuestas: todo se descifra aquí.
     const payloads = new Map<string, EncryptedPayload>();
+    const stickerKeys = new Set<string>();
     for (const m of messages) {
       if (m.body) payloads.set(m.clientId, m.body);
       if (m.replyTo?.body) payloads.set(m.replyTo.clientId, m.replyTo.body);
+      if (m.kind === 'sticker') stickerKeys.add(m.clientId);
+      if (m.replyTo?.kind === 'sticker') stickerKeys.add(m.replyTo.clientId);
     }
     // También se reintentan los que fallaron: pudo llegar la clave después (chat compartido de nuevo).
     const pending = [...payloads].filter(([key]) => !get().texts[key]?.ok);
@@ -128,7 +136,14 @@ export const useChatStore = create<ChatState>((set, get) => {
         }
       }),
     );
-    set({ texts: { ...get().texts, ...Object.fromEntries(entries) } });
+    const stickers: Record<string, StickerRef | null> = {};
+    for (const entry of entries) {
+      const [key, text] = entry;
+      if (!stickerKeys.has(key) || !text.ok) continue;
+      stickers[key] = decodeSticker(text.text);
+      entry[1] = { ok: true, text: stickerLabel(stickers[key]) };
+    }
+    set({ texts: { ...get().texts, ...Object.fromEntries(entries) }, stickers: { ...get().stickers, ...stickers } });
   };
 
   const patchThread = (conversationId: string, patch: (thread: MessageThread) => MessageThread) => {
@@ -195,7 +210,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         ...thread,
         items: thread.items.map((m) => (m.clientId === outgoing.clientId ? { ...m, local: 'failed' } : m)),
       }));
-      set({ outbox: { ...get().outbox, [outgoing.clientId]: { conversationId, media, options } } });
+      set({ outbox: { ...get().outbox, [outgoing.clientId]: { conversationId, kind: outgoing.kind, media, options } } });
       throw error;
     }
   };
@@ -318,7 +333,12 @@ export const useChatStore = create<ChatState>((set, get) => {
         const page = await http.get<MessagePage>(`/chats/${conversationId}/messages`);
         await decryptAll(conversation, page.messages);
         const current = get().threads[conversationId];
-        const locals = current?.items.filter((m) => m.local && !page.messages.some((p) => p.clientId === m.clientId)) ?? [];
+        // Se conservan los envíos propios pendientes y lo que llegó en tiempo real mientras cargaba la página.
+        const newest = page.messages.at(-1)?.createdAt ?? '';
+        const locals =
+          current?.items.filter(
+            (m) => !page.messages.some((p) => p.clientId === m.clientId) && (m.local || m.createdAt > newest),
+          ) ?? [];
         set({
           threads: {
             ...get().threads,
@@ -483,6 +503,19 @@ export const useChatStore = create<ChatState>((set, get) => {
       );
     },
 
+    sendSticker: async (conversationId, sticker, options = {}) => {
+      const conversation = get().conversations[conversationId];
+      if (!conversation) return;
+      const clientId = newClientId();
+      set({
+        texts: { ...get().texts, [clientId]: { ok: true, text: stickerLabel(sticker) } },
+        stickers: { ...get().stickers, [clientId]: sticker },
+      });
+      optimistic(conversationId, clientId, 'sticker', { replyTo: replyReference(conversationId, options.replyToId ?? null) });
+      const body = await sealText(conversation, encodeSticker(sticker));
+      await deliver(conversationId, { clientId, kind: 'sticker', body, media: null, replyToId: options.replyToId ?? null }, undefined, options);
+    },
+
     setReplyDraft: (conversationId, message) => set({ replyDraft: { ...get().replyDraft, [conversationId]: message } }),
 
     loadThread: async (conversationId, rootId) => {
@@ -537,11 +570,13 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
       const conversation = get().conversations[pending.conversationId];
       const text = get().texts[clientId];
+      const sticker = get().stickers[clientId];
       if (!conversation || !text?.ok) return;
+      const isSticker = pending.kind === 'sticker' && sticker;
       await deliver(pending.conversationId, {
         clientId,
-        kind: 'text',
-        body: await sealText(conversation, text.text),
+        kind: isSticker ? 'sticker' : 'text',
+        body: await sealText(conversation, isSticker ? encodeSticker(sticker) : text.text),
         media: null,
         replyToId: pending.options?.replyToId ?? null,
         mentions: pending.options?.mentions ?? [],

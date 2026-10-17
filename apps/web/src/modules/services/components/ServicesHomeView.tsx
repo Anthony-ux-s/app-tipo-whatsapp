@@ -1,9 +1,10 @@
-import { ChevronRight, Lock, Receipt } from 'lucide-react';
+import { ChevronRight, Lock } from 'lucide-react';
 import { Link } from 'react-router';
 import { ProfileButton } from '@shared/ui/ProfileButton';
 import { ErrorState } from '@shared/ui/States';
 import { formatSoles } from '@shared/utils/money';
-import { SERVICE_VISUALS } from '../const/services.const';
+import { MARKET_PARTNERS, SERVICE_VISUALS } from '../const/services.const';
+import { ServiceIcon } from './ServiceIcons';
 import { useServices } from '../hooks/use-services.hook';
 import { OrderStatusBadge, PageHeader, ServicePage } from './ServicesUi';
 
@@ -20,14 +21,12 @@ export function ServicesHomeView() {
         <div className="grid grid-cols-4 gap-x-2 gap-y-4 sm:grid-cols-6">
           {(s.services ?? []).map((service) => {
             const visual = SERVICE_VISUALS[service.id];
-            const Icon = visual.icon;
             const tile = (
               <span className="group flex flex-col items-center gap-1.5 text-center" title={service.description}>
-                <span
-                  className={`relative flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-float transition-transform duration-200 ${visual.gradient} ${service.available ? 'group-hover:-translate-y-0.5' : 'opacity-50 grayscale-[40%]'}`}
-                >
-                  <Icon className="size-5" />
-                </span>
+                <ServiceIcon
+                  name={visual.icon}
+                  className={`size-[52px] drop-shadow-[0_4px_8px_rgba(15,23,42,0.18)] transition-transform duration-200 ${service.available ? 'group-hover:-translate-y-0.5 group-hover:scale-105' : 'opacity-55 grayscale-[45%]'}`}
+                />
                 <span className={`text-xs font-semibold ${service.available ? 'text-ink' : 'text-ink-faint'}`}>{service.name}</span>
                 {!service.available && (
                   <span className="-mt-1 rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] font-bold text-ink-soft">Próximamente</span>
@@ -46,20 +45,26 @@ export function ServicesHomeView() {
           })}
           {!s.services &&
             !s.error &&
-            [0, 1].map((i) => <div key={i} className="mx-auto size-12 animate-pulse rounded-2xl bg-surface-3" />)}
+            [0, 1].map((i) => <div key={i} className="mx-auto size-[52px] animate-pulse rounded-[18px] bg-surface-3" />)}
         </div>
-        <p className="mt-4 border-t border-line pt-3 text-xs text-ink-soft">
-          <span className="font-semibold text-ink">Mercado:</span> tienda MercaYa · delivery Rapidito · pago con QR PagaYa
-        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-3">
+          <span className="text-xs font-semibold text-ink">Mercado con</span>
+          {MARKET_PARTNERS.map((partner) => (
+            <span key={partner.name} className="flex items-center gap-1.5 text-xs text-ink-soft">
+              <ServiceIcon name={partner.icon} className="size-5" />
+              <span>
+                <span className="font-semibold text-ink">{partner.name}</span> · {partner.role}
+              </span>
+            </span>
+          ))}
+        </div>
       </section>
 
       <Link
         to="/app/pedidos"
         className="group flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float transition-colors duration-200 hover:bg-surface-2 md:px-5"
       >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-brand dark:bg-teal-950/60 dark:text-teal-300">
-          <Receipt className="size-5" />
-        </span>
+        <ServiceIcon name="pedidos" className="size-10 shrink-0 drop-shadow-[0_3px_6px_rgba(15,23,42,0.15)]" />
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-semibold text-ink">Mis pedidos</span>
           <span className="block truncate text-sm text-ink-soft">

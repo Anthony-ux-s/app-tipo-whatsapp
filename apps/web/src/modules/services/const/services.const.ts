@@ -1,10 +1,17 @@
 import type { OrderStatus, ServiceId } from '@parla/types';
-import { HeartPulse, ShoppingBasket, type LucideIcon } from 'lucide-react';
+import type { ServiceIconName } from '../components/ServiceIcons';
 
-export const SERVICE_VISUALS: Record<ServiceId, { icon: LucideIcon; gradient: string; to: string | null }> = {
-  mercado: { icon: ShoppingBasket, gradient: 'from-teal-600 to-emerald-600', to: '/app/servicios/mercado' },
-  salud: { icon: HeartPulse, gradient: 'from-cyan-700 to-teal-700', to: null },
+export const SERVICE_VISUALS: Record<ServiceId, { icon: ServiceIconName; to: string | null }> = {
+  mercado: { icon: 'mercado', to: '/app/servicios/mercado' },
+  salud: { icon: 'salud', to: null },
 };
+
+/** Sistemas externos que atienden el mercado (cada uno por su API, a través del gateway). */
+export const MARKET_PARTNERS: { icon: ServiceIconName; name: string; role: string }[] = [
+  { icon: 'mercaya', name: 'MercaYa', role: 'Tienda' },
+  { icon: 'rapidito', name: 'Rapidito', role: 'Delivery' },
+  { icon: 'pagaya', name: 'PagaYa', role: 'Pago con QR' },
+];
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending_payment: 'Esperando tu pago',

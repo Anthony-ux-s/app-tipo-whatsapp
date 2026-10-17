@@ -1,4 +1,4 @@
-import { Bike, Check, ChefHat, ExternalLink, MapPin, MessageCircle, PackageCheck, ShoppingBasket, Smartphone, Store } from 'lucide-react';
+import { Check, ChefHat, ExternalLink, MapPin, MessageCircle, ShoppingBasket, Smartphone, Store } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { QrCode } from '@shared/ui/QrCode';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
@@ -6,6 +6,7 @@ import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { ORDER_STEPS } from '../const/services.const';
 import { useOrderChat } from '../hooks/use-order-chat.hook';
 import { useOrderDetail } from '../hooks/use-orders.hook';
+import { ServiceIcon } from './ServiceIcons';
 import { AmountRow, OrderStatusBadge, PageHeader, ServicePage } from './ServicesUi';
 
 /**
@@ -108,9 +109,7 @@ export function OrderDetailView() {
 
       {order.delivery && (
         <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Delivery" data-testid="delivery-card">
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-600 to-cyan-700 text-white">
-            {order.status === 'delivered' ? <PackageCheck className="size-6" /> : <Bike className="size-6" />}
-          </span>
+          <ServiceIcon name={order.status === 'delivered' ? 'pedidos' : 'rapidito'} className="size-12 shrink-0 drop-shadow-[0_4px_8px_rgba(15,23,42,0.18)]" />
           <div className="min-w-0">
             <p className="font-bold text-ink">
               {order.status === 'delivered'

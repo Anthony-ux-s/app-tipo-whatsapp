@@ -4,6 +4,7 @@ import { Spinner } from '@shared/ui/Spinner';
 import { formatDuration } from '@shared/utils/date';
 import { ACCEPTED_MEDIA } from '../const/chats.const';
 import { useComposer } from '../hooks/use-composer.hook';
+import { StickerPicker } from '../../stickers/components/StickerPicker';
 import { AttachmentPreviewModal } from './AttachmentPreviewModal';
 
 interface ComposerProps {
@@ -53,15 +54,7 @@ export function Composer({ conversationId, threadRootId = null }: ComposerProps)
           </IconButton>
         </div>
       )}
-      {composer.emojiOpen && (
-        <div className="absolute bottom-full left-2 mb-2 grid w-[288px] animate-rise grid-cols-8 gap-1 rounded-2xl border border-line bg-surface p-2 shadow-pop md:left-4">
-          {composer.emojis.map((emoji) => (
-            <button key={emoji} type="button" onClick={() => composer.addEmoji(emoji)} className="flex size-8 items-center justify-center rounded-lg text-xl hover:bg-surface-3" aria-label={`Emoji ${emoji}`}>
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
+      {composer.emojiOpen && <StickerPicker emojis={composer.emojis} onEmoji={composer.addEmoji} onSticker={composer.sendSticker} />}
 
       {recording || composer.recorder.state === 'sending' ? (
         <div className="flex h-12 animate-fade-in items-center gap-2">
@@ -88,7 +81,7 @@ export function Composer({ conversationId, threadRootId = null }: ComposerProps)
         </div>
       ) : (
         <div className="flex items-end gap-1 md:gap-2">
-          <IconButton label="Emojis" active={composer.emojiOpen} onClick={composer.toggleEmoji} className="mb-1 hidden sm:inline-flex">
+          <IconButton label="Emojis y stickers" active={composer.emojiOpen} onClick={composer.toggleEmoji} className="mb-1">
             <Smile className="size-6" />
           </IconButton>
           <IconButton label="Adjuntar foto o video" onClick={composer.pickFile} className="mb-1">

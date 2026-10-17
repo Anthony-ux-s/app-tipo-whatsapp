@@ -12,6 +12,8 @@ export interface UserPreferences {
   theme: ThemePreference;
   enterToSend: boolean;
   notificationSound: boolean;
+  /** Efectos a pantalla completa (confeti, corazones…) con ciertas frases y stickers. */
+  chatEffects: boolean;
 }
 
 export interface UserProfile {

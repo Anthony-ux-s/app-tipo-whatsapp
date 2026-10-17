@@ -28,4 +28,5 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   theme: 'system',
   enterToSend: true,
   notificationSound: true,
+  chatEffects: true,
 };

@@ -63,7 +63,7 @@ export class AddParticipantsDto implements AddParticipantsRequest {
 
 export class SendMessageDto implements SendMessageRequest {
   @IsString() @IsNotEmpty() @MaxLength(64) clientId: string;
-  @IsIn(['text', 'image', 'audio', 'video']) kind: SendMessageRequest['kind'];
+  @IsIn(['text', 'image', 'audio', 'video', 'sticker']) kind: SendMessageRequest['kind'];
   @IsOptional() @ValidateNested() @Type(() => EncryptedPayloadDto) body: EncryptedPayloadDto | null;
   @IsOptional() @ValidateNested() @Type(() => MediaAttachmentDto) media: MediaAttachmentDto | null;
   @IsOptional() @IsString() @MaxLength(64) replyToId?: string | null;

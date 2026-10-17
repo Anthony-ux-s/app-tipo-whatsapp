@@ -18,6 +18,7 @@ const KIND_LABEL: Record<MessageKind, string> = {
   image: '📷 Foto',
   audio: '🎤 Nota de voz',
   video: '🎬 Video',
+  sticker: '💟 Sticker',
   system: 'Aviso',
 };
 

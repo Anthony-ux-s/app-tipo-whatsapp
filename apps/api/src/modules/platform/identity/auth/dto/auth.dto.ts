@@ -69,6 +69,7 @@ class PreferencesDto implements Partial<UserPreferences> {
   @IsOptional() @IsIn(['light', 'dark', 'system']) theme?: ThemePreference;
   @IsOptional() @IsBoolean() enterToSend?: boolean;
   @IsOptional() @IsBoolean() notificationSound?: boolean;
+  @IsOptional() @IsBoolean() chatEffects?: boolean;
 }
 
 export class UpdateProfileDto implements UpdateProfileRequest {

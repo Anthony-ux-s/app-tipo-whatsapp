@@ -5,7 +5,8 @@ export type ParticipantRole = 'admin' | 'member';
 
 export type ConversationKind = 'direct' | 'group';
 
-export type MessageKind = 'text' | 'image' | 'audio' | 'video' | 'system';
+/** `sticker` lleva cifrado qué sticker es (el servidor no lo sabe), igual que el texto. */
+export type MessageKind = 'text' | 'image' | 'audio' | 'video' | 'sticker' | 'system';
 
 export const MEDIA_MESSAGE_KINDS: readonly MessageKind[] = ['image', 'audio', 'video'];
 

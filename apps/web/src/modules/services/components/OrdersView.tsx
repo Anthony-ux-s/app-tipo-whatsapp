@@ -1,5 +1,6 @@
 import { ChevronRight, ShoppingBasket, Store } from 'lucide-react';
 import { Link } from 'react-router';
+import { ServiceIcon } from './ServiceIcons';
 import { Button } from '@shared/ui/Button';
 import { ProfileButton } from '@shared/ui/ProfileButton';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
@@ -55,9 +56,7 @@ export function OrdersView() {
                 data-testid="order-item"
                 className="group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-200 hover:bg-surface-2 md:px-5"
               >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-brand dark:bg-teal-950/60 dark:text-teal-300">
-                  <ShoppingBasket className="size-5" />
-                </span>
+                <ServiceIcon name="mercado" className="size-10 shrink-0 drop-shadow-[0_3px_6px_rgba(15,23,42,0.15)]" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15px] font-semibold text-ink">
                     Mercado · {formatSoles(order.totalCents)}

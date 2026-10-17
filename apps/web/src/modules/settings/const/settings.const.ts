@@ -51,7 +51,7 @@ export const SETTINGS_SECTIONS: Record<SettingsSectionId, SettingsSectionInfo> =
   chats: {
     id: 'chats',
     title: 'Chats',
-    summary: 'Enviar con Enter y sonido de mensajes',
+    summary: 'Enviar con Enter, sonidos y efectos',
     description: 'Cómo escribes y cómo te enteras de lo que llega.',
     icon: MessageSquareText,
   },

@@ -41,7 +41,7 @@ export function makeUser(overrides: Partial<UserRecord> = {}): UserRecord {
     passwordHash: 'hash:Parla2026!',
     publicKey: '{"kty":"EC"}',
     keyBackup: { ciphertext: 'x', iv: 'y', salt: 'z', iterations: 1000 },
-    preferences: { theme: 'system', enterToSend: true, notificationSound: true },
+    preferences: { theme: 'system', enterToSend: true, notificationSound: true, chatEffects: true },
     lastSeenAt: null,
     createdAt: new Date(),
     termsVersion: null,

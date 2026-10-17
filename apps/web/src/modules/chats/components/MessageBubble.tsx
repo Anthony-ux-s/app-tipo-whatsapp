@@ -1,7 +1,12 @@
 import type { ConversationSummary } from '@parla/types';
-import { ChevronDown, Copy, Download, Lock, MessageSquareReply, MessagesSquare, Reply, RotateCcw } from 'lucide-react';
+import { ChevronDown, Copy, Download, Lock, MessageSquareReply, MessagesSquare, Reply, RotateCcw, Sparkles } from 'lucide-react';
 import type { ChatMessage, DecryptedText } from '@shared/types/chat.types';
+import { useChatStore } from '@shared/stores/chat.store';
+import { useEffectsStore } from '@shared/stores/effects.store';
+import { detectEffect } from '@shared/utils/chat-effects';
 import { formatTime } from '@shared/utils/date';
+import { stickerEffect } from '@shared/utils/sticker-codec';
+import { Sticker } from '../../stickers/components/Sticker';
 import { pluralize } from '@shared/utils/text';
 import type { MessageActions } from '../types/message-actions.types';
 import { DeliveryTicks } from './DeliveryTicks';
@@ -34,6 +39,19 @@ const NAME_COLORS: Record<string, string> = {
 
 const menuItem = 'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-ink hover:bg-surface-2';
 
+/** Sticker descifrado; al tocarlo se repite su efecto (si tiene). */
+function MessageSticker({ clientId }: { clientId: string }) {
+  const sticker = useChatStore((s) => s.stickers[clientId]);
+  const effect = stickerEffect(sticker ?? null);
+  const art = <Sticker sticker={sticker} className="size-36 md:size-40" />;
+  if (!effect) return <div data-testid="sticker">{art}</div>;
+  return (
+    <button type="button" data-testid="sticker" onClick={() => useEffectsStore.getState().play(effect)} aria-label="Repetir efecto del sticker" className="block">
+      {art}
+    </button>
+  );
+}
+
 export function MessageBubble({
   conversation,
   message,
@@ -57,7 +75,9 @@ export function MessageBubble({
   const text = texts[message.clientId];
   const sender = actions.person(message.senderId);
   const isMedia = (message.kind === 'image' || message.kind === 'audio' || message.kind === 'video') && message.media;
-  const caption = text?.ok ? text.text : '';
+  const isSticker = message.kind === 'sticker';
+  const caption = text?.ok && !isSticker ? text.text : '';
+  const effect = message.kind === 'text' && caption ? detectEffect(caption) : null;
   const mentionsMe = !outgoing && message.mentions.includes(myId);
   const mentioned = message.mentions.map((id) => ({ id, displayName: conversation.participants.find((p) => p.user.id === id)?.user.displayName ?? '' }));
   const canAct = !message.local;
@@ -69,7 +89,7 @@ export function MessageBubble({
         data-testid="message"
         data-status={message.status}
         data-kind={message.kind}
-        className={`relative max-w-[85%] animate-rise rounded-[var(--radius-bubble)] shadow-float md:max-w-[65%] ${tail} ${outgoing ? 'bg-bubble-out' : 'bg-bubble-in'} ${isMedia ? 'p-1' : `pt-1.5 pb-1.5 pl-3 ${canAct ? 'pr-9 md:pr-3' : 'pr-3'}`} ${mentionsMe ? 'ring-2 ring-cyan-400/70' : ''}`}
+        className={`relative max-w-[85%] animate-rise rounded-[var(--radius-bubble)] md:max-w-[65%] ${isSticker ? 'pr-8' : `shadow-float ${tail} ${outgoing ? 'bg-bubble-out' : 'bg-bubble-in'}`} ${isSticker ? '' : isMedia ? 'p-1' : `pt-1.5 pb-1.5 pl-3 ${canAct ? 'pr-9 md:pr-3' : 'pr-3'}`} ${mentionsMe ? 'ring-2 ring-cyan-400/70' : ''}`}
       >
         {canAct && (
           <button
@@ -130,6 +150,7 @@ export function MessageBubble({
             onOpenImage={(url) => actions.openImage(url, message)}
           />
         )}
+        {isSticker && <MessageSticker clientId={message.clientId} />}
         {message.kind === 'text' && !text && <p className="text-[15px] text-ink-faint italic">Descifrando…</p>}
         {text && !text.ok && (
           <p className="flex items-center gap-1.5 text-[14px] text-ink-soft italic">
@@ -138,7 +159,20 @@ export function MessageBubble({
         )}
         <div className={`flex flex-wrap items-end justify-end gap-x-2 ${isMedia ? 'px-2 pb-1' : ''}`}>
           {caption && <MessageText text={caption} mentioned={mentioned} myId={myId} className={`mr-auto ${isMedia ? 'pt-1.5' : ''} ${canAct && !showSender && !message.replyTo ? 'pr-5' : ''}`} />}
-          <span className="ml-auto flex shrink-0 translate-y-0.5 items-center gap-1 text-[11px] text-ink-faint">
+          <span
+            className={`ml-auto flex shrink-0 items-center gap-1 text-[11px] ${isSticker ? '-mt-1 rounded-full bg-black/45 px-1.5 py-0.5 text-white' : 'translate-y-0.5 text-ink-faint'}`}
+          >
+            {effect && (
+              <button
+                type="button"
+                onClick={() => useEffectsStore.getState().play(effect)}
+                aria-label="Repetir efecto"
+                title="Repetir efecto"
+                className="text-amber-500 transition-transform duration-150 hover:scale-125"
+              >
+                <Sparkles className="size-3.5" />
+              </button>
+            )}
             {formatTime(message.createdAt)}
             {outgoing && <DeliveryTicks status={message.status} local={message.local} className="size-4" />}
           </span>

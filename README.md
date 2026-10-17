@@ -94,6 +94,7 @@ pones tu nombre, un usuario opcional y la contraseña.
   escritorio va en una barra lateral; en el celular, abajo.
 
 **Servicios (super-app)**
+- Íconos **ilustrados con estilo de app** (canasta, salud, pedidos, y los de MercaYa, Rapidito y PagaYa).
 - **Mercado** (tienda MercaYa): escribes la lista como la dices («un kilo de azúcar, arroz y leche») y
   Parla busca cada cosa. Tarjetas con precio, carrito con cantidades y dirección de entrega.
 - **Total transparente**: el gateway pide los precios a la tienda y la tarifa al delivery, y suma
@@ -142,8 +143,23 @@ pones tu nombre, un usuario opcional y la contraseña.
 - Mensajes en **tiempo real** (Elixir, por WebSocket a través del gateway en Go), con estados
   **enviado ✓ → entregado ✓✓ → leído ✓✓ (cian)**. En grupos se muestra el estado del destinatario más atrasado.
 - Fotos y videos con comentario, **notas de voz** grabadas en el navegador, visor de imágenes.
+- **Descargar** fotos, videos y audios (desde el visor o el menú del mensaje), ya descifrados.
 - «Escribiendo…», presencia, no leídos, búsqueda y filtros, historial ilimitado.
 - Grupos: crear, agregar personas, salir; avisos de sistema. Envío optimista con reintento.
+
+**Stickers y efectos (lo que nos diferencia)**
+- **Pali, el loro de Parla**: 12 stickers animados propios, dibujados en SVG (hola, gracias, jajaja, te
+  quiero, ¡listo!, a celebrar, voy en camino, snif, ¿¡qué!?, buenos días, buenas noches, mmm…).
+- **Animados**: emojis grandes con movimiento (❤️ late, 😂 se sacude, 🔥 titila, 🚀 despega…).
+- **Tu frase**: escribes cualquier frase y eliges un estilo (sol, menta, cielo, rosa, noche o cómic).
+- Los stickers van **cifrados de extremo a extremo**: el servidor solo sabe que es «un sticker».
+- **Efectos a pantalla completa**, que WhatsApp no tiene:
+  - «feliz cumpleaños», «felicidades» o 🎉 → **confeti**;
+  - «te quiero» o ❤️ → **corazones**;
+  - «jajaja» → 😂;
+  - «buenas noches» → **estrellas**.
+- Se calculan en el dispositivo con el mensaje ya descifrado, y algunos stickers también los disparan.
+  Con ✨ se repiten; se apagan en *Ajustes → Chats* y se respeta «reducir movimiento» del sistema.
 
 **Llamadas de voz y video**
 - Botones de **videollamada** y **llamada de voz** en cada chat (individual o grupal, hasta 8 personas).
@@ -233,12 +249,14 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 
 ## Pruebas
 
-- **Unitarias (Vitest, 95)**:
+- **Unitarias (Vitest, 98)**:
   - cifrado E2E (7);
-  - core (60): **registro con código por SMS** (envío sin código en claro, modo de prueba solo en desarrollo, reenvíos, intentos, vencimiento, comprobante de un solo uso), usuario opcional, correo verificado, foto solo JPEG, contactos con indicativo propio, **recuperación por correo** sin revelar cuentas y volver a compartir la clave del chat; estados de entrega, permisos, inicio de sesión, hilos, menciones, push, puente con el tiempo real, datos personales, y **pedidos**: montos que
+  - core (59): **registro con código por SMS** (envío sin código en claro, modo de prueba solo en desarrollo, reenvíos, intentos, vencimiento, comprobante de un solo uso), usuario opcional, correo verificado, foto solo JPEG, contactos con indicativo propio, **recuperación por correo** sin revelar cuentas y volver a compartir la clave del chat; estados de entrega, permisos, inicio de sesión, hilos, menciones, push, puente con el tiempo real, datos personales, y **pedidos**: montos que
     cuadran, transiciones que nunca retroceden, aviso de pago repetido sin efecto, cada quien ve solo
     sus pedidos, push en cada etapa;
-  - web (28): países e indicativos; incluye entender «un kilo de azúcar, arroz» como dos búsquedas.
+  - web (32): países e indicativos; entender «un kilo de azúcar, arroz» como dos búsquedas; nombre de
+    los archivos descargados; formato cifrado de los stickers (rechaza contenido raro) y qué frases
+    disparan cada efecto.
 - **Gateway (Go, 36)**:
   - JWT, límite de peticiones y traductor del chat;
   - traductores de tienda, delivery y billetera: respuestas inválidas, firmas válidas y falsificadas;
@@ -250,6 +268,9 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 - **Tiempo real (Elixir, 17)**: llamadas y el enlace con el gateway.
 - **Punta a punta (Playwright, 17 recorridos, navegador real, con los cinco procesos)**:
   - chat cifrado, fotos y notas de voz;
+  - **descargar una foto** descifrada desde el visor y desde el menú;
+  - **stickers** de Pali, animados y con frase propia (el servidor no ve cuál), **efectos** de confeti
+    y corazones, repetirlos y apagarlos en Ajustes;
   - videollamada real por WebRTC y llamada rechazada;
   - menciones, hilos y push;
   - **registro con código por SMS**, foto, correo verificado y **contactos del teléfono** (libreta simulada): encuentra a Laura y conversan;

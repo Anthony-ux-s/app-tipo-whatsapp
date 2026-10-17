@@ -6,6 +6,7 @@ export const MEDIA_LABELS: Record<MessageKind, string> = {
   image: 'Foto',
   audio: 'Nota de voz',
   video: 'Video',
+  sticker: 'Sticker',
   system: 'Aviso',
 };
 
@@ -16,7 +17,11 @@ export const CHAT_FILTERS: { id: ChatFilter; label: string }[] = [
   { id: 'direct', label: 'Personas' },
 ];
 
-export const QUICK_EMOJIS = ['😀', '😂', '😊', '😍', '🙏', '👍', '👏', '🙌', '🎉', '🔥', '💪', '✅', '☕', '🚀', '📦', '📈', '🤝', '💡', '⏰', '❤️', '😅', '🤔', '👀', '😮'];
+export const QUICK_EMOJIS = [
+  '😀', '😂', '🤣', '😊', '😍', '🥰', '😘', '😎', '🤩', '🥳', '😅', '😉', '🤔', '🙄', '😴', '😮', '😢', '😭', '😡', '🤯',
+  '👍', '👎', '👏', '🙌', '🙏', '💪', '🤝', '👋', '✌️', '👀', '❤️', '💔', '💕', '🔥', '✨', '🎉', '🎂', '✅', '❌', '💯',
+  '☕', '🍕', '🍔', '🍎', '🛒', '📦', '🛵', '💸', '🚀', '⏰',
+];
 
 export const MAX_MESSAGE_LENGTH = 4000;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;

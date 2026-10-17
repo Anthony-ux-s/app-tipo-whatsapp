@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type SyntheticEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type SyntheticEvent } from 'react';
 import { useChatStore } from '@shared/stores/chat.store';
+import { useEffectsStore } from '@shared/stores/effects.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
+import { detectEffect } from '@shared/utils/chat-effects';
 import { errorMessage } from '@shared/utils/http';
+import { stickerEffect, type StickerRef } from '@shared/utils/sticker-codec';
 import { MAX_FILE_BYTES, MAX_MESSAGE_LENGTH, QUICK_EMOJIS } from '../const/chats.const';
 import type { PendingAttachment } from '../types/chats.types';
 import {
@@ -27,7 +30,7 @@ export function useComposer(conversationId: string, threadRootId: string | null 
   const participants = useChatStore((s) => s.conversations[conversationId]?.participants);
   const replyDraft = useChatStore((s) => (threadRootId ? null : (s.replyDraft[conversationId] ?? null)));
   const texts = useChatStore((s) => s.texts);
-  const { sendText, sendMedia, emitTyping, setReplyDraft } = useChatStore.getState();
+  const { sendText, sendSticker, sendMedia, emitTyping, setReplyDraft } = useChatStore.getState();
   const [text, setText] = useState('');
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
@@ -38,6 +41,7 @@ export function useComposer(conversationId: string, threadRootId: string | null 
   const fileInput = useRef<HTMLInputElement | null>(null);
   const textArea = useRef<HTMLTextAreaElement | null>(null);
   const lastPing = useRef(0);
+  const pendingCaret = useRef<number | null>(null);
   const stopTimer = useRef<number | null>(null);
 
   const replyToId = threadRootId ?? replyDraft?.id ?? null;
@@ -86,6 +90,15 @@ export function useComposer(conversationId: string, threadRootId: string | null 
     el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
   }, [text]);
 
+  // Tras insertar una mención, el cursor queda detrás de ella antes de que llegue la siguiente tecla.
+  useLayoutEffect(() => {
+    const el = textArea.current;
+    if (pendingCaret.current === null || !el) return;
+    el.focus();
+    el.setSelectionRange(pendingCaret.current, pendingCaret.current);
+    pendingCaret.current = null;
+  }, [text]);
+
   const pingTyping = () => {
     const now = Date.now();
     if (now - lastPing.current > TYPING_PING_MS) {
@@ -109,13 +122,10 @@ export function useComposer(conversationId: string, threadRootId: string | null 
     const el = textArea.current;
     if (!mention || !el) return;
     const next = insertMention(text, mention, el.selectionStart ?? text.length, candidate.displayName);
+    pendingCaret.current = next.caret;
     setText(next.text);
     setMention(null);
     setMentionIndex(0);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(next.caret, next.caret);
-    });
   };
 
   const send = () => {
@@ -132,8 +142,16 @@ export function useComposer(conversationId: string, threadRootId: string | null 
     emitTyping(conversationId, false);
     const mentions = collectMentions(value, candidates);
     sendText(conversationId, value, { replyToId, mentions }).catch((err) => toast(errorMessage(err), 'error'));
+    useEffectsStore.getState().play(detectEffect(value));
     if (!threadRootId) setReplyDraft(conversationId, null);
     textArea.current?.focus();
+  };
+
+  /** Los stickers se envían al tocarlos, como en WhatsApp; el panel queda abierto para mandar otro. */
+  const sendStickerNow = (sticker: StickerRef) => {
+    sendSticker(conversationId, sticker, { replyToId }).catch((err) => toast(errorMessage(err), 'error'));
+    useEffectsStore.getState().play(stickerEffect(sticker));
+    if (!threadRootId) setReplyDraft(conversationId, null);
   };
 
   const closeAttachment = () => {
@@ -203,6 +221,8 @@ export function useComposer(conversationId: string, threadRootId: string | null 
       }
     },
     send,
+    sendSticker: sendStickerNow,
+    closeEmoji: () => setEmojiOpen(false),
     toggleEmoji: () => setEmojiOpen((v) => !v),
     addEmoji: (emoji: string) => {
       setText((v) => v + emoji);

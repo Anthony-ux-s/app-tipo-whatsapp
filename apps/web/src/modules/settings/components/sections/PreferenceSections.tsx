@@ -50,6 +50,16 @@ export function ChatsSection() {
           <Toggle checked={p.preferences.notificationSound} onChange={p.setSound} label="Sonido de mensajes" description="Suena cuando llega un mensaje en otro chat." />
         </SettingsBlock>
       </SettingsGroup>
+      <SettingsGroup title="Efectos" footer="Se calculan en tu dispositivo con el mensaje ya descifrado: el servidor no sabe qué escribiste.">
+        <SettingsBlock>
+          <Toggle
+            checked={p.preferences.chatEffects}
+            onChange={p.setEffects}
+            label="Efectos en pantalla"
+            description="«Feliz cumpleaños» trae confeti, «te quiero» corazones… y algunos stickers también."
+          />
+        </SettingsBlock>
+      </SettingsGroup>
     </>
   );
 }

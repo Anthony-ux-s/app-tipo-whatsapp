@@ -71,6 +71,10 @@ describe('mensajería', () => {
     const audio = { ...media, fileId: 'f2' };
     await expect(send.execute(laura.id, 'c1', { clientId: 'v4', kind: 'image', body: null, media: audio })).resolves.toMatchObject({ kind: 'image' });
     await expect(send.execute(laura.id, 'c1', { clientId: 'v5', kind: 'audio', body: null, media: audio })).rejects.toThrow('El tipo de archivo no coincide');
+    // El sticker viaja cifrado como el texto: el servidor no sabe cuál es
+    await expect(send.execute(laura.id, 'c1', { clientId: 'v6', kind: 'sticker', body, media: null })).resolves.toMatchObject({ kind: 'sticker', body });
+    await expect(send.execute(laura.id, 'c1', { clientId: 'v7', kind: 'sticker', body: null, media: null })).rejects.toThrow(ValidationError);
+    await expect(send.execute(laura.id, 'c1', { clientId: 'v8', kind: 'sticker', body, media: audio })).rejects.toThrow('Un sticker no lleva archivo');
   });
 
   it('enviado → entregado → leído: el remitente recibe cada cambio y en grupos manda el más atrasado', async () => {

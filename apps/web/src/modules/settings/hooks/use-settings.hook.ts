@@ -107,6 +107,7 @@ export function usePreferences() {
     setTheme: (theme: ThemePreference) => save({ theme }),
     setEnterToSend: (enterToSend: boolean) => save({ enterToSend }),
     setSound: (notificationSound: boolean) => save({ notificationSound }),
+    setEffects: (chatEffects: boolean) => save({ chatEffects }),
   };
 }
 

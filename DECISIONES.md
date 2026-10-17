@@ -185,3 +185,16 @@ de perfil y traer los contactos del teléfono.
 | Foto de perfil | El navegador recorta a 512×512 y re-codifica a **JPEG** (sin EXIF/GPS); el core valida que de verdad sea JPEG y ≤ 300 KB; URL impredecible y caché inmutable | Privacidad (sin ubicación), seguridad (ni SVG ni HTML disfrazado) y rendimiento. |
 | Contactos | **Contact Picker API** (Chrome en Android; la persona elige y puede elegir todos) o escribir los números; se envían, se cruzan con las cuentas y **no se guardan** | Es lo que permite la web. Los números sin indicativo se completan con el del propio teléfono. |
 | Lectura automática del SMS | **WebOTP** (`@dominio #código` al final del SMS) y `autocomplete="one-time-code"` | En Android el código se completa solo, y en iPhone aparece sobre el teclado. |
+
+
+## Stickers, efectos e íconos ilustrados
+
+Pedido: «los mejores íconos posibles, lo más llamativo y profesional», stickers y «algo diferenciador».
+
+| Decisión | Elección | Por qué |
+| --- | --- | --- |
+| Arte de los stickers | **Propio, en SVG** (Pali, un loro: «parla» = habla) y emojis del sistema animados con CSS | Sin derechos de terceros ni descargas: pesa casi nada, se ve nítido en cualquier pantalla y funciona sin conexión. |
+| Cómo viaja un sticker | Mensaje de tipo `sticker` cuyo contenido (qué sticker o qué frase) va **cifrado como el texto** | El servidor no sabe qué sticker mandaste ni qué dice tu frase. Si llega uno desconocido (versión nueva), se muestra «Sticker» sin romper nada. |
+| Diferenciador | **Efectos a pantalla completa** según la frase o el sticker | WhatsApp no lo tiene. Como el contenido está cifrado, el efecto **se decide en el teléfono** de quien lo recibe, con el texto ya descifrado. |
+| Control | Preferencia «Efectos en pantalla» (se guarda en la cuenta) y respeto de «reducir movimiento» del sistema | Accesibilidad: a algunas personas el movimiento les molesta o marea. |
+| Íconos de servicios | **Ilustrados**, estilo ícono de app (degradado, brillo y borde suave), también en SVG propio | Se distinguen de un vistazo y le dan cara a cada proveedor (MercaYa, Rapidito, PagaYa) sin usar marcas reales. |

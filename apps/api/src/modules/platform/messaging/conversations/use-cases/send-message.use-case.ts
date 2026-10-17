@@ -107,9 +107,9 @@ export class SendMessageUseCase {
   }
 
   private async validate(userId: string, conversationId: string, input: SendMessageRequest): Promise<void> {
-    if (input.kind === 'text') {
+    if (input.kind === 'text' || input.kind === 'sticker') {
       if (!input.body) throw new ValidationError('El mensaje está vacío');
-      if (input.media) throw new ValidationError('Un mensaje de texto no lleva archivo');
+      if (input.media) throw new ValidationError(input.kind === 'text' ? 'Un mensaje de texto no lleva archivo' : 'Un sticker no lleva archivo');
       return;
     }
     if (!input.media) throw new ValidationError('Falta el archivo del mensaje');

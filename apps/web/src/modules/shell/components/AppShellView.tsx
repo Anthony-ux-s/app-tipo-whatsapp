@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router';
 import { CallOverlay } from '../../calls/components/CallOverlay';
+import { EffectsLayer } from '../../stickers/components/EffectsLayer';
 import { ChatListPanel } from '../../chats/components/ChatListPanel';
 import { useAppShell } from '../hooks/use-app-shell.hook';
 import { useMainLayout } from '../hooks/use-main-layout.hook';
@@ -37,6 +38,7 @@ export function AppShellView() {
         </div>
       </div>
       <CallOverlay />
+      <EffectsLayer />
     </div>
   );
 }
