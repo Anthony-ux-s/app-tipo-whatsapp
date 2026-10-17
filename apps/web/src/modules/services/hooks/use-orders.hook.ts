@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { countNewOrders, useBusinessStore } from '@shared/stores/business.store';
 import { availableOrders, useDriverStore } from '@shared/stores/driver.store';
 import { sortOrders, useOrdersStore } from '@shared/stores/orders.store';
+import { toast } from '@shared/stores/toast.store';
 import { errorMessage } from '@shared/utils/http';
 import { isFinalStatus, minutesLeft, orderStepIndex } from '../utils/services.utils';
 
@@ -65,9 +66,40 @@ export function useOrderDetail() {
     return () => window.clearInterval(timer);
   }, [waiting]);
 
+  const [busy, setBusy] = useState<'cancel' | 'renew' | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const run = async (action: 'cancel' | 'renew', done: string) => {
+    setBusy(action);
+    try {
+      await useOrdersStore.getState()[action === 'cancel' ? 'cancel' : 'renewCode'](orderId);
+      toast(done, 'success');
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    } finally {
+      setBusy(null);
+      setConfirmCancel(false);
+    }
+  };
+
+  // Hora estimada de llegada: desde el último cambio del repartidor, los minutos que estimó Rapidito.
+  const delivery = order?.delivery;
+  const eta =
+    delivery?.etaMinutes && (order?.status === 'driver_assigned' || order?.status === 'on_the_way')
+      ? new Date(new Date(delivery.updatedAt).getTime() + delivery.etaMinutes * 60_000).toISOString()
+      : null;
+
   return {
     order: order ?? null,
     error,
+    busy,
+    eta,
+    /** Se puede cancelar mientras la tienda no lo acepte. */
+    canCancel: order?.status === 'pending_payment' || order?.status === 'paid',
+    confirmCancel,
+    askCancel: () => setConfirmCancel(true),
+    closeCancel: () => setConfirmCancel(false),
+    cancel: () => run('cancel', order?.status === 'paid' ? 'Pedido cancelado. Te devolvimos el pago.' : 'Pedido cancelado.'),
+    renewCode: () => run('renew', 'Listo: tienes un código nuevo.'),
     step: order ? orderStepIndex(order.status) : 0,
     finished: order ? isFinalStatus(order.status) : false,
     minutesToPay: order ? minutesLeft(order.payment.expiresAt, now) : 0,

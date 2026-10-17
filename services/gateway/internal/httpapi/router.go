@@ -90,6 +90,10 @@ func New(opts Options) http.Handler {
 		mux.HandleFunc("GET /api/services/mercado/products", authed(svc.Products))
 		mux.HandleFunc("POST /api/services/mercado/quote", authed(svc.Quote))
 		mux.HandleFunc("POST /api/services/mercado/orders", authed(svc.Create))
+		// Cancelar y rechazar mueven dinero (anular o devolver en la billetera): los resuelve el gateway.
+		mux.HandleFunc("POST /api/orders/{id}/cancel", authed(svc.CancelOrder))
+		mux.HandleFunc("POST /api/business/orders/{id}/reject", authed(svc.RejectOrder))
+		mux.HandleFunc("POST /api/business/orders/{id}/cancel", authed(svc.CancelBusinessOrder))
 		mux.HandleFunc("POST /hooks/pagaya", svc.PagayaHook)
 	}
 	mux.HandleFunc("/api/", limited(proxy.ServeHTTP))

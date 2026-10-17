@@ -14,7 +14,8 @@ const NEXT: Record<OrderStatus, readonly OrderStatus[]> = {
   preparing: ['searching_driver', 'cancelled'],
   rejected: [],
   searching_driver: ['driver_assigned', 'cancelled'],
-  driver_assigned: ['on_the_way', 'cancelled'],
+  // El repartidor puede soltarlo (o la tienda pedir otro): vuelve a ofrecerse.
+  driver_assigned: ['on_the_way', 'searching_driver', 'cancelled'],
   on_the_way: ['delivered'],
   delivered: [],
   payment_expired: [],
@@ -51,7 +52,14 @@ export function formatSoles(cents: number): string {
 }
 
 /** Aviso push para los cambios que le importan al cliente (sin datos sensibles). */
-export function orderPush(orderId: string, status: OrderStatus, totalCents: number, driverName: string | null, businessName: string | null): PushPayload | null {
+export function orderPush(
+  orderId: string,
+  status: OrderStatus,
+  totalCents: number,
+  driverName: string | null,
+  businessName: string | null,
+  refunded = false,
+): PushPayload | null {
   const url = `/app/pedidos/${orderId}`;
   const tag = `order-${orderId}`;
   const business = businessName ?? 'El negocio';
@@ -61,7 +69,7 @@ export function orderPush(orderId: string, status: OrderStatus, totalCents: numb
     case 'preparing':
       return { title: 'Están preparando tu pedido', body: `${business} aceptó tu pedido. Rapidito lo recogerá cuando esté listo.`, url, tag };
     case 'rejected':
-      return { title: 'Tu pedido no fue aceptado', body: `${business} no puede atender tu pedido. Escríbele desde el pedido.`, url, tag };
+      return { title: 'Tu pedido no fue aceptado', body: `${business} no puede atender tu pedido.${refunded ? ` Te devolvimos ${formatSoles(totalCents)}.` : ''}`, url, tag };
     case 'searching_driver':
       return { title: 'Tu pedido está listo', body: 'Buscando un repartidor de Rapidito.', url, tag };
     case 'driver_assigned':
@@ -72,6 +80,8 @@ export function orderPush(orderId: string, status: OrderStatus, totalCents: numb
       return { title: 'Pedido entregado', body: '¡Que lo disfrutes! Gracias por comprar con Parla.', url, tag };
     case 'payment_expired':
       return { title: 'El cobro venció', body: 'No recibimos el pago a tiempo. Puedes volver a hacer el pedido.', url, tag };
+    case 'cancelled':
+      return { title: 'Pedido cancelado', body: refunded ? `Te devolvimos ${formatSoles(totalCents)} a tu billetera.` : 'Tu pedido se canceló.', url, tag };
     default:
       return null;
   }
@@ -98,6 +108,15 @@ export function businessDeliveryPush(orderId: string, status: OrderStatus, drive
   if (status === 'delivered') {
     return { title: 'Pedido entregado', body: `${customerName} recibió su pedido (confirmado con su código).`, url, tag };
   }
+  return null;
+}
+
+/** Aviso push al repartidor que tenía el pedido: lo cancelaron o la tienda pidió otro repartidor. */
+export function driverLostPush(orderId: string, status: OrderStatus, businessName: string): PushPayload | null {
+  const url = `/app/rapidito/pedidos/${orderId}`;
+  const tag = `driver-offer-${orderId}`;
+  if (status === 'cancelled') return { title: 'Pedido cancelado', body: `${businessName} canceló el pedido. No tienes que recogerlo.`, url, tag };
+  if (status === 'searching_driver') return { title: 'Ya no tienes este pedido', body: `${businessName} lo ofreció a otro repartidor.`, url, tag };
   return null;
 }
 

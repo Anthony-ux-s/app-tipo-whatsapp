@@ -1,4 +1,4 @@
-import type { BusinessInfo, BusinessOrder } from '@parla/types';
+import type { BusinessInfo, BusinessOrder, Order } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
 
@@ -13,7 +13,12 @@ interface BusinessState {
   /** Pedido nuevo o actualizado (respuesta de una acción o evento business-order:updated). */
   upsert: (order: BusinessOrder) => void;
   accept: (id: string) => Promise<void>;
+  /** Rechaza un pedido pagado; la billetera devuelve el pago. */
   reject: (id: string) => Promise<void>;
+  /** Cancela un pedido ya aceptado; la billetera devuelve el pago. */
+  cancel: (id: string) => Promise<void>;
+  /** El repartidor asignado no llega: se ofrece a otro. */
+  reassign: (id: string) => Promise<void>;
   /** Listo para recoger: se ofrece a los repartidores de Rapidito. */
   ready: (id: string) => Promise<void>;
   /** La tienda le entregó el pedido al repartidor. */
@@ -60,7 +65,17 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   },
 
   accept: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/accept`)),
-  reject: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/reject`)),
+  // Rechazar y cancelar pasan por el gateway (devuelven el pago) y responden el pedido público:
+  // se vuelve a leer la vista del negocio.
+  reject: async (id) => {
+    await http.post<Order>(`${path(id)}/reject`);
+    await get().loadOrder(id);
+  },
+  cancel: async (id) => {
+    await http.post<Order>(`${path(id)}/cancel`);
+    await get().loadOrder(id);
+  },
+  reassign: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/reassign`)),
 
   ready: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/ready`)),
   handoff: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/handoff`)),

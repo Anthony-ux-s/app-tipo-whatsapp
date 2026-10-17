@@ -52,7 +52,33 @@ func (f *fakeDelivery) Quote(context.Context, services.Address) (rapidito.Quote,
 	return rapidito.Quote{ID: "q_1", FeeCents: 650, ETAMinutes: 30}, nil
 }
 
-type fakePayments struct{ last pagaya.ChargeRequest }
+// fakePayments imita la billetera: anular y devolver son idempotentes; fail simula que no responde.
+type fakePayments struct {
+	last      pagaya.ChargeRequest
+	fail      bool
+	paid      bool // la persona ya pagó el cobro (anular → ErrAlreadyPaid)
+	cancelled []string
+	refunded  []string
+}
+
+func (f *fakePayments) Cancel(_ context.Context, chargeID string) error {
+	if f.fail {
+		return errors.New("billetera caída")
+	}
+	if f.paid {
+		return pagaya.ErrAlreadyPaid
+	}
+	f.cancelled = append(f.cancelled, chargeID)
+	return nil
+}
+
+func (f *fakePayments) Refund(_ context.Context, chargeID string) (time.Time, error) {
+	if f.fail {
+		return time.Time{}, errors.New("billetera caída")
+	}
+	f.refunded = append(f.refunded, chargeID)
+	return time.Date(2026, 10, 17, 12, 30, 0, 0, time.UTC), nil
+}
 
 func (f *fakePayments) CreateCharge(_ context.Context, req pagaya.ChargeRequest) (pagaya.Charge, error) {
 	f.last = req
@@ -75,7 +101,7 @@ func (f *fakeCore) CreateOrder(_ context.Context, in services.InternalCreateOrde
 			SubtotalCents: in.SubtotalCents, DeliveryFeeCents: in.DeliveryFeeCents, TotalCents: in.TotalCents,
 			Currency: in.Currency, Address: in.Address, Payment: in.Payment,
 		},
-		UserID: in.UserID, DeliveryQuoteID: in.DeliveryQuoteID,
+		UserID: in.UserID, DeliveryQuoteID: in.DeliveryQuoteID, BusinessOwnerID: &owner,
 	}
 	f.orders[in.ID] = o
 	return o, nil
@@ -105,6 +131,9 @@ func (f *fakeCore) UpdateOrder(_ context.Context, id string, u services.Internal
 	o.Status = u.Status
 	if u.PaidAt != "" {
 		o.Payment.PaidAt = &u.PaidAt
+	}
+	if u.RefundedAt != "" {
+		o.Payment.RefundedAt = &u.RefundedAt
 	}
 	if u.Delivery != nil {
 		o.Delivery = u.Delivery
@@ -138,6 +167,9 @@ func newWorld() world {
 	}
 	return w
 }
+
+// owner: dueño del negocio que atiende los pedidos de prueba.
+var owner = "dueño"
 
 var cart = services.QuoteRequest{
 	Items:   []services.CartItem{{ProductID: "AZU-RUB-1K", Quantity: 2}, {ProductID: "ARR-EXT-1K", Quantity: 1}},
@@ -263,5 +295,178 @@ func TestCobroVencidoYAvisoDesconocido(t *testing.T) {
 	}
 	if err := w.orch.PaymentEvent(ctx, pagaya.Event{Reference: "ord_x", Status: services.Paid}); err != nil {
 		t.Fatalf("un pedido desconocido se ignora, obtuve %v", err)
+	}
+}
+
+// at deja el pedido de prueba en un estado (como si el core lo hubiera avanzado).
+func (w world) at(status services.OrderStatus) {
+	o := w.core.orders["ord_1"]
+	o.Status = status
+	w.core.orders["ord_1"] = o
+}
+
+func TestCrearGuardaElCobroYElTiempoEstimado(t *testing.T) {
+	w := newWorld()
+	if _, err := w.orch.Create(context.Background(), "u", cart); err != nil {
+		t.Fatal(err)
+	}
+	if w.core.orders["ord_1"].Payment.ChargeID != "cob_1" {
+		t.Fatalf("el pedido debe guardar el cobro para anularlo o devolverlo: %+v", w.core.orders["ord_1"].Payment)
+	}
+}
+
+func TestClienteCancelaSinPagarYSeAnulaElCobro(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	if _, err := w.orch.CancelByCustomer(ctx, "otra", "ord_1"); status(err) != http.StatusNotFound {
+		t.Fatalf("otra persona no puede cancelarlo, obtuve %v", err)
+	}
+	order, err := w.orch.CancelByCustomer(ctx, "u", "ord_1")
+	if err != nil || order.Status != services.Cancelled || len(w.payments.cancelled) != 1 || len(w.payments.refunded) != 0 {
+		t.Fatalf("cancelar sin pagar anula el cobro: %+v %v %+v", order, err, w.payments)
+	}
+	if last := w.core.updates[len(w.core.updates)-1]; last.Note != "Cancelado por el cliente" || last.RefundedAt != "" {
+		t.Fatalf("nota inesperada: %+v", last)
+	}
+	// Repetirlo no vuelve a tocar la billetera.
+	if again, err := w.orch.CancelByCustomer(ctx, "u", "ord_1"); err != nil || again.Status != services.Cancelled || len(w.payments.cancelled) != 1 {
+		t.Fatalf("cancelar dos veces es idempotente: %+v %v", again, err)
+	}
+}
+
+func TestClienteCancelaPagadoYSeLeDevuelve(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	_ = w.orch.PaymentEvent(ctx, paidEvent())
+	order, err := w.orch.CancelByCustomer(ctx, "u", "ord_1")
+	if err != nil || order.Status != services.Cancelled || *order.Payment.RefundedAt != "2026-10-17T12:30:00Z" || len(w.payments.refunded) != 1 {
+		t.Fatalf("cancelar pagado devuelve el pago: %+v %v", order, err)
+	}
+	if last := w.core.updates[len(w.core.updates)-1]; last.Note != "Cancelado por el cliente · pago devuelto" || last.ExpectStatus != services.Paid {
+		t.Fatalf("actualización inesperada: %+v", last)
+	}
+}
+
+func TestClienteCancelaJustoCuandoPagaba(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	w.payments.paid = true // pagó, pero el aviso aún no llega
+	order, err := w.orch.CancelByCustomer(ctx, "u", "ord_1")
+	if err != nil || order.Status != services.Cancelled || order.Payment.RefundedAt == nil || len(w.payments.refunded) != 1 {
+		t.Fatalf("si ya pagó, se cancela devolviendo: %+v %v", order, err)
+	}
+	// Cuando llega el aviso del pago, ya está devuelto: no se devuelve dos veces.
+	if err := w.orch.PaymentEvent(ctx, paidEvent()); err != nil || len(w.payments.refunded) != 1 {
+		t.Fatalf("el aviso tardío no devuelve otra vez: %v %v", err, w.payments.refunded)
+	}
+}
+
+func TestClienteNoCancelaSiLaTiendaYaAcepto(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	w.at(services.Preparing)
+	if _, err := w.orch.CancelByCustomer(ctx, "u", "ord_1"); status(err) != http.StatusConflict {
+		t.Fatalf("esperaba 409, obtuve %v", err)
+	}
+	if len(w.payments.refunded) != 0 || w.core.orders["ord_1"].Status != services.Preparing {
+		t.Fatal("no debía tocar nada")
+	}
+}
+
+func TestSiLaBilleteraFallaElPedidoNoCambia(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	_ = w.orch.PaymentEvent(ctx, paidEvent())
+	w.payments.fail = true
+	before := len(w.core.updates)
+	if _, err := w.orch.CancelByCustomer(ctx, "u", "ord_1"); status(err) != http.StatusBadGateway {
+		t.Fatalf("esperaba 502, obtuve %v", err)
+	}
+	if _, err := w.orch.RejectByOwner(ctx, owner, "ord_1"); status(err) != http.StatusBadGateway {
+		t.Fatalf("esperaba 502, obtuve %v", err)
+	}
+	if len(w.core.updates) != before || w.core.orders["ord_1"].Status != services.Paid {
+		t.Fatal("si la billetera falla, el pedido sigue igual para reintentar")
+	}
+	w.payments.fail = false
+	if order, err := w.orch.CancelByCustomer(ctx, "u", "ord_1"); err != nil || order.Status != services.Cancelled {
+		t.Fatalf("el reintento debía funcionar: %+v %v", order, err)
+	}
+}
+
+func TestTiendaRechazaPagadoYDevuelve(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	_ = w.orch.PaymentEvent(ctx, paidEvent())
+	if _, err := w.orch.RejectByOwner(ctx, "u", "ord_1"); status(err) != http.StatusNotFound {
+		t.Fatalf("el cliente no puede rechazar, obtuve %v", err)
+	}
+	order, err := w.orch.RejectByOwner(ctx, owner, "ord_1")
+	if err != nil || order.Status != services.Rejected || order.Payment.RefundedAt == nil {
+		t.Fatalf("rechazar devuelve el pago: %+v %v", order, err)
+	}
+	if last := w.core.updates[len(w.core.updates)-1]; last.Note != "Rechazado por la tienda · pago devuelto" {
+		t.Fatalf("nota inesperada: %+v", last)
+	}
+	if again, err := w.orch.RejectByOwner(ctx, owner, "ord_1"); err != nil || again.Status != services.Rejected || len(w.payments.refunded) != 1 {
+		t.Fatalf("rechazar dos veces es idempotente: %+v %v", again, err)
+	}
+	w.at(services.Preparing)
+	if _, err := w.orch.RejectByOwner(ctx, owner, "ord_1"); status(err) != http.StatusConflict {
+		t.Fatalf("aceptado ya no se rechaza, obtuve %v", err)
+	}
+}
+
+func TestTiendaCancelaAntesDeQueSalga(t *testing.T) {
+	for _, from := range []services.OrderStatus{services.Preparing, services.SearchingDriver, services.DriverAssigned} {
+		w := newWorld()
+		ctx := context.Background()
+		_, _ = w.orch.Create(ctx, "u", cart)
+		_ = w.orch.PaymentEvent(ctx, paidEvent())
+		w.at(from)
+		order, err := w.orch.CancelByOwner(ctx, owner, "ord_1")
+		if err != nil || order.Status != services.Cancelled || order.Payment.RefundedAt == nil {
+			t.Fatalf("desde %s: %+v %v", from, order, err)
+		}
+		if last := w.core.updates[len(w.core.updates)-1]; last.ExpectStatus != from || last.Note != "Cancelado por la tienda · pago devuelto" {
+			t.Fatalf("actualización inesperada: %+v", last)
+		}
+	}
+	w := newWorld()
+	ctx := context.Background()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	w.at(services.OnTheWay)
+	if _, err := w.orch.CancelByOwner(ctx, owner, "ord_1"); status(err) != http.StatusConflict {
+		t.Fatalf("en camino ya no se cancela, obtuve %v", err)
+	}
+	if _, err := w.orch.CancelByOwner(ctx, "u", "ord_1"); status(err) != http.StatusNotFound {
+		t.Fatalf("el cliente no usa la cancelación de la tienda, obtuve %v", err)
+	}
+}
+
+func TestPagoQueLlegaTrasCancelarSeDevuelve(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	_, _ = w.orch.Create(ctx, "u", cart)
+	_, _ = w.orch.CancelByCustomer(ctx, "u", "ord_1") // anuló sin pagar
+	if err := w.orch.PaymentEvent(ctx, paidEvent()); err != nil {
+		t.Fatal(err)
+	}
+	order := w.core.orders["ord_1"]
+	if order.Status != services.Cancelled || order.Payment.RefundedAt == nil || order.Payment.PaidAt == nil || len(w.payments.refunded) != 1 {
+		t.Fatalf("un pago tardío se devuelve y el pedido sigue cancelado: %+v", order)
+	}
+	if last := w.core.updates[len(w.core.updates)-1]; last.Note != "Pago recibido tras cancelar · devuelto" || last.ExpectStatus != services.Cancelled {
+		t.Fatalf("actualización inesperada: %+v", last)
+	}
+	// El aviso repetido no devuelve dos veces.
+	if err := w.orch.PaymentEvent(ctx, paidEvent()); err != nil || len(w.payments.refunded) != 1 {
+		t.Fatalf("idempotente: %v %v", err, w.payments.refunded)
 	}
 }

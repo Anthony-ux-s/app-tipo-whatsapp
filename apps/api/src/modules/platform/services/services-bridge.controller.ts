@@ -52,10 +52,12 @@ class AddressDto implements DeliveryAddress {
 
 class PaymentDto implements OrderPayment {
   @IsString() @IsNotEmpty() @MaxLength(40) provider: string;
+  @IsOptional() @IsString() @MaxLength(80) chargeId?: string;
   @IsString() @IsNotEmpty() @MaxLength(500) qrText: string;
   @IsString() @IsNotEmpty() @MaxLength(500) payUrl: string;
   @IsISO8601() expiresAt: string;
   @IsOptional() @IsISO8601() paidAt: string | null;
+  @IsOptional() @IsISO8601() refundedAt?: string | null;
 }
 
 class DeliveryDto implements OrderDelivery {
@@ -78,13 +80,16 @@ class CreateOrderDto implements InternalCreateOrder {
   @ValidateNested() @Type(() => AddressDto) address: AddressDto;
   @ValidateNested() @Type(() => PaymentDto) payment: PaymentDto;
   @IsString() @IsNotEmpty() @MaxLength(64) deliveryQuoteId: string;
+  @IsInt() @Min(1) @Max(600) etaMinutes: number;
 }
 
 class UpdateOrderDto implements InternalUpdateOrder {
   @IsOptional() @IsIn(ORDER_STATUSES) expectStatus?: OrderStatus;
   @IsIn(ORDER_STATUSES) status: OrderStatus;
   @IsOptional() @IsISO8601() paidAt?: string;
+  @IsOptional() @IsISO8601() refundedAt?: string;
   @IsOptional() @ValidateNested() @Type(() => DeliveryDto) delivery?: DeliveryDto;
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
 }
 
 /**

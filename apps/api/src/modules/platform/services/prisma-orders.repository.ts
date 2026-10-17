@@ -30,6 +30,7 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
     address: JSON.parse(row.address),
     payment: JSON.parse(row.payment),
     deliveryQuoteId: row.deliveryQuoteId,
+    etaMinutes: row.etaMinutes,
     delivery: row.delivery ? JSON.parse(row.delivery) : null,
     driverId: row.driverId,
     deliveryCode: row.deliveryCode,
@@ -102,7 +103,7 @@ export class PrismaOrdersRepository implements OrdersRepository {
     const current = await this.prisma.order.findUnique({ where: { id }, select: { status: true, timeline: true } });
     if (!current || current.status !== expected) return null;
     const timeline: OrderTimelineEntry[] = JSON.parse(current.timeline);
-    if (changes.status !== expected) {
+    if (changes.status !== expected || changes.note) {
       timeline.push({ status: changes.status, at: new Date().toISOString(), ...(changes.note ? { note: changes.note } : {}) });
     }
     // El `where` con el estado esperado hace atómico el cambio: si otro lo movió antes, no toca nada.
@@ -112,11 +113,16 @@ export class PrismaOrdersRepository implements OrdersRepository {
         status: changes.status,
         timeline: JSON.stringify(timeline),
         ...(changes.payment ? { payment: JSON.stringify(changes.payment) } : {}),
-        ...(changes.delivery ? { delivery: JSON.stringify(changes.delivery) } : {}),
-        ...(changes.driverId ? { driverId: changes.driverId } : {}),
+        ...(changes.delivery !== undefined ? { delivery: changes.delivery ? JSON.stringify(changes.delivery) : null } : {}),
+        ...(changes.driverId !== undefined ? { driverId: changes.driverId } : {}),
       },
     });
     return count === 1 ? this.findById(id) : null;
+  }
+
+  async resetDeliveryCode(id: string, code: string): Promise<OrderRecord> {
+    await this.prisma.order.update({ where: { id }, data: { deliveryCode: code, deliveryCodeAttempts: 0 } });
+    return (await this.findById(id))!;
   }
 
   async addFailedCodeAttempt(id: string): Promise<number> {

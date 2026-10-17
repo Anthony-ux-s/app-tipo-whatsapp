@@ -21,6 +21,8 @@ const Provider = "PagaYa"
 var (
 	ErrInvalid       = errors.New("datos inválidos de la billetera")
 	ErrUnknownStatus = errors.New("estado de cobro desconocido")
+	// ErrAlreadyPaid: se quiso anular un cobro que la persona ya pagó (hay que devolverlo).
+	ErrAlreadyPaid = errors.New("el cobro ya se pagó")
 )
 
 type Client struct {
@@ -76,6 +78,50 @@ func (c Client) CreateCharge(ctx context.Context, req ChargeRequest) (Charge, er
 		return Charge{}, fmt.Errorf("%w: cobro %+v", ErrInvalid, body)
 	}
 	return Charge{ID: body.ID, QRText: body.QRTexto, PayURL: body.URLPago, ExpiresAt: expires}, nil
+}
+
+// Cancel anula un cobro sin pagar: ya no se puede pagar. Repetirlo no cambia nada; si la persona
+// ya lo pagó, devuelve ErrAlreadyPaid.
+func (c Client) Cancel(ctx context.Context, chargeID string) error {
+	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/pagaya/cobros/"+url.PathEscape(chargeID)+"/anular", nil)
+	if err != nil {
+		return err
+	}
+	switch status {
+	case http.StatusOK:
+		return nil
+	case http.StatusConflict:
+		var body struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(raw, &body) == nil && body.Error == "YA_PAGADO" {
+			return ErrAlreadyPaid
+		}
+	}
+	return fmt.Errorf("%w: anular respondió %d", providerapi.ErrUnavailable, status)
+}
+
+// Refund devuelve un cobro pagado y dice cuándo. Es idempotente: devolver dos veces no duplica.
+func (c Client) Refund(ctx context.Context, chargeID string) (time.Time, error) {
+	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/pagaya/cobros/"+url.PathEscape(chargeID)+"/devolucion", nil)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if status != http.StatusOK {
+		return time.Time{}, fmt.Errorf("%w: devolución respondió %d", providerapi.ErrUnavailable, status)
+	}
+	var body struct {
+		Estado     string `json:"estado"`
+		DevueltoEn string `json:"devuelto_en"`
+	}
+	if err := providerapi.Decode(raw, &body); err != nil {
+		return time.Time{}, err
+	}
+	at, err := time.Parse(time.RFC3339, body.DevueltoEn)
+	if err != nil || body.Estado != "DEVUELTO" {
+		return time.Time{}, fmt.Errorf("%w: devolución %+v", ErrInvalid, body)
+	}
+	return at, nil
 }
 
 func httpURL(raw string) bool {

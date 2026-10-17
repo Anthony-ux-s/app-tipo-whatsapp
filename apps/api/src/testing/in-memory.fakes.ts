@@ -339,8 +339,13 @@ export class InMemoryOrdersRepository implements OrdersRepository {
   async updateIfStatus(id: string, expected: OrderStatus, { note, ...changes }: OrderChanges) {
     const order = this.orders.find((o) => o.id === id);
     if (!order || order.status !== expected) return null;
-    if (changes.status !== expected) order.timeline.push({ status: changes.status, at: new Date().toISOString(), ...(note ? { note } : {}) });
+    if (changes.status !== expected || note) order.timeline.push({ status: changes.status, at: new Date().toISOString(), ...(note ? { note } : {}) });
     Object.assign(order, changes, { updatedAt: new Date() });
+    return structuredClone(order);
+  }
+  async resetDeliveryCode(id: string, code: string) {
+    const order = this.orders.find((o) => o.id === id)!;
+    Object.assign(order, { deliveryCode: code, deliveryCodeAttempts: 0, updatedAt: new Date() });
     return structuredClone(order);
   }
   async addFailedCodeAttempt(id: string) {

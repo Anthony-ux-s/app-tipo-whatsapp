@@ -81,3 +81,41 @@ func waitStatus(t *testing.T, core *fakeCore, id string, want services.OrderStat
 	}
 	t.Fatalf("el pedido no llegó a %s", want)
 }
+
+// Cancelar antes de pagar anula el cobro en la billetera: el QR ya no sirve.
+func TestIntegracionCancelarSinPagarAnulaElCobro(t *testing.T) {
+	base := os.Getenv("PARLA_PROVIDERS_URL")
+	if base == "" {
+		t.Skip("define PARLA_PROVIDERS_URL para probar contra los simuladores")
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	core := &fakeCore{orders: map[string]services.InternalOrder{}}
+	orch := &Orchestrator{
+		Commerce:  mercaya.Client{BaseURL: base, HTTP: client},
+		Delivery:  rapidito.Client{BaseURL: base, HTTP: client},
+		Payments:  pagaya.Client{BaseURL: base, HTTP: client},
+		Core:      core,
+		PublicURL: "http://localhost:1",
+	}
+	ctx := context.Background()
+	order, err := orch.Create(ctx, "u_test", services.QuoteRequest{
+		Items:   []services.CartItem{{ProductID: "AZU-RUB-1K", Quantity: 1}},
+		Address: services.Address{Line: "Av. Arequipa 2450, Lince"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled, err := orch.CancelByCustomer(ctx, "u_test", order.ID); err != nil || cancelled.Status != services.Cancelled {
+		t.Fatalf("cancelar: %+v %v", cancelled, err)
+	}
+	req, _ := http.NewRequest(http.MethodPost, order.Payment.PayURL, nil)
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("un cobro anulado no se debe poder pagar, obtuve %d", resp.StatusCode)
+	}
+}

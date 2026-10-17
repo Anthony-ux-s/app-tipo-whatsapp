@@ -64,6 +64,31 @@ func (h *HTTP) Create(w http.ResponseWriter, r *http.Request, userID string) {
 	WriteJSON(w, http.StatusCreated, order)
 }
 
+// CancelOrder: el cliente cancela su pedido antes de que la tienda lo acepte (se anula o devuelve el pago).
+func (h *HTTP) CancelOrder(w http.ResponseWriter, r *http.Request, userID string) {
+	h.respond(w)(h.Orch.CancelByCustomer(r.Context(), userID, r.PathValue("id")))
+}
+
+// RejectOrder: la tienda no acepta un pedido pagado; se devuelve el pago.
+func (h *HTTP) RejectOrder(w http.ResponseWriter, r *http.Request, userID string) {
+	h.respond(w)(h.Orch.RejectByOwner(r.Context(), userID, r.PathValue("id")))
+}
+
+// CancelBusinessOrder: la tienda cancela un pedido aceptado que aún no salió; se devuelve el pago.
+func (h *HTTP) CancelBusinessOrder(w http.ResponseWriter, r *http.Request, userID string) {
+	h.respond(w)(h.Orch.CancelByOwner(r.Context(), userID, r.PathValue("id")))
+}
+
+func (h *HTTP) respond(w http.ResponseWriter) func(services.Order, error) {
+	return func(order services.Order, err error) {
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, order)
+	}
+}
+
 // PagayaHook: aviso firmado de la billetera.
 func (h *HTTP) PagayaHook(w http.ResponseWriter, r *http.Request) {
 	body, ok := readWebhook(w, r)

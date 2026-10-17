@@ -9,8 +9,10 @@ import {
 } from '../../platform/services/use-cases/business-orders.use-cases';
 
 /**
- * «Mi negocio»: el dueño ve los pedidos que recibe, los acepta o los rechaza, avisa cuando están
- * listos (se ofrecen a los repartidores de Rapidito) y confirma que se los entregó al repartidor.
+ * «Mi negocio»: el dueño ve los pedidos que recibe, los acepta, avisa cuando están listos (se ofrecen
+ * a los repartidores de Rapidito), confirma que se los entregó al repartidor o pide otro repartidor.
+ * Rechazar y cancelar (POST /api/business/orders/:id/reject|cancel) los atiende el gateway, que
+ * devuelve el pago en la billetera.
  */
 @Controller('business')
 export class BusinessController {
@@ -43,12 +45,6 @@ export class BusinessController {
   }
 
   @HttpCode(200)
-  @Post('orders/:id/reject')
-  reject(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<BusinessOrder> {
-    return this.decide.execute(user.userId, id, 'reject');
-  }
-
-  @HttpCode(200)
   @Post('orders/:id/ready')
   ready(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<BusinessOrder> {
     return this.decide.execute(user.userId, id, 'ready');
@@ -59,5 +55,12 @@ export class BusinessController {
   @Post('orders/:id/handoff')
   handoff(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<BusinessOrder> {
     return this.decide.execute(user.userId, id, 'handoff');
+  }
+
+  /** El repartidor asignado no llega: se suelta y el pedido se ofrece a otro. */
+  @HttpCode(200)
+  @Post('orders/:id/reassign')
+  reassign(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<BusinessOrder> {
+    return this.decide.execute(user.userId, id, 'reassign');
   }
 }

@@ -146,3 +146,64 @@ func TestRechazaDatosInvalidos(t *testing.T) {
 		}
 	}
 }
+
+func post(t *testing.T, url string) (int, map[string]any) {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodPost, url, nil)
+	req.Header.Set("Accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	return resp.StatusCode, out
+}
+
+func TestAnularUnCobroPendienteImpidePagarlo(t *testing.T) {
+	srv := pagaya(t, time.Minute)
+	out := crear(t, srv, "http://localhost:1/hook")
+	id := out["id_cobro"].(string)
+	for i := 0; i < 2; i++ { // anular dos veces es inofensivo
+		if status, body := post(t, srv.URL+"/pagaya/cobros/"+id+"/anular"); status != 200 || body["estado"] != "ANULADO" {
+			t.Fatalf("anular: %d %v", status, body)
+		}
+	}
+	if status, body := post(t, out["url_pago"].(string)); status != 409 || body["error"] != "ANULADO" {
+		t.Fatalf("un cobro anulado no se paga: %d %v", status, body)
+	}
+	resp, _ := http.Get(out["url_pago"].(string))
+	page, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(page), "Este cobro fue anulado") {
+		t.Fatal("la página debe decir que el cobro fue anulado")
+	}
+	if status, _ := post(t, srv.URL+"/pagaya/cobros/cob_nada/anular"); status != 404 {
+		t.Fatalf("cobro desconocido: %d", status)
+	}
+}
+
+func TestDevolverUnCobroPagado(t *testing.T) {
+	srv := pagaya(t, time.Minute)
+	hook, in := callback(t)
+	out := crear(t, srv, hook.URL)
+	id := out["id_cobro"].(string)
+	if status, body := post(t, srv.URL+"/pagaya/cobros/"+id+"/devolucion"); status != 409 || body["error"] != "NO_PAGADO" {
+		t.Fatalf("sin pagar no se devuelve: %d %v", status, body)
+	}
+	post(t, out["url_pago"].(string))
+	wait(t, in)
+	if status, body := post(t, srv.URL+"/pagaya/cobros/"+id+"/anular"); status != 409 || body["error"] != "YA_PAGADO" {
+		t.Fatalf("pagado no se anula: %d %v", status, body)
+	}
+	status, first := post(t, srv.URL+"/pagaya/cobros/"+id+"/devolucion")
+	if status != 200 || first["estado"] != "DEVUELTO" || first["devuelto_en"] == nil {
+		t.Fatalf("devolución: %d %v", status, first)
+	}
+	if status, again := post(t, srv.URL+"/pagaya/cobros/"+id+"/devolucion"); status != 200 || again["devuelto_en"] != first["devuelto_en"] {
+		t.Fatalf("devolver otra vez debe ser idempotente: %d %v", status, again)
+	}
+	if status, _ := post(t, out["url_pago"].(string)); status != 409 {
+		t.Fatalf("un cobro devuelto no se vuelve a pagar: %d", status)
+	}
+}

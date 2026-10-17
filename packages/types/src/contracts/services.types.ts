@@ -83,11 +83,15 @@ export type OrderStatus =
 
 export interface OrderPayment {
   provider: string;
+  /** Id del cobro en la billetera, para anularlo o devolverlo. */
+  chargeId?: string;
   /** Texto que va dentro del QR (en el simulador es la URL de pago). */
   qrText: string;
   payUrl: string;
   expiresAt: string;
   paidAt: string | null;
+  /** Cuándo se devolvió el pago (pedido cancelado o rechazado); null si no se devolvió. */
+  refundedAt?: string | null;
 }
 
 export interface OrderDelivery {
@@ -142,6 +146,8 @@ export interface Order {
    * recibir el pedido. Sin él no se puede marcar como entregado.
    */
   deliveryCode?: string;
+  /** Se equivocaron 5 veces con el código: el cliente puede generar uno nuevo. */
+  deliveryCodeLocked?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -212,8 +218,10 @@ export interface InternalCreateOrder {
   currency: Currency;
   address: DeliveryAddress;
   payment: OrderPayment;
-  /** Cotización del delivery, para despacharlo al confirmarse el pago. */
+  /** Cotización del delivery con la que se calculó la tarifa. */
   deliveryQuoteId: string;
+  /** Minutos que Rapidito estima para el envío (para la hora estimada de llegada). */
+  etaMinutes: number;
 }
 
 export interface InternalUpdateOrder {
@@ -221,12 +229,16 @@ export interface InternalUpdateOrder {
   expectStatus?: OrderStatus;
   status: OrderStatus;
   paidAt?: string;
+  /** Pago devuelto (al cancelar o rechazar un pedido pagado). */
+  refundedAt?: string;
   delivery?: OrderDelivery;
+  /** Detalle para la línea de tiempo (p. ej. «Cancelado por el cliente · pago devuelto»). */
+  note?: string;
 }
 
 export interface InternalOrder extends Order {
   userId: string;
   deliveryQuoteId: string;
-  /** Dueño del negocio: el gateway solo deja que él marque el pedido como listo. */
+  /** Dueño del negocio: el gateway solo deja que él rechace o cancele el pedido. */
   businessOwnerId: string | null;
 }

@@ -1,4 +1,4 @@
-import { Bike, KeyRound, MapPin, MessageCircle, PackageCheck, ShieldCheck, Store } from 'lucide-react';
+import { Ban, Bike, KeyRound, MapPin, MessageCircle, PackageCheck, ShieldCheck, Store, Undo2 } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatTime } from '@shared/utils/date';
@@ -81,6 +81,19 @@ export function DriverOrderDetailView() {
           <p className="text-sm text-ink">
             Ve a <span className="font-semibold">{order.business.name}</span>. La tienda confirma en su app que te entregó el pedido; recién ahí sigue la entrega.
           </p>
+        </section>
+      )}
+
+      {order.mine && order.status === 'driver_assigned' && (
+        <Button variant="ghost" className="self-center" icon={<Undo2 className="size-4" />} onClick={d.release} loading={d.busy} data-testid="release-order">
+          No puedo llevarlo
+        </Button>
+      )}
+
+      {order.status === 'cancelled' && (
+        <section className="flex items-center gap-4 rounded-2xl bg-surface-3 p-4 md:p-5" aria-label="Cancelado" data-testid="order-stopped">
+          <Ban className="size-6 shrink-0 text-ink-soft" />
+          <p className="text-sm font-semibold text-ink">{order.business.name} canceló este pedido. No tienes que recogerlo ni entregarlo.</p>
         </section>
       )}
 

@@ -1,4 +1,4 @@
-import { Bike, Check, MapPin, MessageCircle, PackageCheck, ShieldCheck, X } from 'lucide-react';
+import { Bike, Check, MapPin, MessageCircle, PackageCheck, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { Avatar } from '@shared/ui/Avatar';
 import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
@@ -68,7 +68,18 @@ export function BusinessOrderDetailView() {
         </Button>
       </section>
 
-      {!delivered && (
+      {(order.status === 'cancelled' || order.status === 'rejected') && (
+        <section className="rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Pedido cerrado" data-testid="order-stopped">
+          <p className="font-bold text-ink">{order.status === 'rejected' ? 'Rechazaste este pedido' : 'Pedido cancelado'}</p>
+          <p className="text-sm text-ink-soft" data-testid="refund">
+            {order.payment.refundedAt
+              ? `Se le devolvieron ${formatSoles(order.totalCents)} al cliente (${formatTime(order.payment.refundedAt)}).`
+              : 'El cliente no había pagado: no hubo cobro.'}
+          </p>
+        </section>
+      )}
+
+      {!delivered && order.status !== 'cancelled' && order.status !== 'rejected' && (
         <section className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Qué toca ahora">
           <p className="text-sm text-ink-soft">{BUSINESS_STATUS_HINTS[order.status]}</p>
           {order.status === 'paid' && (
@@ -99,8 +110,18 @@ export function BusinessOrderDetailView() {
             </div>
           )}
           {order.status === 'driver_assigned' && (
-            <Button icon={<PackageCheck className="size-4" />} onClick={d.handoff} loading={d.busy === 'handoff'} data-testid="handoff-order" className="self-start">
-              Le entregué el pedido a {driverName}
+            <div className="flex flex-wrap gap-2">
+              <Button icon={<PackageCheck className="size-4" />} onClick={d.handoff} loading={d.busy === 'handoff'} disabled={!!d.busy} data-testid="handoff-order">
+                Le entregué el pedido a {driverName}
+              </Button>
+              <Button variant="ghost" icon={<RefreshCw className="size-4" />} onClick={d.reassign} loading={d.busy === 'reassign'} disabled={!!d.busy} data-testid="reassign-order">
+                No llega · buscar otro
+              </Button>
+            </div>
+          )}
+          {d.canCancel && (
+            <Button variant="ghost" size="sm" icon={<X className="size-4" />} onClick={d.askCancel} disabled={!!d.busy} className="self-start" data-testid="business-cancel">
+              Cancelar pedido
             </Button>
           )}
         </section>
@@ -124,6 +145,24 @@ export function BusinessOrderDetailView() {
       <OrderTimeline entries={order.timeline} />
 
       <Modal
+        open={d.confirmCancel}
+        onClose={d.closeCancel}
+        size="sm"
+        title="¿Cancelar este pedido?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={d.closeCancel}>Volver</Button>
+            <Button variant="danger" icon={<X className="size-4" />} onClick={d.cancel} loading={d.busy === 'cancel'} data-testid="confirm-business-cancel">Cancelar pedido</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-soft">
+          Le devolvemos {formatSoles(order.totalCents)} a {order.customer.displayName}
+          {order.delivery?.driverName ? ` y le avisamos a ${order.delivery.driverName} que ya no tiene que recogerlo` : ''}. Escríbele al cliente para explicarle.
+        </p>
+      </Modal>
+
+      <Modal
         open={d.confirmReject}
         onClose={d.cancelReject}
         size="sm"
@@ -136,7 +175,7 @@ export function BusinessOrderDetailView() {
         }
       >
         <p className="text-sm text-ink-soft">
-          {order.customer.displayName} ya pagó {formatSoles(order.totalCents)}. Escríbele por el chat para explicarle y coordinar la devolución.
+          {order.customer.displayName} ya pagó {formatSoles(order.totalCents)}: se lo devolvemos a su billetera. Escríbele por el chat para explicarle.
         </p>
       </Modal>
     </ServicePage>

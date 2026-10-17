@@ -8,6 +8,7 @@ import {
   GetDriverOrderUseCase,
   GetMyDriverUseCase,
   ListDriverOrdersUseCase,
+  ReleaseDeliveryUseCase,
 } from '../../platform/services/use-cases/driver-orders.use-cases';
 
 class DeliverDto {
@@ -26,6 +27,7 @@ export class DriverController {
     private readonly getOrder: GetDriverOrderUseCase,
     private readonly accept: AcceptDeliveryUseCase,
     private readonly deliver: DeliverOrderUseCase,
+    private readonly release: ReleaseDeliveryUseCase,
   ) {}
 
   @Get()
@@ -47,6 +49,13 @@ export class DriverController {
   @Post('orders/:id/accept')
   take(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<DriverOrder> {
     return this.accept.execute(user.userId, id);
+  }
+
+  /** «No puedo llevarlo»: suelta el pedido antes de recogerlo y vuelve a ofrecerse. */
+  @HttpCode(200)
+  @Post('orders/:id/release')
+  drop(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<DriverOrder> {
+    return this.release.execute(user.userId, id);
   }
 
   @HttpCode(200)

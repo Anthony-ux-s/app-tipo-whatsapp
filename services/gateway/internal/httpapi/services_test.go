@@ -68,6 +68,10 @@ func (payFake) CreateCharge(context.Context, pagaya.ChargeRequest) (pagaya.Charg
 	return pagaya.Charge{ID: "cob_1", QRText: "http://p", PayURL: "http://p", ExpiresAt: time.Now().Add(time.Minute)}, nil
 }
 
+func (payFake) Cancel(context.Context, string) error { return nil }
+
+func (payFake) Refund(context.Context, string) (time.Time, error) { return time.Now(), nil }
+
 func servicesGateway(t *testing.T) (*httptest.Server, *coreFake) {
 	t.Helper()
 	coreSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

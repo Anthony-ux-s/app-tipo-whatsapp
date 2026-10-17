@@ -9,6 +9,10 @@ interface OrdersState {
   loadOrder: (id: string) => Promise<Order>;
   /** Pedido nuevo o actualizado (respuesta del gateway o evento order:updated en tiempo real). */
   upsert: (order: Order) => void;
+  /** Cancela antes de que la tienda lo acepte (si ya pagó, la billetera devuelve el pago). */
+  cancel: (id: string) => Promise<void>;
+  /** Código de entrega nuevo cuando el anterior se bloqueó. */
+  renewCode: (id: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -39,6 +43,14 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     if (current && current.updatedAt > order.updatedAt) return;
     set({ orders: { ...get().orders, [order.id]: order } });
   },
+
+  cancel: async (id) => {
+    // El gateway devuelve el pedido público; se vuelve a leer la vista del cliente.
+    await http.post<Order>(`/orders/${encodeURIComponent(id)}/cancel`);
+    await get().loadOrder(id);
+  },
+
+  renewCode: async (id) => get().upsert(await http.post<Order>(`/orders/${encodeURIComponent(id)}/new-code`)),
 
   reset: () => set({ orders: {}, status: 'idle' }),
 }));

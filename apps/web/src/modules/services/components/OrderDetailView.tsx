@@ -1,7 +1,9 @@
-import { Bike, Check, ChefHat, ExternalLink, KeyRound, MapPin, MessageCircle, PackageCheck, ShoppingBasket, Smartphone, Store } from 'lucide-react';
+import { Bike, Check, ChefHat, Clock, ExternalLink, KeyRound, MapPin, MessageCircle, PackageCheck, RefreshCw, ShoppingBasket, Smartphone, Store, X } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
+import { Modal } from '@shared/ui/Modal';
 import { QrCode } from '@shared/ui/QrCode';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
+import { formatTime } from '@shared/utils/date';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { ORDER_STEPS } from '../const/services.const';
 import { useOrderChat } from '../hooks/use-order-chat.hook';
@@ -115,8 +117,17 @@ export function OrderDetailView() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-ink-soft">Tu código de entrega</p>
             <p className="font-mono text-3xl font-extrabold tracking-[0.3em] text-ink" data-testid="delivery-code">{order.deliveryCode}</p>
-            <p className="text-xs text-ink-soft">Dáselo al repartidor solo cuando tengas tu pedido en la mano.</p>
+            {order.deliveryCodeLocked ? (
+              <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">Se bloqueó: alguien probó códigos equivocados. Genera uno nuevo y díctaselo en persona.</p>
+            ) : (
+              <p className="text-xs text-ink-soft">Dáselo al repartidor solo cuando tengas tu pedido en la mano.</p>
+            )}
           </div>
+          {order.deliveryCodeLocked && (
+            <Button variant="secondary" icon={<RefreshCw className="size-4" />} onClick={d.renewCode} loading={d.busy === 'renew'} data-testid="renew-code">
+              Código nuevo
+            </Button>
+          )}
         </section>
       )}
 
@@ -139,6 +150,11 @@ export function OrderDetailView() {
               Rapidito
               {order.delivery?.vehicle ? ` · ${order.delivery.vehicle}` : ''}
             </p>
+            {d.eta && (
+              <p className="mt-0.5 flex items-center gap-1 text-sm font-semibold text-brand dark:text-teal-300" data-testid="eta">
+                <Clock className="size-3.5" /> Llega aprox. a las {formatTime(d.eta)}
+              </p>
+            )}
           </div>
           {order.delivery && order.status !== 'delivered' && (
             <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={() => chat.open('driver')} loading={chat.opening === 'driver'} data-testid="chat-driver">
@@ -148,12 +164,26 @@ export function OrderDetailView() {
         </section>
       )}
 
+      {d.canCancel && (
+        <Button variant="ghost" className="self-center" icon={<X className="size-4" />} onClick={d.askCancel} data-testid="cancel-order">
+          Cancelar pedido
+        </Button>
+      )}
+
       {stopped && (
-        <section className="rounded-2xl bg-surface p-5 text-center shadow-float">
-          {order.status === 'rejected' ? (
+        <section className="rounded-2xl bg-surface p-5 text-center shadow-float" data-testid="order-stopped">
+          {order.status === 'rejected' || order.status === 'cancelled' ? (
             <>
-              <p className="font-bold text-ink">{businessName} no aceptó este pedido</p>
-              <p className="mt-1 text-sm text-ink-soft">Escríbele para coordinar la devolución de tu pago o arma otro pedido.</p>
+              <p className="font-bold text-ink">
+                {order.status === 'rejected' ? `${businessName} no aceptó este pedido` : 'Pedido cancelado'}
+              </p>
+              <p className="mt-1 text-sm text-ink-soft" data-testid="refund">
+                {order.payment.refundedAt
+                  ? `Te devolvimos ${formatSoles(order.totalCents)} a tu billetera ${order.payment.provider} (${formatTime(order.payment.refundedAt)}).`
+                  : order.payment.paidAt
+                    ? 'Estamos devolviendo tu pago.'
+                    : 'No se te cobró nada.'}
+              </p>
             </>
           ) : (
             <>
@@ -188,6 +218,27 @@ export function OrderDetailView() {
       </section>
 
       {order.timeline.length > 1 && <OrderTimeline entries={order.timeline} />}
+
+      <Modal
+        open={d.confirmCancel}
+        onClose={d.closeCancel}
+        size="sm"
+        title="¿Cancelar el pedido?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={d.closeCancel}>Volver</Button>
+            <Button variant="danger" icon={<X className="size-4" />} onClick={d.cancel} loading={d.busy === 'cancel'} data-testid="confirm-cancel">
+              Cancelar pedido
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-soft">
+          {order.status === 'paid'
+            ? `${businessName} todavía no lo aceptó. Te devolvemos ${formatSoles(order.totalCents)} a tu billetera.`
+            : 'Anulamos el cobro: el QR deja de servir y no se te cobra nada.'}
+        </p>
+      </Modal>
     </ServicePage>
   );
 }

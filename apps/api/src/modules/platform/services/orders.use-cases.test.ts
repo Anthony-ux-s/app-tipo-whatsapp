@@ -19,12 +19,13 @@ import {
   GetOrderContactUseCase,
   ListBusinessOrdersUseCase,
 } from './use-cases/business-orders.use-cases';
-import { AcceptDeliveryUseCase, DeliverOrderUseCase, ListDriverOrdersUseCase } from './use-cases/driver-orders.use-cases';
+import { AcceptDeliveryUseCase, DeliverOrderUseCase, ListDriverOrdersUseCase, ReleaseDeliveryUseCase } from './use-cases/driver-orders.use-cases';
 import {
   CreateOrderUseCase,
   GetMyOrderUseCase,
   ListMyOrdersUseCase,
   OrderEvents,
+  RenewDeliveryCodeUseCase,
   UpdateOrderUseCase,
 } from './use-cases/orders.use-cases';
 
@@ -67,6 +68,7 @@ describe('pedidos de Servicios (core)', () => {
     address: { line: 'Av. Larco 123, Miraflores', reference: 'Puerta verde' },
     payment: { provider: 'PagaYa', qrText: 'http://pagaya/x', payUrl: 'http://pagaya/x', expiresAt: new Date().toISOString(), paidAt: null },
     deliveryQuoteId: 'q_1',
+    etaMinutes: 30,
     ...overrides,
   });
 
@@ -132,7 +134,10 @@ describe('pedidos de Servicios (core)', () => {
 
     const taken = await take.execute(carlos.id, ID);
     expect(taken).toMatchObject({ status: 'driver_assigned', mine: true });
+    // Hora estimada: el tiempo de Rapidito desde que lo toma, y el tramo final al recogerlo.
+    expect((await orders.findById(ID))!.delivery?.etaMinutes).toBe(30);
     await decide.execute(rosa.id, ID, 'handoff');
+    expect((await orders.findById(ID))!.delivery?.etaMinutes).toBe(18);
     const done = await deliver.execute(carlos.id, ID, await codeOf());
     await flush();
 
@@ -219,20 +224,74 @@ describe('pedidos de Servicios (core)', () => {
       await expect(decide.execute(rosa.id, ID, 'ready')).rejects.toThrow('Primero acepta');
       expect((await decide.execute(rosa.id, ID, 'accept')).status).toBe('preparing');
       expect((await decide.execute(rosa.id, ID, 'accept')).status).toBe('preparing');
-      await expect(decide.execute(rosa.id, ID, 'reject')).rejects.toThrow(ConflictError);
+      await expect(decide.execute(rosa.id, ID, 'reassign')).rejects.toThrow(ConflictError);
       await decide.execute(rosa.id, ID, 'ready');
       await expect(decide.execute(rosa.id, ID, 'handoff')).rejects.toThrow('ningún repartidor');
       expect(realtime.events('order:updated').filter((e) => (e.payload as Order).status === 'preparing')).toHaveLength(1);
     });
 
-    it('al rechazar, la clienta se entera y el pedido termina', async () => {
+    it('al rechazar (con devolución, vía gateway), la clienta se entera y el pedido termina', async () => {
       await create.execute(newOrder());
       await pay();
-      expect((await decide.execute(rosa.id, ID, 'reject')).status).toBe('rejected');
+      const refundedAt = new Date().toISOString();
+      const rejected = await update.execute(ID, { expectStatus: 'paid', status: 'rejected', refundedAt, note: 'Rechazado por la tienda · pago devuelto' });
+      expect(rejected).toMatchObject({ status: 'rejected', payment: { refundedAt } });
+      expect(rejected.timeline.at(-1)?.note).toBe('Rechazado por la tienda · pago devuelto');
       await flush();
-      expect(push.sent.map((s) => s.payload.title)).toContain('Tu pedido no fue aceptado');
+      expect(push.sent.find((s) => s.payload.title === 'Tu pedido no fue aceptado')?.payload.body).toContain('Te devolvimos S/ 20.70');
       await expect(decide.execute(rosa.id, ID, 'accept')).rejects.toThrow(ConflictError);
     });
+
+    it('un pago que llega después de cancelar solo registra la devolución', async () => {
+      await create.execute(newOrder());
+      await update.execute(ID, { expectStatus: 'pending_payment', status: 'cancelled', note: 'Cancelado por el cliente' });
+      const before = realtime.events('order:updated').length;
+      const late = await update.execute(ID, { expectStatus: 'cancelled', status: 'cancelled', paidAt: new Date().toISOString(), refundedAt: new Date().toISOString(), note: 'Pago recibido tras cancelar · devuelto' });
+      expect(late.status).toBe('cancelled');
+      expect(late.payment.refundedAt).toBeTruthy();
+      expect(late.timeline.map((t) => t.note)).toContain('Pago recibido tras cancelar · devuelto');
+      expect(realtime.events('order:updated')).toHaveLength(before + 1);
+    });
+
+    it('si el repartidor no llega, la tienda pide otro y el pedido se vuelve a ofrecer', async () => {
+      await readyForDrivers();
+      await take.execute(carlos.id, ID);
+      const again = await decide.execute(rosa.id, ID, 'reassign');
+      expect(again).toMatchObject({ status: 'searching_driver', delivery: null });
+      expect((await orders.findById(ID))!.driverId).toBeNull();
+      expect(again.timeline.at(-1)?.note).toContain('Carlos Huamán no llegó');
+      await flush();
+      expect(push.sent.filter((s) => s.target.endpoint.endsWith('/carlos')).map((s) => s.payload.title)).toContain('Ya no tienes este pedido');
+      expect((await take.execute(lucia.id, ID)).mine).toBe(true);
+    });
+  });
+
+  it('el repartidor suelta un pedido antes de recogerlo; después de recogerlo, no', async () => {
+    await readyForDrivers();
+    const release = new ReleaseDeliveryUseCase(drivers, orders, users, events);
+    await take.execute(carlos.id, ID);
+    const dropped = await release.execute(carlos.id, ID);
+    expect(dropped).toMatchObject({ status: 'searching_driver', mine: false });
+    expect((await new ListDriverOrdersUseCase(drivers, orders, users).execute(lucia.id)).available.map((o) => o.id)).toEqual([ID]);
+    await take.execute(lucia.id, ID);
+    await decide.execute(rosa.id, ID, 'handoff');
+    await expect(release.execute(lucia.id, ID)).rejects.toThrow('Ya recogiste');
+  });
+
+  it('con el código bloqueado, solo la clienta genera uno nuevo y vuelve a funcionar', async () => {
+    await readyForDrivers();
+    await take.execute(carlos.id, ID);
+    await decide.execute(rosa.id, ID, 'handoff');
+    const renew = new RenewDeliveryCodeUseCase(orders, events);
+    await expect(renew.execute(ana.id, ID)).rejects.toThrow('sigue activo');
+    const old = await codeOf();
+    const wrong = old === '0000' ? '1111' : '0000';
+    for (let i = 0; i < 5; i++) await deliver.execute(carlos.id, ID, wrong).catch(() => undefined);
+    expect((await new GetMyOrderUseCase(orders).execute(ana.id, ID)).deliveryCodeLocked).toBe(true);
+    await expect(renew.execute(beto.id, ID)).rejects.toThrow(NotFoundError);
+    const renewed = await renew.execute(ana.id, ID);
+    expect(renewed.deliveryCodeLocked).toBe(false);
+    expect((await deliver.execute(carlos.id, ID, renewed.deliveryCode!)).status).toBe('delivered');
   });
 
   it('el chat del pedido es bidireccional entre cliente, tienda y repartidor, y nadie más', async () => {

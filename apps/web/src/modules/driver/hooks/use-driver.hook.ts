@@ -82,6 +82,18 @@ export function useDriverOrderDetail() {
         setBusy(false);
       }
     },
+    release: async () => {
+      setBusy(true);
+      try {
+        await useDriverStore.getState().release(orderId);
+        toast('Listo: lo ofrecimos a otros repartidores.', 'success');
+        navigate('/app/rapidito');
+      } catch (err) {
+        toast(errorMessage(err), 'error');
+      } finally {
+        setBusy(false);
+      }
+    },
     deliver: async (event?: FormEvent) => {
       event?.preventDefault();
       if (code.length !== 4) {

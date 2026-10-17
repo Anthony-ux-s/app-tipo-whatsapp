@@ -5,6 +5,8 @@
 //	GET  /pagaya/cobros/{id}  → {"id_cobro","estado","monto","pagado_en"}
 //	GET  /pagaya/pagar/{id}   → página para pagar (simula la app del banco)
 //	POST /pagaya/pagar/{id}   → confirma el pago (idempotente) y avisa a notificar_a
+//	POST /pagaya/cobros/{id}/anular     → PENDIENTE → ANULADO (idempotente); 409 {"error":"YA_PAGADO"} si ya se pagó
+//	POST /pagaya/cobros/{id}/devolucion → PAGADO → DEVUELTO (idempotente) {"id_cobro","estado","devuelto_en"}; 409 {"error":"NO_PAGADO"}
 //
 // Avisos: {"id_cobro","referencia","estado":"PAGADO"|"EXPIRADO","pagado_en"} con la firma en
 // x-pagaya-firma = hex(HMAC-SHA256(secreto, cuerpo)).
@@ -29,6 +31,8 @@ const (
 	pendiente = "PENDIENTE"
 	pagado    = "PAGADO"
 	expirado  = "EXPIRADO"
+	anulado   = "ANULADO"
+	devuelto  = "DEVUELTO"
 )
 
 type cobro struct {
@@ -40,6 +44,7 @@ type cobro struct {
 	Estado     string
 	ExpiraEn   time.Time
 	PagadoEn   *time.Time
+	DevueltoEn *time.Time
 }
 
 // Service guarda los cobros en memoria.
@@ -62,6 +67,8 @@ func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /pagaya/cobros/{id}", s.consultar)
 	mux.HandleFunc("GET /pagaya/pagar/{id}", s.pagina)
 	mux.HandleFunc("POST /pagaya/pagar/{id}", s.pagar)
+	mux.HandleFunc("POST /pagaya/cobros/{id}/anular", s.anular)
+	mux.HandleFunc("POST /pagaya/cobros/{id}/devolucion", s.devolver)
 }
 
 type crearRequest struct {
@@ -131,6 +138,18 @@ func (s *Service) pagar(w http.ResponseWriter, r *http.Request) {
 		renderPage(w, http.StatusNotFound, pageView{Estado: "NO_EXISTE"})
 		return
 	}
+	if c.Estado == anulado || c.Estado == devuelto {
+		// Anulado o ya devuelto: no se puede pagar (otra vez).
+		view := viewOf(c)
+		estado := c.Estado
+		s.mu.Unlock()
+		if strings.Contains(r.Header.Get("Accept"), "application/json") {
+			notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": estado})
+			return
+		}
+		renderPage(w, http.StatusConflict, view)
+		return
+	}
 	changed := false
 	if c.Estado == pendiente && s.Now().Before(c.ExpiraEn) {
 		now := s.Now()
@@ -151,6 +170,43 @@ func (s *Service) pagar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	renderPage(w, http.StatusOK, view)
+}
+
+// anular: el comercio cancela un cobro que aún no se pagó; ya no se puede pagar.
+func (s *Service) anular(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.cobros[r.PathValue("id")]
+	switch {
+	case !ok:
+		notify.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "NO_EXISTE"})
+	case c.Estado == pagado || c.Estado == devuelto:
+		notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": "YA_PAGADO"})
+	default:
+		// Pendiente o vencido: queda anulado (repetirlo no cambia nada).
+		c.Estado = anulado
+		notify.WriteJSON(w, http.StatusOK, map[string]any{"id_cobro": c.ID, "estado": c.Estado})
+	}
+}
+
+// devolver: el comercio devuelve un cobro pagado (idempotente: devolver dos veces no duplica).
+func (s *Service) devolver(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.cobros[r.PathValue("id")]
+	switch {
+	case !ok:
+		notify.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "NO_EXISTE"})
+	case c.Estado == pagado:
+		now := s.Now()
+		c.Estado = devuelto
+		c.DevueltoEn = &now
+		fallthrough
+	case c.Estado == devuelto:
+		notify.WriteJSON(w, http.StatusOK, map[string]any{"id_cobro": c.ID, "estado": c.Estado, "devuelto_en": formatTime(c.DevueltoEn)})
+	default:
+		notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": "NO_PAGADO"})
+	}
 }
 
 func (s *Service) expirar(id string) {

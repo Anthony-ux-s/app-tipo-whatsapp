@@ -99,7 +99,7 @@ export class AcceptDeliveryUseCase {
       const updated = await this.orders.updateIfStatus(id, 'searching_driver', {
         status: 'driver_assigned',
         driverId: userId,
-        delivery: { provider: 'Rapidito', driverName: name, vehicle: `${driver.vehicle} · ${driver.plate}`, etaMinutes: null, updatedAt: new Date().toISOString() },
+        delivery: { provider: 'Rapidito', driverName: name, vehicle: `${driver.vehicle} · ${driver.plate}`, etaMinutes: order.etaMinutes, updatedAt: new Date().toISOString() },
         note: `${name} · ${driver.vehicle} ${driver.plate}`,
       });
       if (!updated) throw new ConflictError('Otro repartidor tomó este pedido');
@@ -107,6 +107,37 @@ export class AcceptDeliveryUseCase {
       order = updated;
     }
     return toDriverOrder(order, userId, await customersOf(this.users, [order]));
+  }
+}
+
+/**
+ * El repartidor suelta un pedido que tomó y todavía no recogió («No puedo llevarlo»): vuelve a
+ * ofrecerse a los demás repartidores. Ya recogido, no se puede soltar.
+ */
+@Injectable()
+export class ReleaseDeliveryUseCase {
+  constructor(
+    @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
+    @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
+    @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
+    private readonly events: OrderEvents,
+  ) {}
+
+  async execute(userId: string, id: string): Promise<DriverOrder> {
+    await requireDriver(this.drivers, userId);
+    const order = await this.orders.findById(id);
+    if (!order || (order.driverId !== userId && order.status !== 'searching_driver')) throw new NotFoundError('Pedido no encontrado');
+    if (order.driverId !== userId) return toDriverOrder(order, userId, await customersOf(this.users, [order]));
+    if (order.status !== 'driver_assigned') throw new ConflictError('Ya recogiste este pedido: entrégalo al cliente');
+    const updated = await this.orders.updateIfStatus(id, 'driver_assigned', {
+      status: 'searching_driver',
+      driverId: null,
+      delivery: null,
+      note: `${order.delivery?.driverName ?? 'El repartidor'} no pudo llevarlo · se ofrece a otro`,
+    });
+    if (!updated) throw new ConflictError('El pedido ya cambió de estado');
+    this.events.changed(updated, userId);
+    return toDriverOrder(updated, userId, await customersOf(this.users, [updated]));
   }
 }
 

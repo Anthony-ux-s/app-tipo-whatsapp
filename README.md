@@ -122,7 +122,14 @@ pones tu nombre, un usuario opcional y la contraseña.
   - **Chat del pedido**: cliente, tienda y repartidor se escriben entre ellos desde el pedido, en los
     dos sentidos, con el chat cifrado de siempre. El core solo dice quién es la otra parte, y solo a
     quienes participan en ese pedido.
-  - El código lo ve solo el cliente: ni la tienda ni el repartidor lo reciben del servidor.
+  - El código lo ve solo el cliente: ni la tienda ni el repartidor lo reciben del servidor. Si se
+    bloquea por intentos equivocados, el cliente genera uno nuevo desde el pedido.
+  - **Cancelar y devolver**: el cliente cancela mientras la tienda no lo acepte; la tienda lo rechaza
+    o lo cancela después de aceptarlo. Si ya estaba pagado, PagaYa devuelve el pago al instante; si
+    no, se anula el QR y ya no se puede pagar. Un pago que llega después de cancelar se devuelve solo.
+  - **Si el repartidor no puede**: lo suelta antes de recogerlo («No puedo llevarlo») o la tienda pide
+    otro («No llega · buscar otro»); el pedido vuelve a ofrecerse a los demás repartidores.
+  - **Hora estimada de llegada** con el tiempo que cotiza Rapidito, que se ajusta al recoger el pedido.
 - **Mis pedidos**: historial con el estado de cada uno.
 - **Salud**: aparece como «Próximamente». La arquitectura ya permite sumarlo con su propio traductor.
 
@@ -290,7 +297,12 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 - **Probado en esta PC sin Docker**: los `Dockerfile` y el `docker-compose.yml` no se pudieron
   construir aquí; el modo producción sí se probó sin Docker.
 - **Llamadas**: TURN propio para redes muy restrictivas, compartir pantalla, SFU para grupos grandes.
-- **Seguridad**: SMS/OTP para el teléfono, rotación de la clave del grupo cuando alguien sale, clave
-  privada no extraíble en IndexedDB, recuperación de cuenta, auditoría externa.
+- **Delivery**: mapa y ubicación en vivo del repartidor; reasignación automática si nadie toma el
+  pedido o el repartidor no avanza; calificaciones y propinas; resumen de ganancias del repartidor.
+- **Negocios**: el dueño aún no administra su catálogo, precios, stock ni horario (vienen de MercaYa);
+  hay un solo negocio por servicio y no hay registro de negocios ni de repartidores.
+- **Ofertas de restaurantes y salud**: son una vitrina de ejemplo; todavía no se pueden pedir.
+- **Seguridad**: rotación de la clave del grupo cuando alguien sale, clave privada no extraíble en
+  IndexedDB, auditoría externa.
 - **Escala**: varios nodos de Elixir en clúster y varios gateways; presencia del core en Redis;
   archivos en S3/R2; colas para los avisos de los proveedores.

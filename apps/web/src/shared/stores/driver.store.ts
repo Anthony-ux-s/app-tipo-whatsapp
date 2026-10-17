@@ -13,6 +13,8 @@ interface DriverState {
   /** Oferta nueva o cambio en una entrega (respuesta de una acción o evento driver-order:updated). */
   upsert: (order: DriverOrder) => void;
   accept: (id: string) => Promise<void>;
+  /** «No puedo llevarlo»: lo suelta antes de recogerlo. */
+  release: (id: string) => Promise<void>;
   /** Entrega con el código que dicta el cliente. */
   deliver: (id: string, code: string) => Promise<void>;
   reset: () => void;
@@ -62,6 +64,7 @@ export const useDriverStore = create<DriverState>((set, get) => ({
   },
 
   accept: async (id) => get().upsert(await http.post<DriverOrder>(`${path(id)}/accept`)),
+  release: async (id) => get().upsert(await http.post<DriverOrder>(`${path(id)}/release`)),
   deliver: async (id, code) => get().upsert(await http.post<DriverOrder>(`${path(id)}/deliver`, { code })),
 
   reset: () => set({ driver: undefined, orders: {}, status: 'idle' }),

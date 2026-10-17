@@ -199,6 +199,8 @@ model Order {
   payment              String
   /// Cotización de Rapidito con la que se calculó la tarifa de delivery.
   deliveryQuoteId      String
+  /// Minutos que Rapidito estimó para el envío (para la hora estimada de llegada).
+  etaMinutes           Int      @default(30)
   /// JSON OrderDelivery (repartidor, vehículo, tiempo estimado); null hasta que un repartidor lo toma.
   delivery             String?
   /// Negocio que prepara el pedido; null en pedidos sin negocio asignado.

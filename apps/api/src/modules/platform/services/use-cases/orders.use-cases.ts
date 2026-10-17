@@ -15,7 +15,9 @@ import {
   assertOrderTransition,
   businessDeliveryPush,
   businessOrderPush,
+  driverLostPush,
   driverOfferPush,
+  MAX_DELIVERY_CODE_ATTEMPTS,
   newDeliveryCode,
   orderPush,
 } from '../../../../kernel/order-rules';
@@ -54,7 +56,9 @@ export function toOrder(order: OrderRecord, forCustomer = false): Order {
     payment: order.payment,
     delivery: order.delivery,
     timeline: order.timeline,
-    ...(forCustomer && CODE_VISIBLE.includes(order.status) ? { deliveryCode: order.deliveryCode } : {}),
+    ...(forCustomer && CODE_VISIBLE.includes(order.status)
+      ? { deliveryCode: order.deliveryCode, deliveryCodeLocked: order.deliveryCodeAttempts >= MAX_DELIVERY_CODE_ATTEMPTS }
+      : {}),
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
   };
@@ -110,31 +114,46 @@ export class OrderEvents {
     private readonly notifications: NotificationDispatcher,
   ) {}
 
-  changed(order: OrderRecord): void {
+  /**
+   * @param previousDriverId repartidor que acaba de perder el pedido (lo soltó o la tienda pidió otro),
+   * para avisarle y sacárselo de «Mis entregas».
+   */
+  changed(order: OrderRecord, previousDriverId: string | null = null, statusChanged = true): void {
     this.realtime.toUsers([order.userId], 'order:updated', toOrder(order, true));
-    const push = orderPush(order.id, order.status, order.totalCents, order.delivery?.driverName ?? null, order.business?.name ?? null);
-    if (push) void this.notifications.notify([order.userId], () => push);
-    if (order.business && BUSINESS_SEES(order.status)) void this.toOthers(order, order.business.ownerId);
+    if (statusChanged) {
+      const refunded = !!order.payment.refundedAt;
+      const push = orderPush(order.id, order.status, order.totalCents, order.delivery?.driverName ?? null, order.business?.name ?? null, refunded);
+      if (push) void this.notifications.notify([order.userId], () => push);
+    }
+    if (order.business && BUSINESS_SEES(order.status)) void this.toOthers(order, order.business.ownerId, previousDriverId, statusChanged);
   }
 
-  private async toOthers(order: OrderRecord, ownerId: string): Promise<void> {
+  private async toOthers(order: OrderRecord, ownerId: string, previousDriverId: string | null, statusChanged: boolean): Promise<void> {
     const customers = await customersOf(this.users, [order]);
     const businessOrder = toBusinessOrder(order, customers);
     this.realtime.toUsers([ownerId], 'business-order:updated', businessOrder);
     const customerName = businessOrder.customer.displayName;
-    const push = businessOrderPush(order.id, order.status, order.totalCents, customerName)
-      ?? businessDeliveryPush(order.id, order.status, order.delivery?.driverName ?? null, customerName);
+    const push = statusChanged
+      ? (businessOrderPush(order.id, order.status, order.totalCents, customerName)
+        ?? businessDeliveryPush(order.id, order.status, order.delivery?.driverName ?? null, customerName))
+      : null;
     if (push) void this.notifications.notify([ownerId], () => push);
 
-    // Solo se llama al cambiar de estado: driver_assigned significa que alguien acaba de tomarlo.
-    const offerChanged = order.status === 'searching_driver' || order.status === 'driver_assigned';
-    const driverIds = offerChanged ? await this.drivers.listUserIds() : order.driverId ? [order.driverId] : [];
+    // searching_driver: se ofrece (o se vuelve a ofrecer); driver_assigned: alguien acaba de tomarlo.
+    const offerChanged = statusChanged && (order.status === 'searching_driver' || order.status === 'driver_assigned');
+    const driverIds = new Set(offerChanged ? await this.drivers.listUserIds() : []);
+    if (order.driverId) driverIds.add(order.driverId);
+    if (previousDriverId) driverIds.add(previousDriverId);
     for (const driverId of driverIds) {
       this.realtime.toUsers([driverId], 'driver-order:updated', toDriverOrder(order, driverId, customers));
     }
-    if (order.status === 'searching_driver') {
+    const lostBy = previousDriverId ?? (order.status === 'cancelled' ? order.driverId : null);
+    const lost = statusChanged && lostBy ? driverLostPush(order.id, order.status, order.business?.name ?? 'La tienda') : null;
+    if (lostBy && lost) void this.notifications.notify([lostBy], () => lost);
+    if (offerChanged && order.status === 'searching_driver') {
       const offer = driverOfferPush(order.id, order.business?.name ?? 'Una tienda', order.deliveryFeeCents);
-      void this.notifications.notify(driverIds, () => offer);
+      // A quien lo acaba de soltar no se le vuelve a ofrecer por push.
+      void this.notifications.notify([...driverIds].filter((id) => id !== previousDriverId), () => offer);
     }
   }
 }
@@ -162,6 +181,7 @@ export class CreateOrderUseCase {
       businessId: business?.id ?? null,
       status: 'pending_payment',
       deliveryCode: newDeliveryCode(),
+      etaMinutes: input.etaMinutes,
     });
     this.events.changed(order);
     return toInternalOrder(order);
@@ -180,8 +200,9 @@ export class GetInternalOrderUseCase {
 }
 
 /**
- * Cambios que llegan de la pasarela (vía gateway). Idempotente: con `expectStatus`, un aviso repetido
- * recibe 409 y no cambia nada; y un pedido nunca retrocede de estado.
+ * Cambios que llegan de la pasarela vía gateway (pago, cancelación con devolución, rechazo).
+ * Idempotente: con `expectStatus`, un aviso repetido recibe 409 y no cambia nada; y un pedido nunca
+ * retrocede de estado. Con el mismo estado solo registra la devolución (un pago que llegó tarde).
  */
 @Injectable()
 export class UpdateOrderUseCase {
@@ -198,12 +219,19 @@ export class UpdateOrderUseCase {
     }
     assertOrderTransition(order.status, input.status);
 
-    const changes: OrderChanges = { status: input.status };
-    if (input.paidAt) changes.payment = { ...order.payment, paidAt: input.paidAt };
+    const changes: OrderChanges = { status: input.status, note: input.note };
+    if (input.paidAt || input.refundedAt) {
+      changes.payment = {
+        ...order.payment,
+        ...(input.paidAt ? { paidAt: input.paidAt } : {}),
+        ...(input.refundedAt ? { refundedAt: input.refundedAt } : {}),
+      };
+    }
     if (input.delivery) changes.delivery = input.delivery;
     const updated = await this.orders.updateIfStatus(id, order.status, changes);
     if (!updated) throw new ConflictError('El pedido ya cambió de estado');
-    if (updated.status !== order.status) this.events.changed(updated);
+    const statusChanged = updated.status !== order.status;
+    if (statusChanged || input.refundedAt) this.events.changed(updated, null, statusChanged);
     return toInternalOrder(updated);
   }
 }
@@ -227,5 +255,27 @@ export class GetMyOrderUseCase {
     const order = await this.orders.findById(id);
     if (!order || order.userId !== userId) throw new NotFoundError('Pedido no encontrado');
     return toOrder(order, true);
+  }
+}
+
+/**
+ * El cliente genera un código de entrega nuevo cuando el anterior se bloqueó por intentos fallidos
+ * (lo tiene que dictar en persona; si alguien lo estaba adivinando, el nuevo no le sirve).
+ */
+@Injectable()
+export class RenewDeliveryCodeUseCase {
+  constructor(
+    @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
+    private readonly events: OrderEvents,
+  ) {}
+
+  async execute(userId: string, id: string): Promise<Order> {
+    const order = await this.orders.findById(id);
+    if (!order || order.userId !== userId) throw new NotFoundError('Pedido no encontrado');
+    if (order.status !== 'driver_assigned' && order.status !== 'on_the_way') throw new ConflictError('Este pedido ya no necesita código');
+    if (order.deliveryCodeAttempts < MAX_DELIVERY_CODE_ATTEMPTS) throw new ConflictError('Tu código sigue activo');
+    const updated = await this.orders.resetDeliveryCode(id, newDeliveryCode());
+    this.events.changed(updated, null, false);
+    return toOrder(updated, true);
   }
 }

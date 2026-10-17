@@ -43,6 +43,10 @@ type Delivery interface {
 // Payments: lo que necesita de la billetera.
 type Payments interface {
 	CreateCharge(ctx context.Context, req pagaya.ChargeRequest) (pagaya.Charge, error)
+	// Cancel anula un cobro sin pagar (pagaya.ErrAlreadyPaid si ya se pagó).
+	Cancel(ctx context.Context, chargeID string) error
+	// Refund devuelve un cobro pagado; repetirlo no duplica la devolución.
+	Refund(ctx context.Context, chargeID string) (time.Time, error)
 }
 
 // Error lleva el código HTTP y el mensaje para la persona.
@@ -234,10 +238,11 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 		SubtotalCents: q.SubtotalCents, DeliveryFeeCents: q.DeliveryFeeCents, TotalCents: q.TotalCents, Currency: services.Currency,
 		Address: req.Address,
 		Payment: services.OrderPayment{
-			Provider: pagaya.Provider, QRText: charge.QRText, PayURL: charge.PayURL,
+			Provider: pagaya.Provider, ChargeID: charge.ID, QRText: charge.QRText, PayURL: charge.PayURL,
 			ExpiresAt: charge.ExpiresAt.UTC().Format(time.RFC3339),
 		},
 		DeliveryQuoteID: delivery.ID,
+		ETAMinutes:      delivery.ETAMinutes,
 	})
 	if err != nil {
 		slog.Error("no se pudo guardar el pedido en el core", "pedido", id, "error", err)
@@ -268,12 +273,34 @@ func (o *Orchestrator) PaymentEvent(ctx context.Context, ev pagaya.Event) error 
 		return nil
 	}
 
-	if order.Status != services.PendingPayment {
-		return nil
-	}
 	paidAt := o.now()
 	if ev.PaidAt != nil {
 		paidAt = *ev.PaidAt
+	}
+	// Pagó después de que se canceló o rechazó (o mientras se cancelaba): se le devuelve.
+	if (order.Status == services.Cancelled || order.Status == services.Rejected) && order.Payment.RefundedAt == nil {
+		chargeID := order.Payment.ChargeID
+		if chargeID == "" {
+			chargeID = ev.ChargeID
+		}
+		refundedAt, err := o.Payments.Refund(ctx, chargeID)
+		if err != nil {
+			// Se devuelve el error para que la billetera reintente el aviso y volvamos a devolver.
+			slog.Error("no se pudo devolver un pago que llegó tras cancelar", "pedido", order.ID, "error", err)
+			return err
+		}
+		_, err = o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{
+			ExpectStatus: order.Status, Status: order.Status,
+			PaidAt: paidAt.UTC().Format(time.RFC3339), RefundedAt: refundedAt.UTC().Format(time.RFC3339),
+			Note: "Pago recibido tras cancelar · devuelto",
+		})
+		if errors.Is(err, ErrConflict) {
+			return nil
+		}
+		return err
+	}
+	if order.Status != services.PendingPayment {
+		return nil
 	}
 	_, err = o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{
 		ExpectStatus: services.PendingPayment, Status: services.Paid, PaidAt: paidAt.UTC().Format(time.RFC3339),
@@ -282,4 +309,136 @@ func (o *Orchestrator) PaymentEvent(ctx context.Context, ev pagaya.Event) error 
 		return nil
 	}
 	return err
+}
+
+// Quién pide cancelar o rechazar: el cliente del pedido o el dueño del negocio que lo atiende.
+type actor int
+
+const (
+	byCustomer actor = iota
+	byOwner
+)
+
+// cancellation describe una forma de cerrar el pedido devolviendo el pago.
+type cancellation struct {
+	who    actor
+	target services.OrderStatus
+	// from: estados desde los que se puede; otro estado → 409 con late.
+	from map[services.OrderStatus]bool
+	late string
+	// note: lo que queda en la línea de tiempo cuando se devuelve el pago.
+	note string
+}
+
+var (
+	customerCancel = cancellation{
+		who: byCustomer, target: services.Cancelled,
+		from: map[services.OrderStatus]bool{services.PendingPayment: true, services.Paid: true},
+		late: "La tienda ya aceptó tu pedido. Escríbele para cancelarlo.",
+		note: "Cancelado por el cliente · pago devuelto",
+	}
+	ownerReject = cancellation{
+		who: byOwner, target: services.Rejected,
+		from: map[services.OrderStatus]bool{services.Paid: true},
+		late: "Este pedido ya no está esperando tu respuesta",
+		note: "Rechazado por la tienda · pago devuelto",
+	}
+	ownerCancel = cancellation{
+		who: byOwner, target: services.Cancelled,
+		from: map[services.OrderStatus]bool{services.Preparing: true, services.SearchingDriver: true, services.DriverAssigned: true},
+		late: "Ya no se puede cancelar: el pedido va en camino o terminó",
+		note: "Cancelado por la tienda · pago devuelto",
+	}
+)
+
+// CancelByCustomer: el cliente cancela antes de que la tienda acepte. Si no pagó, se anula el cobro;
+// si pagó, se le devuelve.
+func (o *Orchestrator) CancelByCustomer(ctx context.Context, userID, orderID string) (services.Order, error) {
+	return o.close(ctx, userID, orderID, customerCancel)
+}
+
+// RejectByOwner: la tienda no acepta un pedido pagado y se le devuelve el pago al cliente.
+func (o *Orchestrator) RejectByOwner(ctx context.Context, userID, orderID string) (services.Order, error) {
+	return o.close(ctx, userID, orderID, ownerReject)
+}
+
+// CancelByOwner: la tienda cancela un pedido aceptado que aún no sale de la tienda; se devuelve el pago.
+func (o *Orchestrator) CancelByOwner(ctx context.Context, userID, orderID string) (services.Order, error) {
+	return o.close(ctx, userID, orderID, ownerCancel)
+}
+
+// close cierra el pedido según c. Primero mueve el dinero (anular o devolver, ambos idempotentes) y
+// solo si eso salió bien lo registra en el core: si la billetera falla, el pedido no cambia y se
+// puede reintentar sin cobrar ni devolver dos veces.
+func (o *Orchestrator) close(ctx context.Context, userID, orderID string, c cancellation) (services.Order, error) {
+	order, err := o.Core.GetOrder(ctx, orderID)
+	if err == nil && !o.allowed(order, userID, c.who) {
+		err = ErrNotFound
+	}
+	if errors.Is(err, ErrNotFound) {
+		return services.Order{}, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Pedido no encontrado"}
+	}
+	if err != nil {
+		slog.Error("no se pudo leer el pedido en el core", "pedido", orderID, "error", err)
+		return services.Order{}, unavailable("Parla")
+	}
+	if order.Status == c.target {
+		return order.Order, nil
+	}
+	if !c.from[order.Status] {
+		return services.Order{}, conflict(c.late)
+	}
+
+	update := services.InternalUpdateOrder{ExpectStatus: order.Status, Status: c.target, Note: c.note}
+	if order.Status == services.PendingPayment {
+		// Sin pagar: se anula el cobro. Si justo se pagó (carrera con el pago), se devuelve.
+		update.Note = "Cancelado por el cliente"
+		err := o.Payments.Cancel(ctx, order.Payment.ChargeID)
+		if errors.Is(err, pagaya.ErrAlreadyPaid) {
+			err = o.refund(ctx, order, &update)
+			update.Note = c.note
+		}
+		if err != nil {
+			slog.Warn("no se pudo anular el cobro", "pedido", order.ID, "error", err)
+			return services.Order{}, unavailable("El pago")
+		}
+	} else if err := o.refund(ctx, order, &update); err != nil {
+		slog.Warn("no se pudo devolver el pago", "pedido", order.ID, "error", err)
+		return services.Order{}, unavailable("El pago")
+	}
+
+	updated, err := o.Core.UpdateOrder(ctx, order.ID, update)
+	if errors.Is(err, ErrConflict) {
+		// Cambió mientras tanto: si ya quedó como se pedía, listo; si no, ya no se puede.
+		if current, err := o.Core.GetOrder(ctx, order.ID); err == nil && current.Status == c.target {
+			return current.Order, nil
+		}
+		return services.Order{}, conflict(c.late)
+	}
+	if err != nil {
+		slog.Error("no se pudo guardar la cancelación en el core", "pedido", order.ID, "error", err)
+		return services.Order{}, unavailable("Parla")
+	}
+	return updated.Order, nil
+}
+
+func (o *Orchestrator) allowed(order services.InternalOrder, userID string, who actor) bool {
+	if who == byCustomer {
+		return order.UserID == userID
+	}
+	return order.BusinessOwnerID != nil && *order.BusinessOwnerID == userID
+}
+
+// refund devuelve el pago del pedido y anota cuándo en update.
+func (o *Orchestrator) refund(ctx context.Context, order services.InternalOrder, update *services.InternalUpdateOrder) error {
+	at, err := o.Payments.Refund(ctx, order.Payment.ChargeID)
+	if err != nil {
+		return err
+	}
+	update.RefundedAt = at.UTC().Format(time.RFC3339)
+	return nil
+}
+
+func conflict(message string) error {
+	return &Error{Status: http.StatusConflict, Code: "conflict", Message: message}
 }

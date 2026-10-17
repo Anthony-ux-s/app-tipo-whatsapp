@@ -26,6 +26,8 @@ export interface OrderRecord {
   address: DeliveryAddress;
   payment: OrderPayment;
   deliveryQuoteId: string;
+  /** Minutos que Rapidito estimó para el envío. */
+  etaMinutes: number;
   delivery: OrderDelivery | null;
   /** Repartidor de Rapidito que lo tomó; null mientras nadie lo toma. */
   driverId: string | null;
@@ -45,9 +47,13 @@ export type NewOrder = Omit<
 export interface OrderChanges {
   status: OrderStatus;
   payment?: OrderPayment;
-  delivery?: OrderDelivery;
-  driverId?: string;
-  /** Detalle del paso para la línea de tiempo (p. ej. quién lo entregó y cómo se confirmó). */
+  /** null quita al repartidor (lo soltó o la tienda pidió otro). */
+  delivery?: OrderDelivery | null;
+  driverId?: string | null;
+  /**
+   * Detalle del paso para la línea de tiempo (p. ej. quién lo entregó y cómo se confirmó). Con el
+   * mismo estado (p. ej. una devolución después de cancelar) se anota igual.
+   */
   note?: string;
 }
 
@@ -70,6 +76,8 @@ export interface OrdersRepository {
   updateIfStatus(id: string, expected: OrderStatus, changes: OrderChanges): Promise<OrderRecord | null>;
   /** Suma un intento fallido del código de entrega y devuelve cuántos van. */
   addFailedCodeAttempt(id: string): Promise<number>;
+  /** Código de entrega nuevo, con los intentos en cero (lo pide el cliente si se bloqueó). */
+  resetDeliveryCode(id: string, code: string): Promise<OrderRecord>;
 }
 
 export const ORDERS_REPOSITORY = Symbol('ORDERS_REPOSITORY');

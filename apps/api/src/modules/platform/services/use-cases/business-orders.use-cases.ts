@@ -5,7 +5,7 @@ import { ConflictError, NotFoundError, ValidationError } from '../../../../kerne
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { toPublicUser } from '../../identity/user.mapper';
 import { BUSINESSES_REPOSITORY, type BusinessesRepository } from '../businesses.repository';
-import { ORDERS_REPOSITORY, type OrderRecord, type OrdersRepository } from '../orders.repository';
+import { ORDERS_REPOSITORY, type OrderChanges, type OrderRecord, type OrdersRepository } from '../orders.repository';
 import { customersOf, OrderEvents, toBusinessOrder } from './orders.use-cases';
 
 const BUSINESS_HISTORY_LIMIT = 100;
@@ -61,20 +61,24 @@ export class GetBusinessOrderUseCase {
   }
 }
 
-export type BusinessAction = 'accept' | 'reject' | 'ready' | 'handoff';
+/** Rechazar y cancelar los resuelve el gateway, porque devuelven el pago en la billetera. */
+export type BusinessAction = 'accept' | 'ready' | 'handoff' | 'reassign';
 
 /** De qué estado a cuál lleva cada acción del dueño, y qué le dice si ya no se puede. */
 const ACTIONS: Record<BusinessAction, { from: OrderStatus; to: OrderStatus; late: string }> = {
   accept: { from: 'paid', to: 'preparing', late: 'Este pedido ya no está esperando tu respuesta' },
-  reject: { from: 'paid', to: 'rejected', late: 'Este pedido ya no está esperando tu respuesta' },
   ready: { from: 'preparing', to: 'searching_driver', late: 'Primero acepta el pedido para prepararlo' },
   handoff: { from: 'driver_assigned', to: 'on_the_way', late: 'Todavía ningún repartidor tomó este pedido' },
+  reassign: { from: 'driver_assigned', to: 'searching_driver', late: 'Este pedido ya no tiene repartidor asignado' },
 };
 
+/** Al recoger, el tiempo que falta es el tramo de la tienda al cliente (aprox. 60 % del estimado). */
+const ON_THE_WAY_SHARE = 0.6;
+
 /**
- * El dueño avanza su pedido: lo acepta o lo rechaza, avisa que está listo (se ofrece a los
- * repartidores de Rapidito) y confirma que se lo entregó al repartidor. Repetir la misma acción no
- * cambia nada; saltarse un paso o volver atrás, no se puede.
+ * El dueño avanza su pedido: lo acepta, avisa que está listo (se ofrece a los repartidores de
+ * Rapidito), confirma que se lo entregó al repartidor, o pide otro repartidor si el asignado no
+ * llega. Repetir la misma acción no cambia nada; saltarse un paso o volver atrás, no se puede.
  */
 @Injectable()
 export class DecideBusinessOrderUseCase {
@@ -89,10 +93,20 @@ export class DecideBusinessOrderUseCase {
     const step = ACTIONS[action];
     if (order.status !== step.to) {
       if (order.status !== step.from) throw new ConflictError(step.late);
-      const note = action === 'handoff' && order.delivery?.driverName ? `Entregado a ${order.delivery.driverName} en la tienda` : undefined;
-      const updated = await this.orders.updateIfStatus(id, step.from, { status: step.to, note });
+      const driverName = order.delivery?.driverName ?? 'el repartidor';
+      const changes: OrderChanges = { status: step.to };
+      if (action === 'handoff') {
+        changes.note = `Entregado a ${driverName} en la tienda`;
+        changes.delivery = order.delivery && {
+          ...order.delivery,
+          etaMinutes: Math.max(5, Math.round(order.etaMinutes * ON_THE_WAY_SHARE)),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      if (action === 'reassign') Object.assign(changes, { driverId: null, delivery: null, note: `La tienda pidió otro repartidor (${driverName} no llegó)` });
+      const updated = await this.orders.updateIfStatus(id, step.from, changes);
       if (!updated) throw new ConflictError(step.late);
-      this.events.changed(updated);
+      this.events.changed(updated, action === 'reassign' ? order.driverId : null);
       order = updated;
     }
     return toBusinessOrder(order, await customersOf(this.users, [order]));

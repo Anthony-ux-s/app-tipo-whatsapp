@@ -88,10 +88,13 @@ const (
 
 type OrderPayment struct {
 	Provider  string  `json:"provider"`
+	ChargeID  string  `json:"chargeId,omitempty"`
 	QRText    string  `json:"qrText"`
 	PayURL    string  `json:"payUrl"`
 	ExpiresAt string  `json:"expiresAt"`
 	PaidAt    *string `json:"paidAt"`
+	// RefundedAt: cuándo se devolvió el pago (cancelado o rechazado); null si no se devolvió.
+	RefundedAt *string `json:"refundedAt"`
 }
 
 type OrderDelivery struct {
@@ -149,13 +152,18 @@ type InternalCreateOrder struct {
 	Address          Address      `json:"address"`
 	Payment          OrderPayment `json:"payment"`
 	DeliveryQuoteID  string       `json:"deliveryQuoteId"`
+	// ETAMinutes: lo que Rapidito estimó para el envío.
+	ETAMinutes int `json:"etaMinutes"`
 }
 
 type InternalUpdateOrder struct {
 	ExpectStatus OrderStatus    `json:"expectStatus,omitempty"`
 	Status       OrderStatus    `json:"status"`
 	PaidAt       string         `json:"paidAt,omitempty"`
+	RefundedAt   string         `json:"refundedAt,omitempty"`
 	Delivery     *OrderDelivery `json:"delivery,omitempty"`
+	// Note: detalle para la línea de tiempo del pedido (p. ej. «Cancelado por el cliente · pago devuelto»).
+	Note string `json:"note,omitempty"`
 }
 
 type InternalOrder struct {
