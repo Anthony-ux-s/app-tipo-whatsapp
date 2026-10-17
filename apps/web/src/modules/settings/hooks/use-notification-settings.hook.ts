@@ -8,7 +8,7 @@ const DESCRIPTIONS: Record<PushState | 'checking', string> = {
   unsupported: 'Este navegador no permite notificaciones push. Instala Parla como app o usa Chrome, Edge o Firefox.',
   denied: 'Bloqueaste las notificaciones. Actívalas desde la configuración del sitio en tu navegador.',
   enabled: 'Recibirás avisos aunque Parla esté cerrada. Por privacidad, no muestran el contenido de los mensajes.',
-  disabled: 'Activa los avisos para enterarte de mensajes, menciones y tareas aunque Parla esté cerrada.',
+  disabled: 'Activa los avisos para enterarte de mensajes y menciones aunque Parla esté cerrada.',
 };
 
 /** Activar o desactivar las notificaciones push de este dispositivo. */

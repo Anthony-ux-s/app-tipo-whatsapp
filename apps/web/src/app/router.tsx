@@ -3,6 +3,8 @@ import { WelcomeView } from '../modules/account/components/WelcomeView';
 import { ForgotPasswordView } from '../modules/auth/components/ForgotPasswordView';
 import { LoginView } from '../modules/auth/components/LoginView';
 import { RegisterView } from '../modules/auth/components/RegisterView';
+import { BusinessOrderDetailView } from '../modules/business/components/BusinessOrderDetailView';
+import { BusinessOrdersView } from '../modules/business/components/BusinessOrdersView';
 import { ConversationView } from '../modules/chats/components/ConversationView';
 import { NoChatSelected } from '../modules/chats/components/NoChatSelected';
 import { LegalView } from '../modules/legal/components/LegalView';
@@ -15,7 +17,6 @@ import { ServicesHomeView } from '../modules/services/components/ServicesHomeVie
 import { SettingsSectionView } from '../modules/settings/components/SettingsSectionView';
 import { SettingsView } from '../modules/settings/components/SettingsView';
 import { AppShellView } from '../modules/shell/components/AppShellView';
-import { MyTasksView } from '../modules/tasks/components/MyTasksView';
 import { NotFoundView } from './NotFoundView';
 import { GuestOnly, RequireAuth } from './route-guards';
 
@@ -47,7 +48,8 @@ export const router = createBrowserRouter([
           { path: 'ofertas', element: <OffersView /> },
           { path: 'pedidos', element: <OrdersView /> },
           { path: 'pedidos/:orderId', element: <OrderDetailView /> },
-          { path: 'tareas', element: <MyTasksView /> },
+          { path: 'negocio', element: <BusinessOrdersView /> },
+          { path: 'negocio/pedidos/:orderId', element: <BusinessOrderDetailView /> },
           { path: 'ajustes', element: <SettingsView /> },
           { path: 'ajustes/:section', element: <SettingsSectionView /> },
         ],

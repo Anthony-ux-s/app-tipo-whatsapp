@@ -1,4 +1,4 @@
-import type { ConversationKind, DeliveryStatus, MessageKind, TaskStatus, ParticipantRole } from './enums.types';
+import type { ConversationKind, DeliveryStatus, MessageKind, ParticipantRole } from './enums.types';
 import type { PublicUser } from './identity.types';
 
 /** Clave de la conversación envuelta para un miembro concreto. */
@@ -63,8 +63,6 @@ export interface Message {
   replyCount: number;
   /** Personas mencionadas con @ (ids). */
   mentions: string[];
-  /** Tarea que presenta el mensaje (kind = task). */
-  task: Task | null;
 }
 
 export interface ConversationSummary {
@@ -83,8 +81,6 @@ export interface ConversationSummary {
   unreadCount: number;
   /** Mensajes sin leer que me mencionan. */
   mentionCount: number;
-  /** Tareas abiertas del chat. */
-  openTaskCount: number;
   createdById: string;
   createdAt: string;
   updatedAt: string;
@@ -114,7 +110,7 @@ export interface AddParticipantsRequest {
 
 export interface SendMessageRequest {
   clientId: string;
-  kind: Exclude<MessageKind, 'system' | 'task'>;
+  kind: Exclude<MessageKind, 'system'>;
   body: EncryptedPayload | null;
   media: MediaAttachment | null;
   /** Responder en el hilo de este mensaje. */
@@ -127,37 +123,6 @@ export interface ThreadPage {
   root: Message;
   replies: Message[];
 }
-
-/** Tarea asignable dentro de un chat (el título va cifrado con la clave de la conversación). */
-export interface Task {
-  id: string;
-  conversationId: string;
-  title: EncryptedPayload;
-  assigneeId: string | null;
-  createdById: string;
-  dueDate: string | null;
-  status: TaskStatus;
-  sourceMessageId: string | null;
-  createdAt: string;
-  completedAt: string | null;
-  completedById: string | null;
-}
-
-export interface CreateTaskRequest {
-  clientId: string;
-  title: EncryptedPayload;
-  assigneeId: string | null;
-  dueDate: string | null;
-  sourceMessageId: string | null;
-}
-
-export interface UpdateTaskRequest {
-  status?: TaskStatus;
-  assigneeId?: string | null;
-  dueDate?: string | null;
-}
-
-export type TaskScope = 'assigned' | 'created' | 'done';
 
 /** Suscripción Web Push del navegador. */
 export interface PushSubscriptionRequest {

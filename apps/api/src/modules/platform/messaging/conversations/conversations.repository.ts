@@ -1,7 +1,6 @@
 import type { ConversationKind, MediaAttachment, MessageKind, ParticipantRole, WrappedKey } from '@parla/types';
 import type { ReceiptState } from '../../../../kernel/delivery-status';
 import type { UserRecord } from '../../identity/user.record';
-import type { TaskRecord } from '../../collaboration/tasks/task.record';
 
 export interface ParticipantRecord {
   user: UserRecord;
@@ -36,7 +35,6 @@ export interface MessageRecord {
   replyTo: ReplyRecord | null;
   replyCount: number;
   mentions: string[];
-  task: TaskRecord | null;
 }
 
 export interface ConversationRecord {
@@ -52,7 +50,6 @@ export interface ConversationRecord {
   lastMessage: MessageRecord | null;
   unreadCount: number;
   mentionCount: number;
-  openTaskCount: number;
 }
 
 export interface NewConversation {
@@ -78,7 +75,6 @@ export interface NewMessage {
   recipientIds: string[];
   replyToId?: string | null;
   mentions?: string[];
-  taskId?: string | null;
 }
 
 /** Recibo que cambió: sirve para avisar al remitente del nuevo estado. */

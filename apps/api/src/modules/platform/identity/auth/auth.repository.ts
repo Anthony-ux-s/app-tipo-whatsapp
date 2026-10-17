@@ -56,8 +56,6 @@ export interface AuthRepository {
 export interface AccountData {
   conversations: { title: string; kind: string; joinedAt: Date }[];
   messagesSent: number;
-  tasksCreated: number;
-  tasksAssigned: number;
   ordersPlaced: number;
 }
 

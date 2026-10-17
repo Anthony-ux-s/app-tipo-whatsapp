@@ -21,6 +21,7 @@ export function parseShoppingQuery(query: string): string[] {
 
 /** Paso actual del pedido en la línea de tiempo (0 = pago). */
 export function orderStepIndex(status: OrderStatus): number {
+  // Pagado: el negocio ya lo tiene, falta que lo acepte y lo prepare.
   if (status === 'paid') return 1;
   const index = ORDER_STEPS.findIndex((step) => step.status === status);
   return index === -1 ? 0 : index;
@@ -34,7 +35,7 @@ export function discountPercent(priceCents: number, listPriceCents: number | und
 
 /** El pedido ya no va a cambiar. */
 export function isFinalStatus(status: OrderStatus): boolean {
-  return status === 'delivered' || status === 'payment_expired' || status === 'cancelled';
+  return status === 'delivered' || status === 'payment_expired' || status === 'cancelled' || status === 'rejected';
 }
 
 /** «14:35» de vencimiento o «vencido». */

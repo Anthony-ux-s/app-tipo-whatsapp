@@ -7,10 +7,10 @@ import { JwtAuthGuard } from './http/jwt-auth.guard';
 import { InfraModule } from './infra/infra.module';
 import { CallsModule } from './modules/members/calls/calls.module';
 import { ChatsModule } from './modules/members/chats/chats.module';
+import { BusinessModule } from './modules/members/business/business.module';
 import { OrdersModule } from './modules/members/orders/orders.module';
 import { PeopleModule } from './modules/members/people/people.module';
 import { PushModule } from './modules/members/push/push.module';
-import { TasksModule } from './modules/members/tasks/tasks.module';
 import { AuthModule } from './modules/platform/identity/auth/auth.module';
 import { RecoveryModule } from './modules/platform/identity/recovery/recovery.module';
 import { RealtimeBridgeModule } from './modules/platform/messaging/realtime-bridge/realtime-bridge.module';
@@ -25,9 +25,9 @@ import { HealthController } from './health.controller';
     RecoveryModule,
     PeopleModule,
     ChatsModule,
-    TasksModule,
     PushModule,
     OrdersModule,
+    BusinessModule,
     RealtimeBridgeModule,
     ServicesBridgeModule,
     CallsModule,

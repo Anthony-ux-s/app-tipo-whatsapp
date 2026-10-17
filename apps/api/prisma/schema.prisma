@@ -12,41 +12,43 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  username     String?   @unique
-  phone        String?   @unique
+  id              String    @id @default(cuid())
+  username        String?   @unique
+  phone           String?   @unique
   /// Cuándo se verificó el teléfono con un código por SMS (las cuentas nuevas siempre lo verifican).
   phoneVerifiedAt DateTime?
   /// Correo para restablecer la contraseña; solo cuenta una vez verificado con un código.
-  email        String?   @unique
+  email           String?   @unique
   emailVerifiedAt DateTime?
   /// Foto de perfil (archivo público con nombre impredecible); null = iniciales y color.
-  avatarFileId String?
-  displayName  String
-  about        String    @default("")
-  avatarColor  String
-  passwordHash String
+  avatarFileId    String?
+  displayName     String
+  about           String    @default("")
+  avatarColor     String
+  passwordHash    String
   /// Clave pública ECDH (JWK serializado).
-  publicKey    String
+  publicKey       String
   /// Clave privada cifrada con la contraseña (JSON EncryptedKeyBackup).
-  keyBackup    String
+  keyBackup       String
   /// Preferencias del usuario (JSON UserPreferences).
-  preferences  String
-  lastSeenAt   DateTime?
-  createdAt    DateTime  @default(now())
+  preferences     String
+  lastSeenAt      DateTime?
+  createdAt       DateTime  @default(now())
   /// Aceptación de términos y política de privacidad (versión y fecha).
   termsVersion    String?
   termsAcceptedAt DateTime?
   /// Cuenta eliminada: se anonimiza (sin nombre, usuario ni teléfono) y no puede volver a entrar.
   deletedAt       DateTime?
 
-  participants ConversationParticipant[]
-  wrappedKeys  ConversationParticipant[] @relation("WrappedBy")
-  messages     Message[]
-  receipts     MessageReceipt[]
-  mentions     MessageMention[]
+  participants      ConversationParticipant[]
+  wrappedKeys       ConversationParticipant[] @relation("WrappedBy")
+  messages          Message[]
+  receipts          MessageReceipt[]
+  mentions          MessageMention[]
   pushSubscriptions PushSubscription[]
-  orders       Order[]
+  orders            Order[]
+  /// Negocio del que es dueño (atiende pedidos de un servicio); null para los clientes.
+  business          Business?
 }
 
 model Conversation {
@@ -66,23 +68,22 @@ model Conversation {
   participants ConversationParticipant[]
   messages     Message[]
   files        StoredFile[]
-  tasks        Task[]
 
   @@index([updatedAt])
 }
 
 model ConversationParticipant {
-  id             String   @id @default(cuid())
-  conversationId String
-  userId         String
+  id               String   @id @default(cuid())
+  conversationId   String
+  userId           String
   /// Clave de la conversación envuelta para este usuario (base64).
-  wrappedKey     String
-  keyIv          String
-  wrappedById    String
+  wrappedKey       String
+  keyIv            String
+  wrappedById      String
   /// Clave pública de quien envolvió, tal como era al envolver: si después cambia sus claves
   /// (restablece su cuenta), esta copia se sigue pudiendo abrir.
-  wrapperPublicKey String @default("")
-  joinedAt       DateTime @default(now())
+  wrapperPublicKey String   @default("")
+  joinedAt         DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -107,8 +108,6 @@ model Message {
   clientId       String
   /// Hilo: mensaje raíz al que responde (siempre la raíz, los hilos no se anidan).
   replyToId      String?
-  /// Tarea que presenta este mensaje (kind = task).
-  taskId         String?  @unique
   createdAt      DateTime @default(now())
 
   conversation Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -117,7 +116,6 @@ model Message {
   replyTo      Message?         @relation("Thread", fields: [replyToId], references: [id], onDelete: SetNull)
   replies      Message[]        @relation("Thread")
   mentions     MessageMention[]
-  task         Task?            @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@unique([senderId, clientId])
   @@index([conversationId, createdAt])
@@ -135,31 +133,6 @@ model MessageMention {
 
   @@id([messageId, userId])
   @@index([userId, conversationId])
-}
-
-/// Tarea asignable dentro de un chat. El título va cifrado con la clave de la conversación.
-model Task {
-  id              String    @id @default(cuid())
-  conversationId  String
-  titleCiphertext String
-  titleIv         String
-  assigneeId      String?
-  createdById     String
-  /// Fecha límite (AAAA-MM-DD), sin hora.
-  dueDate         String?
-  /// TaskStatus: open | done
-  status          String    @default("open")
-  sourceMessageId String?
-  createdAt       DateTime  @default(now())
-  completedAt     DateTime?
-  completedById   String?
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  message      Message?
-
-  @@index([conversationId, status])
-  @@index([assigneeId, status])
-  @@index([createdById])
 }
 
 /// Suscripción Web Push de un navegador.
@@ -203,14 +176,14 @@ model StoredFile {
 }
 
 /// Pedido hecho desde Servicios (tienda + delivery + pago con QR). Lo arma el gateway (Go) con
-/// precios de la tienda y la tarifa del delivery; el core lo guarda y avisa cada cambio al cliente.
+/// precios de la tienda y la tarifa del delivery; el core lo guarda y avisa cada cambio al cliente y al negocio.
 model Order {
   /// Id generado por el gateway ("ord_…").
   id               String   @id
   userId           String
   /// ServiceId: mercado | salud
   service          String
-  /// OrderStatus: pending_payment | paid | searching_driver | on_the_way | delivered | payment_expired | cancelled
+  /// OrderStatus: pending_payment | paid | preparing | rejected | searching_driver | on_the_way | delivered | payment_expired | cancelled
   status           String
   /// JSON OrderLine[]
   lines            String
@@ -222,16 +195,36 @@ model Order {
   address          String
   /// JSON OrderPayment (QR, URL de pago, vencimiento, fecha de pago)
   payment          String
-  /// Cotización del delivery que se despacha al confirmarse el pago.
+  /// Cotización de Rapidito que se despacha cuando el negocio marca el pedido como listo.
   deliveryQuoteId  String
   /// JSON OrderDelivery (motorizado, vehículo, tiempo estimado); null hasta despacharlo.
   delivery         String?
+  /// Negocio que prepara el pedido; null en pedidos sin negocio asignado.
+  businessId       String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([businessId, createdAt])
+}
+
+/**
+ * Negocio que atiende los pedidos de un servicio (hoy, la tienda del Mercado) y su dueño en Parla.
+ * El dueño acepta cada pedido, lo prepara y avisa a Rapidito cuando está listo.
+ */
+model Business {
+  id        String   @id @default(cuid())
+  name      String
+  /// ServiceId que atiende: mercado | salud (uno por servicio).
+  service   String   @unique
+  ownerId   String   @unique
+  createdAt DateTime @default(now())
+
+  owner  User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  orders Order[]
 }
 
 /**
@@ -239,23 +232,23 @@ model Order {
  * contraseña). Solo se guarda el hash del código. Al verificarse entrega un comprobante de un solo uso.
  */
 model VerificationCode {
-  id          String    @id @default(cuid())
+  id         String    @id @default(cuid())
   /// VerificationChannel: sms | email
-  channel     String
+  channel    String
   /// VerificationPurpose: register | email | reset_password
-  purpose     String
+  purpose    String
   /// Teléfono E.164 o correo en minúsculas.
-  target      String
+  target     String
   /// Cuenta que lo pidió (agregar correo); null al registrarse.
-  userId      String?
-  codeHash    String
-  attempts    Int       @default(0)
-  expiresAt   DateTime
-  verifiedAt  DateTime?
+  userId     String?
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  verifiedAt DateTime?
   /// Hash del comprobante que se entrega al verificar (para registrarse o restablecer).
-  proofHash   String?
-  consumedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  proofHash  String?
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([target, purpose, createdAt])
 }

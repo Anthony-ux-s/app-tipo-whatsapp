@@ -1,4 +1,4 @@
-# Simuladores de los sistemas externos (MercaYa, MotoYa, PagaYa) para demos y pruebas.
+# Simuladores de los sistemas externos (MercaYa, Rapidito, PagaYa) para demos y pruebas.
 # En producción se reemplazan por las APIs reales de cada proveedor.
 FROM golang:1.25-bookworm AS build
 WORKDIR /src

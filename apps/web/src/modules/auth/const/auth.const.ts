@@ -4,7 +4,7 @@ export const DEMO_PASSWORD = 'Parla2026!';
 
 /** Cuentas de prueba creadas por el seed (se muestran solo para la demo). */
 export const DEMO_ACCOUNTS: DemoAccount[] = [
-  { identifier: 'laura', name: 'Laura Méndez', role: 'Grupos, tareas y pedidos', color: 'teal' },
+  { identifier: 'laura', name: 'Laura Méndez', role: 'Grupos, chats y pedidos', color: 'teal' },
   { identifier: 'andres', name: 'Andrés Rojas', role: 'Para chatear con Laura', color: 'emerald' },
   { identifier: '+573001234567', name: 'Sofía Ramírez', role: 'Entra con su teléfono', color: 'emerald-dark' },
 ];

@@ -64,9 +64,15 @@ export interface OrderQuote {
   etaMinutes: number;
 }
 
+/**
+ * Pagado → el negocio lo acepta (preparing) o lo rechaza (rejected) → listo: Rapidito busca motorizado
+ * (searching_driver) → en camino → entregado.
+ */
 export type OrderStatus =
   | 'pending_payment'
   | 'paid'
+  | 'preparing'
+  | 'rejected'
   | 'searching_driver'
   | 'on_the_way'
   | 'delivered'
@@ -90,9 +96,25 @@ export interface OrderDelivery {
   updatedAt: string;
 }
 
+/** Negocio que atiende un servicio (p. ej. la tienda del Mercado) y su dueño en Parla. */
+export interface BusinessInfo {
+  id: string;
+  name: string;
+  service: ServiceId;
+}
+
+export interface OrderBusiness {
+  id: string;
+  name: string;
+  /** Cuenta del dueño en Parla, para escribirle por chat. */
+  ownerId: string;
+}
+
 export interface Order {
   id: string;
   service: ServiceId;
+  /** Negocio que prepara el pedido; null en pedidos sin negocio asignado. */
+  business: OrderBusiness | null;
   status: OrderStatus;
   lines: OrderLine[];
   subtotalCents: number;
@@ -104,6 +126,18 @@ export interface Order {
   delivery: OrderDelivery | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OrderCustomer {
+  id: string;
+  displayName: string;
+  avatarColor: string;
+  avatarUrl: string | null;
+}
+
+/** Pedido tal como lo ve el dueño del negocio: con quién lo pidió, para atenderlo y escribirle. */
+export interface BusinessOrder extends Order {
+  customer: OrderCustomer;
 }
 
 /** Respuesta al crear un pedido: el pedido y el QR para pagarlo. */
@@ -137,4 +171,6 @@ export interface InternalUpdateOrder {
 export interface InternalOrder extends Order {
   userId: string;
   deliveryQuoteId: string;
+  /** Dueño del negocio: el gateway solo deja que él marque el pedido como listo. */
+  businessOwnerId: string | null;
 }

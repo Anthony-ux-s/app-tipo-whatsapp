@@ -18,7 +18,8 @@ export async function login(page: Page, identifier: string, password = PASSWORD)
   await page.getByLabel('Usuario o teléfono').fill(identifier);
   await page.getByLabel('Contraseña', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  await expect(page.getByTestId('chat-list')).toBeVisible();
+  // La lista de chats, o la bandeja vacía si la cuenta aún no tiene ninguno (p. ej. la tienda).
+  await expect(page.getByTestId('chat-list').or(page.getByRole('heading', { name: '¿No tienes chats aún?' }))).toBeVisible();
 }
 
 export async function openChat(page: Page, title: string) {

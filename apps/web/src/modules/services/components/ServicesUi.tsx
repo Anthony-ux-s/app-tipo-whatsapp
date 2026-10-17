@@ -42,7 +42,9 @@ export function PageHeader({ title, subtitle, onBack, action }: { title: string;
 
 const STATUS_STYLES: Record<OrderStatus, string> = {
   pending_payment: 'bg-cyan-50 text-cyan-900 ring-1 ring-cyan-300 dark:bg-cyan-950/50 dark:text-cyan-200 dark:ring-cyan-800',
-  paid: 'bg-teal-100 text-teal-900 dark:bg-teal-900/50 dark:text-teal-200',
+  paid: 'bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200',
+  preparing: 'bg-teal-100 text-teal-900 dark:bg-teal-900/50 dark:text-teal-200',
+  rejected: 'bg-rose-100 text-rose-900 dark:bg-rose-900/50 dark:text-rose-200',
   searching_driver: 'bg-teal-100 text-teal-900 dark:bg-teal-900/50 dark:text-teal-200',
   on_the_way: 'bg-cyan-100 text-cyan-900 dark:bg-cyan-900/50 dark:text-cyan-200',
   delivered: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-200',

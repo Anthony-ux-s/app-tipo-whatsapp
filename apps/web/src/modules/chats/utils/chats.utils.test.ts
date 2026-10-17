@@ -31,7 +31,6 @@ const msg = (id: string, senderId: string, createdAt: string, extra: Partial<Mes
   replyTo: null,
   replyCount: 0,
   mentions: [],
-  task: null,
   ...extra,
 });
 
@@ -51,7 +50,6 @@ const group = (lastMessage: Message | null): ConversationSummary => ({
   lastMessage,
   unreadCount: 0,
   mentionCount: 0,
-  openTaskCount: 0,
   createdById: 'me',
   createdAt: '2026-10-01T10:00:00',
   updatedAt: '2026-10-01T10:00:00',

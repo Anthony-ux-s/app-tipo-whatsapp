@@ -4,10 +4,13 @@ import { ConflictError, ValidationError } from './domain-error';
 /**
  * Estados de un pedido y transiciones válidas. Un pedido nunca retrocede: un aviso repetido o
  * desordenado de la pasarela o del delivery no puede «despagar» ni «desentregar» nada.
+ * Pagado, el negocio lo acepta (preparing) o lo rechaza; al estar listo sale el motorizado de Rapidito.
  */
 const NEXT: Record<OrderStatus, readonly OrderStatus[]> = {
   pending_payment: ['paid', 'payment_expired', 'cancelled'],
-  paid: ['searching_driver', 'cancelled'],
+  paid: ['preparing', 'rejected', 'cancelled'],
+  preparing: ['searching_driver', 'cancelled'],
+  rejected: [],
   searching_driver: ['on_the_way', 'delivered', 'cancelled'],
   on_the_way: ['delivered'],
   delivered: [],
@@ -45,12 +48,19 @@ export function formatSoles(cents: number): string {
 }
 
 /** Aviso push para los cambios que le importan al cliente (sin datos sensibles). */
-export function orderPush(orderId: string, status: OrderStatus, totalCents: number, driverName: string | null): PushPayload | null {
+export function orderPush(orderId: string, status: OrderStatus, totalCents: number, driverName: string | null, businessName: string | null): PushPayload | null {
   const url = `/app/pedidos/${orderId}`;
   const tag = `order-${orderId}`;
+  const business = businessName ?? 'El negocio';
   switch (status) {
     case 'paid':
-      return { title: 'Pago recibido', body: `Pagaste ${formatSoles(totalCents)}. Estamos buscando un motorizado.`, url, tag };
+      return { title: 'Pago recibido', body: `Pagaste ${formatSoles(totalCents)}. ${business} confirmará tu pedido en un momento.`, url, tag };
+    case 'preparing':
+      return { title: 'Están preparando tu pedido', body: `${business} aceptó tu pedido. Rapidito lo recogerá cuando esté listo.`, url, tag };
+    case 'rejected':
+      return { title: 'Tu pedido no fue aceptado', body: `${business} no puede atender tu pedido. Escríbele desde el pedido.`, url, tag };
+    case 'searching_driver':
+      return { title: 'Tu pedido está listo', body: 'Rapidito está asignando un motorizado.', url, tag };
     case 'on_the_way':
       return { title: 'Tu pedido va en camino', body: driverName ? `${driverName} lleva tu pedido.` : 'Un motorizado lleva tu pedido.', url, tag };
     case 'delivered':
@@ -60,4 +70,15 @@ export function orderPush(orderId: string, status: OrderStatus, totalCents: numb
     default:
       return null;
   }
+}
+
+/** Aviso push para el dueño del negocio: llegó un pedido pagado que debe aceptar. */
+export function businessOrderPush(orderId: string, status: OrderStatus, totalCents: number, customerName: string): PushPayload | null {
+  if (status !== 'paid') return null;
+  return {
+    title: 'Nuevo pedido',
+    body: `${customerName} pagó ${formatSoles(totalCents)}. Acéptalo para empezar a prepararlo.`,
+    url: `/app/negocio/pedidos/${orderId}`,
+    tag: `business-order-${orderId}`,
+  };
 }

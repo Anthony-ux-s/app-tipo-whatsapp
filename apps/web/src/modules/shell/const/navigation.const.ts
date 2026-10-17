@@ -1,6 +1,6 @@
-import { BadgePercent, Bike, LayoutGrid, ListChecks, MessageCircle, Settings, type LucideIcon } from 'lucide-react';
+import { BadgePercent, Bike, LayoutGrid, MessageCircle, Settings, type LucideIcon } from 'lucide-react';
 
-export type AppSection = 'chats' | 'servicios' | 'ofertas' | 'delivery' | 'tareas' | 'ajustes';
+export type AppSection = 'chats' | 'servicios' | 'ofertas' | 'delivery' | 'ajustes';
 
 export interface NavItem {
   id: AppSection;
@@ -15,19 +15,18 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'servicios', to: '/app/servicios', label: 'Servicios', icon: LayoutGrid },
   { id: 'ofertas', to: '/app/ofertas', label: 'Ofertas', icon: BadgePercent },
   { id: 'delivery', to: '/app/pedidos', label: 'Delivery', icon: Bike },
-  { id: 'tareas', to: '/app/tareas', label: 'Tareas', icon: ListChecks },
   { id: 'ajustes', to: '/app/ajustes', label: 'Ajustes', icon: Settings },
 ];
 
-/** Barra inferior del celular: Tareas y Ajustes quedan en el menú del perfil (el avatar del encabezado). */
-export const MOBILE_NAV_ITEMS = NAV_ITEMS.filter((item) => item.id !== 'tareas' && item.id !== 'ajustes');
+/** Barra inferior del celular: Ajustes queda en el menú del perfil (el avatar del encabezado). */
+export const MOBILE_NAV_ITEMS = NAV_ITEMS.filter((item) => item.id !== 'ajustes');
 
 /** Sección a la que pertenece una ruta. */
 export function sectionOf(pathname: string): AppSection {
   if (pathname.startsWith('/app/servicios')) return 'servicios';
   if (pathname.startsWith('/app/ofertas')) return 'ofertas';
-  if (pathname.startsWith('/app/pedidos')) return 'delivery';
-  if (pathname.startsWith('/app/tareas')) return 'tareas';
+  // «Mi negocio» vive dentro de Delivery: es el otro lado de los mismos pedidos.
+  if (pathname.startsWith('/app/pedidos') || pathname.startsWith('/app/negocio')) return 'delivery';
   if (pathname.startsWith('/app/ajustes')) return 'ajustes';
   return 'chats';
 }

@@ -11,7 +11,7 @@ interface AppRailProps {
   activeOrders: number;
 }
 
-/** Barra de secciones (solo escritorio): Chats, Servicios, Ofertas, Delivery, Tareas y Ajustes, como en WeChat. */
+/** Barra de secciones (solo escritorio): Chats, Servicios, Ofertas, Delivery y Ajustes, como en WeChat. */
 export function AppRail({ user, section, unread, activeOrders }: AppRailProps) {
   const main = NAV_ITEMS.filter((item) => item.id !== 'ajustes');
   const settings = NAV_ITEMS.find((item) => item.id === 'ajustes')!;

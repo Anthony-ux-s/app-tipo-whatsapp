@@ -1,6 +1,5 @@
 import type { ConversationSummary, DeliveryStatus, Message, PresenceStatus } from '@parla/types';
 import { aggregateDeliveryStatus } from '../../../../kernel/delivery-status';
-import { toTask } from '../../collaboration/tasks/task.mapper';
 import { avatarUrlOf, toPublicUser } from '../../identity/user.mapper';
 import type { ConversationRecord, MessageRecord } from './conversations.repository';
 
@@ -38,7 +37,6 @@ export function toMessage(message: MessageRecord, viewerId: string): Message {
       : null,
     replyCount: message.replyCount,
     mentions: message.mentions,
-    task: message.task ? toTask(message.task) : null,
   };
 }
 
@@ -78,7 +76,6 @@ export function toConversationSummary(
     lastMessage: conversation.lastMessage ? toMessage(conversation.lastMessage, viewerId) : null,
     unreadCount: conversation.unreadCount,
     mentionCount: conversation.mentionCount,
-    openTaskCount: conversation.openTaskCount,
     createdById: conversation.createdById,
     createdAt: conversation.createdAt.toISOString(),
     updatedAt: conversation.updatedAt.toISOString(),

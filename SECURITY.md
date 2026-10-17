@@ -8,7 +8,7 @@ No reemplaza una auditoría externa ni la revisión legal de un abogado.
 | Área | Control | Dónde | Verificado con |
 | --- | --- | --- | --- |
 | Cifrado de mensajes | E2E con WebCrypto: ECDH P-256 + HKDF + AES-GCM 256 por conversación | `packages/crypto` | Pruebas unitarias + E2E que comprueba que la API nunca devuelve texto en claro |
-| Archivos y tareas | Fotos, audio, video y títulos de tareas cifrados en el navegador | web `chat.store` | E2E de fotos/notas de voz y tareas |
+| Archivos | Fotos, audio y video cifrados en el navegador | web `chat.store` | E2E de fotos y notas de voz |
 | Llamadas | WebRTC P2P con DTLS-SRTP; el servidor solo reenvía la señalización entre personas que están en la llamada | `services/realtime` (un proceso por llamada) | Pruebas de Elixir + E2E de videollamada |
 | Puerta única | El gateway (Go) es lo único expuesto: valida el JWT (solo HS256, con vencimiento; cierra el WebSocket con 4401 al vencer), limita peticiones por IP y responde 404 a `/api/internal/*` | `services/gateway` | Pruebas de Go + `curl` contra el entorno arrancado |
 | Traductores | Lista blanca de eventos, IDs y tamaños validados, campos desconocidos descartados; el usuario sale del token y nunca del mensaje | `services/gateway/internal/translators` | Pruebas de Go |
@@ -38,7 +38,7 @@ No reemplaza una auditoría externa ni la revisión legal de un abogado.
 3. **Sin rotación de clave de grupo** al sacar a alguien: puede seguir leyendo mensajes nuevos si
    obtiene el texto cifrado. Pendiente: rotar y re-envolver la clave al salir un miembro.
 4. **Metadatos visibles para el servidor**: quién habla con quién, cuándo, a quién se menciona,
-   responsables y fechas de tareas, duración de llamadas, y los pedidos (productos, montos, dirección). Necesarios para el servicio; declarados en la
+   duración de llamadas, y los pedidos (productos, montos, dirección). Necesarios para el servicio; declarados en la
    política de privacidad.
 5. **Llamadas sin TURN**: en redes restrictivas pueden no conectar; si se agrega TURN, el relé ve
    tráfico cifrado (no el contenido).

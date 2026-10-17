@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useBusinessStore } from '@shared/stores/business.store';
 import { useCallStore } from '@shared/stores/call.store';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
@@ -17,6 +18,7 @@ function resetSessionStores() {
   useChatStore.getState().reset();
   usePeopleStore.getState().reset();
   useOrdersStore.getState().reset();
+  useBusinessStore.getState().reset();
 }
 
 /** El cierre se difiere un instante: si el armazón se vuelve a montar (StrictMode), se reutiliza el socket. */
@@ -63,7 +65,6 @@ export function useRealtime(userId: string | undefined) {
       }
     });
     socket.on('message:replies', (payload) => useChatStore.getState().applyReplies(payload));
-    socket.on('task:upsert', (task) => void useChatStore.getState().applyTask(task));
     // Llamadas: la señalización llega por el mismo socket.
     const calls = () => useCallStore.getState();
     socket.on('call:incoming', ({ call }) => void calls().onIncoming(call, userId));
@@ -81,6 +82,7 @@ export function useRealtime(userId: string | undefined) {
     });
     // Servicios: cada cambio de un pedido (pagado, en camino, entregado) llega al instante.
     socket.on('order:updated', (order) => useOrdersStore.getState().upsert(order));
+    socket.on('business-order:updated', (order) => useBusinessStore.getState().upsert(order));
     // Fotos, nombres y usuarios nuevos de los contactos (y los míos, si cambié desde otro dispositivo).
     socket.on('profile:updated', (profile) => {
       useChatStore.getState().applyProfile(profile);

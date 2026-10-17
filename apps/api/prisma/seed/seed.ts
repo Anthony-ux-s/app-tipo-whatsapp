@@ -49,16 +49,18 @@ const USERS: SeedUser[] = [
   { key: 'sofia', username: null, phone: '+573001234567', displayName: 'Sofía Ramírez', about: 'Atención al cliente', avatarColor: 'emerald-dark' },
   { key: 'mateo', username: 'mateo', phone: '+573005550104', displayName: 'Mateo Gómez', about: 'Finanzas', avatarColor: 'cyan-dark' },
   { key: 'valentina', username: 'valentina', phone: '+573005550105', displayName: 'Valentina Castro', about: 'Calidad y tostión', avatarColor: 'emerald' },
+  // Dueña de la tienda del Mercado: recibe los pedidos, los acepta y llama a Rapidito.
+  { key: 'tienda', username: 'tienda', phone: '+573005550106', displayName: 'Elena Condori', about: 'Dueña de Bodega MercaYa 🛒', avatarColor: 'cyan' },
 ];
+
+/** Negocio de ejemplo: atiende los pedidos del Mercado con delivery Rapidito. */
+const BUSINESS = { owner: 'tienda', name: 'Bodega MercaYa', service: 'mercado' } as const;
 
 type Media = { kind: 'image' | 'audio'; file: 'packaging' | 'route' | 'wireframe' | 'voice' };
 /** Hilo (índice del mensaje al que responde) y personas mencionadas con @. */
 type LineOptions = { replyTo?: number; mentions?: string[] };
 /** [autor, texto, minutos atrás, archivo opcional, opciones] */
 type Line = [string, string, number, Media?, LineOptions?];
-
-/** [quien la crea, título, asignada a, vence en N días (null = sin fecha), hecha, minutos atrás] */
-type SeedTask = [string, string, string | null, number | null, boolean, number];
 
 interface SeedConversation {
   kind: 'direct' | 'group';
@@ -72,13 +74,6 @@ interface SeedConversation {
   /** Últimos N mensajes que aún no llegan al dispositivo de esa persona. */
   undelivered?: Record<string, number>;
   lines: Line[];
-  tasks?: SeedTask[];
-}
-
-/** Fecha local AAAA-MM-DD dentro de N días. */
-function localDate(days: number): string {
-  const d = new Date(Date.now() + days * 24 * 3600_000);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 const H = 60;
@@ -105,7 +100,6 @@ const CONVERSATIONS: SeedConversation[] = [
       ['andres', 'Ahí estaré. ¿Llevo las tazas de cata nuevas?', 12, undefined, { replyTo: 9 }],
       ['valentina', 'Sí, porfa. Y las cucharas de cata 🥄', 6, undefined, { replyTo: 9 }],
     ],
-    tasks: [['mateo', 'Subir las facturas de proveedores de octubre', 'laura', 1, false, 2 * D + 2 * H - 5]],
   },
   {
     kind: 'group',
@@ -125,10 +119,6 @@ const CONVERSATIONS: SeedConversation[] = [
       ['andres', 'Les dejo nota de voz con el detalle para el informe.', H + 40, { kind: 'audio', file: 'voice' }],
       ['sofia', 'Gracias, Andrés. Le aviso al cliente que la reposición sale mañana.', 40, undefined, { replyTo: 6 }],
     ],
-    tasks: [
-      ['laura', 'Confirmar la entrega en Usaquén para el jueves', 'sofia', 2, true, 2 * D + H + 20],
-      ['andres', 'Cambiar el lote de bolsas de Nariño', 'andres', 1, false, 2 * H - 2],
-    ],
   },
   {
     kind: 'group',
@@ -145,11 +135,6 @@ const CONVERSATIONS: SeedConversation[] = [
       ['laura', 'Aprobado por mi parte. Valentina, ¿cuántas bolsas de 250 g sacamos del lote?', 5 * H, undefined],
       ['valentina', 'Unas 400 bolsas. Si vendemos bien, guardo 20 kg verdes para una segunda tanda.', 4 * H + 30, undefined],
       ['laura', 'Perfecto. @Diego Herrera, arma la preventa para clientes corporativos 🚀', 50, undefined, { mentions: ['diego'] }],
-    ],
-    tasks: [
-      ['laura', 'Aprobar el arte final del empaque v3', 'camila', -1, true, 1 * D + 5 * H + 30],
-      ['laura', 'Armar la preventa para clientes corporativos', 'diego', 5, false, 48],
-      ['valentina', 'Guardar 20 kg de café verde para la segunda tanda', 'valentina', null, false, 4 * H + 20],
     ],
   },
   {
@@ -217,7 +202,6 @@ const CONVERSATIONS: SeedConversation[] = [
       ['camila', 'Buen punto. Lo ajusto para la v3.', 2 * H, undefined],
       ['camila', '@Laura Méndez, ¿puedes revisar los textos de la página de suscripción?', 30, undefined, { mentions: ['laura'] }],
     ],
-    tasks: [['camila', 'Revisar los textos de la página de suscripción', 'laura', 3, false, 29]],
   },
 ];
 
@@ -271,6 +255,9 @@ async function main(): Promise<void> {
     });
   }
   const person = (key: string) => people.get(key)!;
+
+  console.log('Creando el negocio del Mercado…');
+  await prisma.business.create({ data: { name: BUSINESS.name, service: BUSINESS.service, ownerId: person(BUSINESS.owner).id } });
 
   console.log('Cifrando conversaciones y mensajes…');
   for (const conv of CONVERSATIONS) {
@@ -371,53 +358,14 @@ async function main(): Promise<void> {
       });
       messageIds.push(created.id);
     }
-
-    for (const [creator, title, assignee, dueInDays, done, minutesAgo] of conv.tasks ?? []) {
-      const createdAt = new Date(Date.now() - minutesAgo * 60_000);
-      const sealed = await encryptText(key, title);
-      const task = await prisma.task.create({
-        data: {
-          conversationId: conversation.id,
-          titleCiphertext: sealed.ciphertext,
-          titleIv: sealed.iv,
-          assigneeId: assignee ? person(assignee).id : null,
-          createdById: person(creator).id,
-          dueDate: dueInDays === null ? null : localDate(dueInDays),
-          status: done ? 'done' : 'open',
-          createdAt,
-          completedAt: done ? new Date(createdAt.getTime() + 3 * 3600_000) : null,
-          completedById: done && assignee ? person(assignee).id : null,
-        },
-      });
-      await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          senderId: person(creator).id,
-          kind: 'task',
-          taskId: task.id,
-          clientId: randomUUID(),
-          createdAt,
-          mentions: assignee ? { create: { userId: person(assignee).id, conversationId: conversation.id } } : undefined,
-          receipts: {
-            create: conv.members
-              .filter((m) => m !== creator)
-              .map((m) => ({
-                userId: person(m).id,
-                conversationId: conversation.id,
-                deliveredAt: new Date(createdAt.getTime() + 20_000),
-                readAt: new Date(createdAt.getTime() + 60_000),
-              })),
-          },
-        },
-      });
-    }
   }
 
   console.log('\nDatos de ejemplo listos. Usuarios de prueba (contraseña para todos: %s):', DEMO_PASSWORD);
   console.table([
-    { usuario: 'laura', quién: 'Laura Méndez · la más activa: grupos, chats, tareas' },
+    { usuario: 'laura', quién: 'Laura Méndez · la más activa: grupos, chats y pedidos' },
     { usuario: 'camila', quién: 'Camila Torres · creó el grupo «Diseño tienda en línea»' },
     { usuario: 'andres', quién: 'Andrés Rojas' },
+    { usuario: 'tienda', quién: 'Elena Condori · dueña de Bodega MercaYa: acepta pedidos y llama a Rapidito' },
     { usuario: '+57 300 123 4567', quién: 'Sofía Ramírez (entra con su teléfono)' },
   ]);
 }

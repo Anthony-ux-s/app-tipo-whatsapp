@@ -1,4 +1,4 @@
-package motoya
+package rapidito
 
 import (
 	"context"
@@ -53,7 +53,7 @@ func TestCotizacionValidaYAbsurda(t *testing.T) {
 	}
 }
 
-const secret = "motoya-test-secret"
+const secret = "rapidito-test-secret"
 
 func TestAvisoFirmadoSeTraduce(t *testing.T) {
 	body := []byte(`{"delivery_id":"dlv_1","reference":"ord_1","status":"DRIVER_ASSIGNED","driver":{"name":"Rosa Quispe","vehicle":"Moto · C3M-915"},"eta_minutes":20}`)

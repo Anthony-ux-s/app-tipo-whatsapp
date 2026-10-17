@@ -112,7 +112,6 @@ export class PrismaAuthRepository implements AuthRepository {
       this.prisma.messageReceipt.deleteMany({ where: { userId: id } }),
       this.prisma.messageMention.deleteMany({ where: { userId: id } }),
       this.prisma.conversationParticipant.deleteMany({ where: { userId: id } }),
-      this.prisma.task.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } }),
       this.prisma.user.update({
         where: { id },
         data: {
@@ -134,7 +133,7 @@ export class PrismaAuthRepository implements AuthRepository {
   }
 
   async exportData(id: string): Promise<AccountData> {
-    const [participants, messagesSent, tasksCreated, tasksAssigned, ordersPlaced] = await Promise.all([
+    const [participants, messagesSent, ordersPlaced] = await Promise.all([
       this.prisma.conversationParticipant.findMany({
         where: { userId: id },
         include: {
@@ -144,8 +143,6 @@ export class PrismaAuthRepository implements AuthRepository {
         },
       }),
       this.prisma.message.count({ where: { senderId: id, kind: { not: 'system' } } }),
-      this.prisma.task.count({ where: { createdById: id } }),
-      this.prisma.task.count({ where: { assigneeId: id } }),
       this.prisma.order.count({ where: { userId: id } }),
     ]);
     return {
@@ -158,8 +155,6 @@ export class PrismaAuthRepository implements AuthRepository {
         joinedAt: p.joinedAt,
       })),
       messagesSent,
-      tasksCreated,
-      tasksAssigned,
       ordersPlaced,
     };
   }

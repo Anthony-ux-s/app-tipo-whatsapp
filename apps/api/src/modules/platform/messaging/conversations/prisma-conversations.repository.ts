@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import type { ConversationKind, MessageKind, WrappedKey } from '@parla/types';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../infra/prisma/prisma.service';
-import { toTaskRecord } from '../../../../infra/prisma/task-row';
 import { toUserRecord } from '../../../../infra/prisma/user-row';
 import type {
   ConversationRecord,
@@ -16,7 +15,6 @@ import type {
 const messageInclude = {
   receipts: true,
   mentions: { select: { userId: true } },
-  task: true,
   replyTo: { select: { id: true, senderId: true, kind: true, ciphertext: true, iv: true, clientId: true } },
   _count: { select: { replies: true } },
 } satisfies Prisma.MessageInclude;
@@ -48,14 +46,12 @@ function toMessageRecord(row: MessageRow): MessageRecord {
     replyTo: row.replyTo ? { ...row.replyTo, kind: row.replyTo.kind as MessageKind } : null,
     replyCount: row._count.replies,
     mentions: row.mentions.map((m) => m.userId),
-    task: row.task ? toTaskRecord(row.task) : null,
   };
 }
 
 interface Counters {
   unread: number;
   mentions: number;
-  openTasks: number;
 }
 
 function toConversationRecord(row: ConversationRow, counters: Counters): ConversationRecord {
@@ -81,7 +77,6 @@ function toConversationRecord(row: ConversationRow, counters: Counters): Convers
     lastMessage: row.messages[0] ? toMessageRecord(row.messages[0]) : null,
     unreadCount: counters.unread,
     mentionCount: counters.mentions,
-    openTaskCount: counters.openTasks,
   };
 }
 
@@ -105,11 +100,11 @@ export class PrismaConversationsRepository implements ConversationsRepository {
     return new Map(rows.map((r) => [r.id, r.publicKey]));
   }
 
-/** No leídos, menciones sin leer y tareas abiertas por conversación, en tres consultas agrupadas. */
+/** No leídos y menciones sin leer por conversación, en dos consultas agrupadas. */
   private async counters(userId: string, conversationIds: string[]): Promise<(id: string) => Counters> {
-    if (conversationIds.length === 0) return () => ({ unread: 0, mentions: 0, openTasks: 0 });
+    if (conversationIds.length === 0) return () => ({ unread: 0, mentions: 0 });
     const inIds = { in: conversationIds };
-    const [unread, mentions, tasks] = await Promise.all([
+    const [unread, mentions] = await Promise.all([
       this.prisma.messageReceipt.groupBy({
         by: ['conversationId'],
         where: { userId, readAt: null, conversationId: inIds },
@@ -120,16 +115,11 @@ export class PrismaConversationsRepository implements ConversationsRepository {
         where: { userId, readAt: null, conversationId: inIds, message: { mentions: { some: { userId } } } },
         _count: { _all: true },
       }),
-      this.prisma.task.groupBy({
-        by: ['conversationId'],
-        where: { status: 'open', conversationId: inIds },
-        _count: { _all: true },
-      }),
     ]);
     const toMap = (groups: { conversationId: string; _count: { _all: number } }[]) =>
       new Map(groups.map((g) => [g.conversationId, g._count._all]));
-    const [u, m, t] = [toMap(unread), toMap(mentions), toMap(tasks)];
-    return (id) => ({ unread: u.get(id) ?? 0, mentions: m.get(id) ?? 0, openTasks: t.get(id) ?? 0 });
+    const [u, m] = [toMap(unread), toMap(mentions)];
+    return (id) => ({ unread: u.get(id) ?? 0, mentions: m.get(id) ?? 0 });
   }
 
   async listForUser(userId: string): Promise<ConversationRecord[]> {
@@ -213,14 +203,13 @@ export class PrismaConversationsRepository implements ConversationsRepository {
     });
     if (existing) return toMessageRecord(existing);
 
-    const { recipientIds, media, mentions = [], replyToId = null, taskId = null, ...data } = input;
+    const { recipientIds, media, mentions = [], replyToId = null, ...data } = input;
     const now = new Date();
     const [row] = await this.prisma.$transaction([
       this.prisma.message.create({
         data: {
           ...data,
           replyToId,
-          taskId,
           media: media ? JSON.stringify(media) : null,
           createdAt: now,
           receipts: {

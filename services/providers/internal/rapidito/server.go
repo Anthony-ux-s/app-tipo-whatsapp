@@ -1,13 +1,13 @@
-// Package motoya simula «MotoYa», un servicio de delivery en moto con su propia API en inglés y
+// Package rapidito simula «Rapidito», un servicio de delivery en moto con su propia API en inglés y
 // montos como texto decimal.
 //
-//	POST /motoya/api/quotes      {"dropoff":{"address","notes"}} → {"quote_id","fee":{"amount","currency"},"eta_minutes","expires_at"}
-//	POST /motoya/api/deliveries  {"quote_id","reference","callback_url"} → 201 {"delivery_id","status":"SEARCHING_DRIVER"}
-//	GET  /motoya/api/deliveries/{id}
+//	POST /rapidito/api/quotes      {"dropoff":{"address","notes"}} → {"quote_id","fee":{"amount","currency"},"eta_minutes","expires_at"}
+//	POST /rapidito/api/deliveries  {"quote_id","reference","callback_url"} → 201 {"delivery_id","status":"SEARCHING_DRIVER"}
+//	GET  /rapidito/api/deliveries/{id}
 //
 // Tras crear un delivery avisa a callback_url: DRIVER_ASSIGNED y luego DELIVERED, firmado con
-// x-motoya-signature = hex(HMAC-SHA256(secreto, cuerpo)).
-package motoya
+// x-rapidito-signature = hex(HMAC-SHA256(secreto, cuerpo)).
+package rapidito
 
 import (
 	"context"
@@ -24,7 +24,8 @@ import (
 	"github.com/parla/providers/internal/notify"
 )
 
-const quoteTTL = 30 * time.Minute
+// La cotización vale mientras el negocio prepara el pedido (se despacha cuando está listo).
+const quoteTTL = 6 * time.Hour
 
 var drivers = []struct{ Name, Plate string }{
 	{"Carlos Huamán", "B7K-482"},
@@ -68,9 +69,9 @@ func New(step time.Duration, notifier notify.Notifier) *Service {
 }
 
 func (s *Service) Routes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /motoya/api/quotes", s.createQuote)
-	mux.HandleFunc("POST /motoya/api/deliveries", s.createDelivery)
-	mux.HandleFunc("GET /motoya/api/deliveries/{id}", s.getDelivery)
+	mux.HandleFunc("POST /rapidito/api/quotes", s.createQuote)
+	mux.HandleFunc("POST /rapidito/api/deliveries", s.createDelivery)
+	mux.HandleFunc("GET /rapidito/api/deliveries/{id}", s.getDelivery)
 }
 
 type quoteRequest struct {

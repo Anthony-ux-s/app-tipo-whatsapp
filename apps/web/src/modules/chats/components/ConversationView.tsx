@@ -1,7 +1,6 @@
 import { ChevronDown, Download, Lock, X } from 'lucide-react';
 import { Spinner } from '@shared/ui/Spinner';
 import { ErrorState } from '@shared/ui/States';
-import { TasksPanel } from '../../tasks/components/TasksPanel';
 import { useConversation } from '../hooks/use-conversation.hook';
 import { Composer } from './Composer';
 import { ConversationHeader } from './ConversationHeader';
@@ -10,7 +9,7 @@ import { ConversationInfoPanel } from './ConversationInfoPanel';
 import { MessageBubble } from './MessageBubble';
 import { ThreadPanel } from './ThreadPanel';
 
-/** Panel principal: cabecera, mensajes cronológicos, barra de escritura y paneles de info, hilo y tareas. */
+/** Panel principal: cabecera, mensajes cronológicos, barra de escritura y paneles de info e hilo. */
 export function ConversationView() {
   const chat = useConversation();
   const { conversation, thread, panel } = chat;
@@ -31,12 +30,10 @@ export function ConversationView() {
           subtitle={chat.subtitle}
           typing={chat.typing}
           online={chat.online}
-          tasksOpen={panel?.type === 'tasks'}
           callBusy={chat.callBusy}
           onCall={chat.startCall}
           onBack={chat.back}
           onOpenInfo={chat.openInfo}
-          onOpenTasks={chat.openTasks}
         />
         <KeyReshareBanner conversation={conversation} />
 
@@ -50,7 +47,7 @@ export function ConversationView() {
           <div className="mx-auto mb-3 flex max-w-md justify-center px-4">
             <p className="flex items-start gap-2 rounded-lg bg-cyan-50/95 px-3 py-2 text-center text-xs text-cyan-900 shadow-float dark:bg-cyan-950/70 dark:text-cyan-100">
               <Lock className="mt-px size-3.5 shrink-0" />
-              Los mensajes y las tareas están cifrados de extremo a extremo. Nadie fuera de este chat, ni siquiera Parla, puede leerlos.
+              Los mensajes están cifrados de extremo a extremo. Nadie fuera de este chat, ni siquiera Parla, puede leerlos.
             </p>
           </div>
 
@@ -122,7 +119,6 @@ export function ConversationView() {
       {panel?.type === 'thread' && (
         <ThreadPanel conversation={conversation} rootId={panel.rootId} myId={chat.user.id} actions={chat.actions} onClose={chat.closePanel} />
       )}
-      {panel?.type === 'tasks' && <TasksPanel conversation={conversation} prefill={panel.prefill} onClose={chat.closePanel} />}
 
       {chat.lightbox && (
         <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-teal-950/90 p-4" role="dialog" aria-label="Imagen" onClick={chat.closeImage}>

@@ -103,32 +103,6 @@ export function SelectChatIllustration() {
   );
 }
 
-/** Equipo trabajando junto: estados vacíos de tareas. */
-export function TeamIllustration() {
-  return (
-    <svg viewBox="0 0 320 220" {...svgProps} aria-label="Equipo de trabajo">
-      <ellipse cx="160" cy="204" rx="130" ry="10" fill="#0f766e" fillOpacity="0.08" />
-      <rect x="70" y="40" width="180" height="120" rx="18" fill="var(--surface)" stroke="var(--line)" strokeWidth="2" />
-      <rect x="86" y="58" width="60" height="10" rx="5" fill="#0f766e" />
-      <rect x="86" y="76" width="110" height="8" rx="4" fill="var(--surface-3)" />
-      <g>
-        <circle cx="110" cy="122" r="16" fill="#2dd4bf" /><circle cx="140" cy="122" r="16" fill="#34d399" stroke="var(--surface)" strokeWidth="3" />
-        <circle cx="170" cy="122" r="16" fill="#22d3ee" stroke="var(--surface)" strokeWidth="3" />
-        <circle cx="200" cy="122" r="16" fill="#0f766e" stroke="var(--surface)" strokeWidth="3" />
-        <path d="M194 122h12M200 116v12" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
-      </g>
-      <g transform="translate(232 24)">
-        <circle r="22" fill="#10b981" />
-        <path d="M-9 0l6 6 12-12" stroke="#ffffff" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      </g>
-      <rect x="20" y="96" width="44" height="30" rx="10" fill="#a5f3fc" />
-      <path d="M30 126l-4 10 14-10z" fill="#a5f3fc" />
-      <rect x="262" y="132" width="44" height="30" rx="10" fill="#a7f3d0" />
-      <path d="M296 162l4 10-14-10z" fill="#a7f3d0" />
-    </svg>
-  );
-}
-
 /** Error de carga: nube desconectada. */
 export function ErrorIllustration() {
   return (

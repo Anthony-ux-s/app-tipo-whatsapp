@@ -13,8 +13,11 @@ describe('servicios', () => {
   it('ubica el pedido en la línea de tiempo y sabe cuándo terminó', () => {
     expect(orderStepIndex('pending_payment')).toBe(0);
     expect(orderStepIndex('paid')).toBe(1);
-    expect(orderStepIndex('on_the_way')).toBe(2);
-    expect(orderStepIndex('delivered')).toBe(3);
+    expect(orderStepIndex('preparing')).toBe(1);
+    expect(orderStepIndex('searching_driver')).toBe(2);
+    expect(orderStepIndex('on_the_way')).toBe(3);
+    expect(orderStepIndex('delivered')).toBe(4);
+    expect(isFinalStatus('rejected')).toBe(true);
     expect(isFinalStatus('delivered')).toBe(true);
     expect(isFinalStatus('searching_driver')).toBe(false);
   });

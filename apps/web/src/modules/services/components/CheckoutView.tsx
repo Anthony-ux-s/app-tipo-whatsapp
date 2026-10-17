@@ -72,7 +72,7 @@ export function CheckoutView() {
         ) : (
           <>
             <AmountRow label="Productos" value={formatSoles(c.quote.subtotalCents)} />
-            <AmountRow label="Delivery MotoYa" value={formatSoles(c.quote.deliveryFeeCents)} />
+            <AmountRow label="Delivery Rapidito" value={formatSoles(c.quote.deliveryFeeCents)} />
             <div className="my-1 border-t border-dashed border-line" />
             <AmountRow label="Total a pagar" value={formatSoles(c.quote.totalCents)} strong />
             <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-soft">

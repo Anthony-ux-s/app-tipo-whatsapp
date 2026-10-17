@@ -8,7 +8,7 @@ async function messageMenu(page: Page, text: string, action: string) {
   await page.getByRole('menuitem', { name: action, exact: true }).click();
 }
 
-test.describe('Fase 3: menciones, hilos, tareas y notificaciones', () => {
+test.describe('Fase 3: menciones, hilos y notificaciones', () => {
   test('mencionar, responder en hilo y citar un mensaje en tiempo real', async ({ browser }) => {
     const laura = await openSession(browser, 'laura');
     const andres = await openSession(browser, 'andres');
@@ -56,56 +56,6 @@ test.describe('Fase 3: menciones, hilos, tareas y notificaciones', () => {
     expect(andres.consoleErrors).toEqual([]);
     await laura.context.close();
     await andres.context.close();
-  });
-
-  test('convertir un mensaje en tarea, asignarla y completarla desde "Mis tareas"', async ({ browser }) => {
-    const laura = await openSession(browser, 'laura');
-    const andres = await openSession(browser, 'andres');
-    const text = unique('Enviar cotización a los hoteles');
-
-    await openChat(laura.page, 'Logística y despachos');
-    await laura.page.getByLabel('Escribe un mensaje').fill(text);
-    await laura.page.getByLabel('Escribe un mensaje').press('Enter');
-    await expect(laura.page.getByTestId('message').filter({ hasText: text })).toHaveAttribute('data-status', /sent|delivered|read/);
-
-    await messageMenu(laura.page, text, 'Convertir en tarea');
-    await expect(laura.page.getByPlaceholder('ej. Enviar la cotización a los hoteles')).toHaveValue(text);
-    await laura.page.getByLabel('Responsable').selectOption({ label: 'Andrés Rojas' });
-    const tomorrow = new Date(Date.now() + 86_400_000);
-    const iso = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
-    await laura.page.getByLabel('Fecha límite').fill(iso);
-    await laura.page.getByRole('button', { name: 'Crear tarea' }).click();
-    await expect(laura.page.getByText('Tarea creada y compartida en el chat')).toBeVisible();
-
-    const lauraCard = laura.page.getByTestId('message-list').getByTestId('task-card').filter({ hasText: text });
-    await expect(lauraCard).toHaveAttribute('data-done', 'false');
-
-    // Andrés la encuentra en "Mis tareas" (título descifrado en su navegador) y la completa
-    await andres.page.goto('/app/tareas');
-    const mine = andres.page.getByTestId('my-tasks').getByTestId('task-card').filter({ hasText: text });
-    await expect(mine).toContainText('Mañana');
-    await mine.getByRole('checkbox').click();
-    await expect(mine).toHaveCount(0); // sale de "Asignadas a mí"
-    await andres.page.getByRole('tab', { name: 'Hechas' }).click();
-    await expect(andres.page.getByTestId('my-tasks').getByTestId('task-card').filter({ hasText: text })).toHaveAttribute('data-done', 'true');
-
-    // Laura lo ve completado en el chat sin recargar
-    await expect(lauraCard).toHaveAttribute('data-done', 'true');
-
-    expect(laura.consoleErrors).toEqual([]);
-    expect(andres.consoleErrors).toEqual([]);
-    await laura.context.close();
-    await andres.context.close();
-  });
-
-  test('un colaborador no puede completar la tarea de otra persona', async ({ browser }) => {
-    const sofia = await openSession(browser, '+573001234567');
-    await openChat(sofia.page, 'Logística y despachos');
-    await sofia.page.getByRole('button', { name: 'Tareas del chat' }).click();
-    // "Cambiar el lote de bolsas" la creó Andrés para sí mismo: Sofía no puede marcarla
-    const card = sofia.page.getByTestId('open-tasks').getByTestId('task-card').filter({ hasText: 'Cambiar el lote de bolsas' });
-    await expect(card.getByRole('checkbox')).toBeDisabled();
-    await sofia.context.close();
   });
 
   test('suscripción push: alta, estado y baja contra la API real', async ({ browser }) => {

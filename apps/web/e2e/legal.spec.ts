@@ -29,7 +29,7 @@ test.describe('Legal y datos personales', () => {
     expect(data.profile.username).toBe(username);
     expect(data.profile.phone).toBe(phone);
     expect(data.termsVersion).toBe('2026-10');
-    expect(data.activity).toEqual({ messagesSent: 0, tasksCreated: 0, tasksAssigned: 0, ordersPlaced: 0 });
+    expect(data.activity).toEqual({ messagesSent: 0, ordersPlaced: 0 });
     expect(data).not.toHaveProperty('workspaces');
 
     await page.getByRole('button', { name: 'Eliminar mi cuenta' }).click();

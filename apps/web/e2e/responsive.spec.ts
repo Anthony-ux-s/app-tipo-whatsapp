@@ -12,10 +12,9 @@ test('en el celular la lista ocupa la pantalla y el chat se abre a pantalla comp
   await page.getByRole('button', { name: 'Volver a los chats' }).click();
   await expect(page.getByTestId('chat-list')).toBeVisible();
 
-  // Ajustes (y Tareas) se abren desde el avatar: la barra inferior es Chats, Servicios, Ofertas y Delivery
+  // Ajustes se abre desde el avatar: la barra inferior es Chats, Servicios, Ofertas y Delivery
   await page.getByRole('link', { name: 'Tu perfil y ajustes' }).click();
   await expect(page.getByRole('heading', { name: 'Ajustes' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Mis tareas' })).toBeVisible();
   // Cada sección abre su propia pantalla, sin la barra inferior, y se vuelve con la flecha
   await page.getByRole('link', { name: 'Perfil' }).click();
   await expect(page.getByRole('heading', { name: 'Perfil' })).toBeVisible();

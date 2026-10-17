@@ -1,6 +1,5 @@
-import type { Task } from '@parla/types';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import type { CallKind } from '@parla/types';
 import { useCallStore } from '@shared/stores/call.store';
 import { useChatStore } from '@shared/stores/chat.store';
@@ -10,8 +9,6 @@ import type { ChatMessage } from '@shared/types/chat.types';
 import { mediaFileName, saveFile } from '@shared/utils/download';
 import { errorMessage } from '@shared/utils/http';
 import { decryptedMediaUrl } from '@shared/utils/media-cache';
-import { isGroupAdmin, toTaskView } from '../../tasks/utils/task-view.utils';
-import type { TaskPrefill } from '../../tasks/types/tasks.types';
 import type { MessageActions } from '../types/message-actions.types';
 import { buildTimeline } from '../utils/message-timeline.utils';
 import { counterpart, headerSubtitle, typingLabel } from '../utils/conversation-preview.utils';
@@ -21,23 +18,19 @@ const NEAR_BOTTOM_PX = 160;
 export type SidePanel =
   | { type: 'info' }
   | { type: 'thread'; rootId: string }
-  | { type: 'tasks'; prefill: TaskPrefill | null }
   | null;
 
 /** Conversación abierta: carga, lectura, desplazamiento, paneles laterales y acciones de cada mensaje. */
 export function useConversation() {
   const { conversationId = '' } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const user = useSessionStore((s) => s.user)!;
   const conversation = useChatStore((s) => s.conversations[conversationId]);
   const listStatus = useChatStore((s) => s.listStatus);
   const thread = useChatStore((s) => s.threads[conversationId]);
   const texts = useChatStore((s) => s.texts);
-  const tasks = useChatStore((s) => s.tasks);
   const typing = useChatStore((s) => s.typing[conversationId]);
-  const { setActive, loadMessages, loadOlder, markRead, fetchConversation, retry, setReplyDraft, updateTask } =
-    useChatStore.getState();
+  const { setActive, loadMessages, loadOlder, markRead, fetchConversation, retry, setReplyDraft } = useChatStore.getState();
   const callBusy = useCallStore((s) => s.phase !== 'idle');
   const [panel, setPanel] = useState<SidePanel>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -57,13 +50,6 @@ export function useConversation() {
     stickToBottom.current = true;
     return () => setActive(null);
   }, [conversationId, setActive]);
-
-  // ?panel=tareas (desde "Mis tareas" o una notificación) abre el panel de tareas.
-  useEffect(() => {
-    if (searchParams.get('panel') !== 'tareas') return;
-    setPanel({ type: 'tasks', prefill: null });
-    setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!conversation || loadedFor.current === conversationId) return;
@@ -141,10 +127,6 @@ export function useConversation() {
       setMenuFor(null);
       setPanel({ type: 'thread', rootId });
     },
-    createTaskFrom: (message) => {
-      setMenuFor(null);
-      setPanel({ type: 'tasks', prefill: { title: textOf(message), sourceMessageId: message.id } });
-    },
     copyText: (message) => {
       setMenuFor(null);
       void navigator.clipboard
@@ -164,10 +146,6 @@ export function useConversation() {
       void url.then((u) => saveFile(u, fileName)).catch(() => toast('No se pudo descargar el archivo', 'error'));
     },
     retry: (clientId) => retry(clientId).catch((err) => toast(errorMessage(err), 'error')),
-    toggleTask: (task: Task) =>
-      updateTask(task, { status: task.status === 'done' ? 'open' : 'done' }).catch((err) => toast(errorMessage(err), 'error')),
-    openTasks: () => setPanel({ type: 'tasks', prefill: null }),
-    taskView: (task) => toTaskView(tasks[task.id] ?? task, conversation?.participants ?? [], texts, user.id, conversation ? isGroupAdmin(conversation, user.id) : false),
     person,
   };
 
@@ -193,7 +171,6 @@ export function useConversation() {
       if (conversation) void useCallStore.getState().startCall(conversation, kind, user.id);
     },
     openInfo: () => setPanel({ type: 'info' }),
-    openTasks: () => setPanel({ type: 'tasks', prefill: null }),
     closePanel: () => setPanel(null),
     closeImage: () => setLightbox(null),
     closeMenu: () => setMenuFor(null),

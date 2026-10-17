@@ -3,8 +3,8 @@ import { useSessionStore } from '@shared/stores/session.store';
 import { Avatar } from './Avatar';
 
 /**
- * Avatar del encabezado en el celular: abre el perfil y los ajustes (incluidas las tareas), que no
- * van en la barra inferior. En escritorio ya están en la barra lateral.
+ * Avatar del encabezado en el celular: abre el perfil y los ajustes, que no van en la barra
+ * inferior. En escritorio ya están en la barra lateral.
  */
 export function ProfileButton() {
   const user = useSessionStore((s) => s.user);

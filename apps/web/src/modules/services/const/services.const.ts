@@ -8,7 +8,9 @@ export const SERVICE_VISUALS: Record<ServiceId, { icon: LucideIcon; gradient: st
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending_payment: 'Esperando tu pago',
-  paid: 'Pago recibido',
+  paid: 'Esperando al negocio',
+  preparing: 'Preparando',
+  rejected: 'No aceptado',
   searching_driver: 'Buscando motorizado',
   on_the_way: 'En camino',
   delivered: 'Entregado',
@@ -19,6 +21,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 /** Pasos que ve el cliente, en orden. */
 export const ORDER_STEPS: { status: OrderStatus; label: string }[] = [
   { status: 'pending_payment', label: 'Pago' },
+  { status: 'preparing', label: 'Preparando' },
   { status: 'searching_driver', label: 'Motorizado' },
   { status: 'on_the_way', label: 'En camino' },
   { status: 'delivered', label: 'Entregado' },

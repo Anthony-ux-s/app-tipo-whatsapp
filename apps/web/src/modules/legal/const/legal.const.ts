@@ -12,8 +12,8 @@ export const TERMS: LegalDocument = {
     {
       heading: '1. El servicio',
       paragraphs: [
-        'Parla permite conversar con cualquier persona registrada en chats individuales y grupales, compartir archivos, hacer llamadas de voz y video, organizar tareas y usar servicios de terceros (por ahora, un mercado con delivery) sin salir de la app.',
-        'Los mensajes, archivos y títulos de tareas se cifran de extremo a extremo en tu dispositivo. Las llamadas viajan cifradas directamente entre los participantes.',
+        'Parla permite conversar con cualquier persona registrada en chats individuales y grupales, compartir archivos, hacer llamadas de voz y video y usar servicios de terceros (por ahora, un mercado con delivery) sin salir de la app.',
+        'Los mensajes y archivos se cifran de extremo a extremo en tu dispositivo. Las llamadas viajan cifradas directamente entre los participantes.',
       ],
     },
     {
@@ -69,8 +69,8 @@ export const PRIVACY: LegalDocument = {
         'Datos de cuenta: teléfono (verificado con un código por SMS), nombre, usuario si eliges uno, contraseña (solo guardamos un hash), correo de recuperación si lo agregas, foto de perfil e información que escribas en tu perfil. Tu foto la ven las personas con las que conversas.',
         'Contactos: si buscas a tus contactos, tu navegador envía solo los números que tú eliges para ver quiénes usan Parla. No los guardamos ni los usamos para nada más.',
         'Códigos de verificación: los SMS y correos con códigos los entrega OneSignal por encargo nuestro; solo recibe el número o correo y el texto del mensaje.',
-        'Datos técnicos: con quién conversas, fechas de los mensajes, estado de entrega, a quién mencionas y datos de las tareas (responsable, fecha, estado). Estos metadatos son necesarios para que el servicio funcione.',
-        'Lo que NO podemos leer: el contenido de tus mensajes, archivos, notas de voz, títulos de tareas y llamadas. Se cifran en tu dispositivo y solo los participantes tienen las claves.',
+        'Datos técnicos: con quién conversas, fechas de los mensajes, estado de entrega, y a quién mencionas. Estos metadatos son necesarios para que el servicio funcione.',
+        'Lo que NO podemos leer: el contenido de tus mensajes, archivos, notas de voz y llamadas. Se cifran en tu dispositivo y solo los participantes tienen las claves.',
         'Servicios: al hacer un pedido compartimos con la tienda los productos, con la empresa de delivery tu dirección y referencia, y con la billetera el monto a cobrar. Guardamos el pedido (productos, montos, dirección y estado) para tu historial; los datos de tu cuenta bancaria o billetera los maneja ella, nunca Parla.',
       ],
     },

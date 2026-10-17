@@ -2,10 +2,7 @@ import type {
   AddParticipantsRequest,
   CreateDirectConversationRequest,
   CreateGroupConversationRequest,
-  CreateTaskRequest,
   ReshareKeysRequest,
-  TaskStatus,
-  UpdateTaskRequest,
   EncryptedPayload,
   MediaAttachment,
   SendMessageRequest,
@@ -71,20 +68,6 @@ export class SendMessageDto implements SendMessageRequest {
   @IsOptional() @ValidateNested() @Type(() => MediaAttachmentDto) media: MediaAttachmentDto | null;
   @IsOptional() @IsString() @MaxLength(64) replyToId?: string | null;
   @IsOptional() @IsArray() @ArrayMaxSize(256) @IsString({ each: true }) mentions?: string[];
-}
-
-export class CreateTaskDto implements CreateTaskRequest {
-  @IsString() @IsNotEmpty() @MaxLength(64) clientId: string;
-  @ValidateNested() @Type(() => EncryptedPayloadDto) title: EncryptedPayloadDto;
-  @IsOptional() @IsString() assigneeId: string | null;
-  @IsOptional() @IsString() @MaxLength(10) dueDate: string | null;
-  @IsOptional() @IsString() sourceMessageId: string | null;
-}
-
-export class UpdateTaskDto implements UpdateTaskRequest {
-  @IsOptional() @IsIn(['open', 'done']) status?: TaskStatus;
-  @IsOptional() @IsString() assigneeId?: string | null;
-  @IsOptional() @IsString() @MaxLength(10) dueDate?: string | null;
 }
 
 export class MarkDeliveredDto {

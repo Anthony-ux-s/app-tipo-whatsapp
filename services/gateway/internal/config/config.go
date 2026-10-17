@@ -12,7 +12,7 @@ import (
 const devInternalToken = "parla-dev-internal-token"
 const devJWTSecret = "parla-dev-secret-cambiar-en-produccion"
 const devPagayaSecret = "pagaya-dev-secret"
-const devMotoyaSecret = "motoya-dev-secret"
+const devRapiditoSecret = "rapidito-dev-secret"
 
 type Config struct {
 	Production bool
@@ -30,9 +30,9 @@ type Config struct {
 	// ProvidersURL: sistemas externos (tienda, delivery, billetera); en desarrollo, los simuladores.
 	ProvidersURL string
 	// PublicURL: dirección pública del gateway, a la que los proveedores mandan sus avisos.
-	PublicURL    string
-	PagayaSecret string
-	MotoyaSecret string
+	PublicURL      string
+	PagayaSecret   string
+	RapiditoSecret string
 }
 
 func env(key, fallback string) string {
@@ -79,7 +79,7 @@ func Load() (Config, error) {
 		ProvidersURL:    strings.TrimRight(providers.String(), "/"),
 		PublicURL:       strings.TrimRight(public.String(), "/"),
 		PagayaSecret:    env("PAGAYA_WEBHOOK_SECRET", devPagayaSecret),
-		MotoyaSecret:    env("MOTOYA_WEBHOOK_SECRET", devMotoyaSecret),
+		RapiditoSecret:  env("RAPIDITO_WEBHOOK_SECRET", devRapiditoSecret),
 	}
 
 	if production {
@@ -92,8 +92,8 @@ func Load() (Config, error) {
 		if cfg.PagayaSecret == devPagayaSecret || len(cfg.PagayaSecret) < 24 {
 			return Config{}, errors.New("en producción PAGAYA_WEBHOOK_SECRET debe ser un secreto propio de al menos 24 caracteres")
 		}
-		if cfg.MotoyaSecret == devMotoyaSecret || len(cfg.MotoyaSecret) < 24 {
-			return Config{}, errors.New("en producción MOTOYA_WEBHOOK_SECRET debe ser un secreto propio de al menos 24 caracteres")
+		if cfg.RapiditoSecret == devRapiditoSecret || len(cfg.RapiditoSecret) < 24 {
+			return Config{}, errors.New("en producción RAPIDITO_WEBHOOK_SECRET debe ser un secreto propio de al menos 24 caracteres")
 		}
 	}
 	return cfg, nil

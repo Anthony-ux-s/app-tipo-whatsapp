@@ -12,11 +12,10 @@ import type {
   NewMessage,
   ReceiptChange,
 } from '../modules/platform/messaging/conversations/conversations.repository';
-import type { TaskRecord } from '../modules/platform/collaboration/tasks/task.record';
-import type { NewTask, TaskChanges, TasksRepository } from '../modules/platform/collaboration/tasks/tasks.repository';
 import type { PushResult, PushSender, PushTarget } from '../infra/push/push-sender.port';
 import type { PushSubscriptionsRepository, StoredSubscription } from '../modules/platform/messaging/push/push-subscriptions.repository';
-import type { PushPayload, TaskScope } from '@parla/types';
+import type { PushPayload } from '@parla/types';
+import type { BusinessesRepository, BusinessRecord } from '../modules/platform/services/businesses.repository';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
 import type { AppEnv } from '../config/env.validation';
 import type { VerificationSender } from '../infra/messaging/verification-sender.port';
@@ -103,7 +102,7 @@ export class InMemoryAuthRepository implements AuthRepository {
     Object.assign(user, { username: null, phone: null, displayName: 'Cuenta eliminada', about: '', passwordHash: '', deletedAt: at });
   }
   async exportData() {
-    return { conversations: [], messagesSent: 0, tasksCreated: 0, tasksAssigned: 0, ordersPlaced: 0 };
+    return { conversations: [], messagesSent: 0, ordersPlaced: 0 };
   }
 }
 
@@ -130,12 +129,9 @@ export class RecordingRealtime implements RealtimePublisher {
 }
 
 export class InMemoryConversationsRepository implements ConversationsRepository {
-  conversations: Omit<ConversationRecord, 'lastMessage' | 'unreadCount' | 'mentionCount' | 'openTaskCount'>[] = [];
+  conversations: Omit<ConversationRecord, 'lastMessage' | 'unreadCount' | 'mentionCount'>[] = [];
   messages: MessageRecord[] = [];
   files: { id: string; conversationId: string; uploaderId: string }[] = [];
-  /** Para que las tarjetas de tarea lleven su tarea (lo conecta la prueba). */
-  taskLookup?: (id: string) => TaskRecord | null;
-
   addConversation(id: string, users: UserRecord[], kind: 'direct' | 'group' = 'group') {
     this.conversations.push({
       id,
@@ -162,7 +158,7 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
   }
   async findForUser(conversationId: string, userId: string) {
     const c = this.conversations.find((x) => x.id === conversationId && x.participants.some((p) => p.user.id === userId));
-    return c ? { ...c, lastMessage: null, unreadCount: 0, mentionCount: 0, openTaskCount: 0 } : null;
+    return c ? { ...c, lastMessage: null, unreadCount: 0, mentionCount: 0 } : null;
   }
   async findIdByDirectKey() {
     return null;
@@ -196,7 +192,7 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
   async createMessage(input: NewMessage) {
     const existing = this.messages.find((m) => m.senderId === input.senderId && m.clientId === input.clientId);
     if (existing) return existing;
-    const { recipientIds, replyToId = null, mentions = [], taskId = null, ...data } = input;
+    const { recipientIds, replyToId = null, mentions = [], ...data } = input;
     const root = replyToId ? this.messages.find((m) => m.id === replyToId) : undefined;
     if (root) root.replyCount += 1;
     const message: MessageRecord = {
@@ -207,7 +203,6 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
       replyTo: root ? { id: root.id, senderId: root.senderId, kind: root.kind, ciphertext: root.ciphertext, iv: root.iv, clientId: root.clientId } : null,
       replyCount: 0,
       mentions,
-      task: taskId ? (this.taskLookup?.(taskId) ?? null) : null,
     };
     this.messages.push(message);
     return message;
@@ -247,39 +242,6 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
   }
 }
 
-export class InMemoryTasksRepository implements TasksRepository {
-  tasks: TaskRecord[] = [];
-  async create(input: NewTask) {
-    const task: TaskRecord = { ...input, id: nextId('t'), status: 'open', createdAt: new Date(), completedAt: null, completedById: null };
-    this.tasks.push(task);
-    return task;
-  }
-  async findById(id: string) {
-    return this.tasks.find((t) => t.id === id) ?? null;
-  }
-  async update(id: string, changes: TaskChanges) {
-    const task = this.tasks.find((t) => t.id === id)!;
-    Object.assign(task, changes);
-    return { ...task };
-  }
-  async delete(id: string) {
-    this.tasks = this.tasks.filter((t) => t.id !== id);
-  }
-  async listForConversation(conversationId: string) {
-    return this.tasks.filter((t) => t.conversationId === conversationId);
-  }
-  async listForUser(userId: string, scope: TaskScope) {
-    return this.tasks.filter(
-      (t) =>
-        scope === 'assigned'
-          ? t.assigneeId === userId && t.status === 'open'
-          : scope === 'created'
-            ? t.createdById === userId && t.status === 'open'
-            : t.status === 'done' && (t.assigneeId === userId || t.createdById === userId),
-    );
-  }
-}
-
 export class InMemoryPushSubscriptions implements PushSubscriptionsRepository {
   items: StoredSubscription[] = [];
   async save(sub: StoredSubscription) {
@@ -313,10 +275,23 @@ export class RecordingPushSender implements PushSender {
   }
 }
 
+export class InMemoryBusinessesRepository implements BusinessesRepository {
+  businesses: BusinessRecord[] = [];
+  async findByService(service: string) {
+    return this.businesses.find((b) => b.service === service) ?? null;
+  }
+  async findByOwner(ownerId: string) {
+    return this.businesses.find((b) => b.ownerId === ownerId) ?? null;
+  }
+}
+
 export class InMemoryOrdersRepository implements OrdersRepository {
   orders: OrderRecord[] = [];
-  async create(order: NewOrder) {
-    const record: OrderRecord = { ...order, delivery: null, createdAt: new Date(), updatedAt: new Date() };
+  constructor(private readonly businesses = new InMemoryBusinessesRepository()) {}
+  async create({ businessId, ...order }: NewOrder) {
+    const found = this.businesses.businesses.find((b) => b.id === businessId);
+    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId } : null;
+    const record: OrderRecord = { ...order, business, delivery: null, createdAt: new Date(), updatedAt: new Date() };
     this.orders.push(record);
     return { ...record };
   }
@@ -326,6 +301,10 @@ export class InMemoryOrdersRepository implements OrdersRepository {
   }
   async listForUser(userId: string, limit: number) {
     return this.orders.filter((o) => o.userId === userId).slice(0, limit);
+  }
+  async listForBusiness(businessId: string, limit: number) {
+    const hidden: OrderStatus[] = ['pending_payment', 'payment_expired'];
+    return this.orders.filter((o) => o.business?.id === businessId && !hidden.includes(o.status)).slice(0, limit);
   }
   async updateIfStatus(id: string, expected: OrderStatus, changes: OrderChanges) {
     const order = this.orders.find((o) => o.id === id);

@@ -49,7 +49,7 @@ export function ServicesHomeView() {
             [0, 1].map((i) => <div key={i} className="mx-auto size-12 animate-pulse rounded-2xl bg-surface-3" />)}
         </div>
         <p className="mt-4 border-t border-line pt-3 text-xs text-ink-soft">
-          <span className="font-semibold text-ink">Mercado:</span> tienda MercaYa · delivery MotoYa · pago con QR PagaYa
+          <span className="font-semibold text-ink">Mercado:</span> tienda MercaYa · delivery Rapidito · pago con QR PagaYa
         </p>
       </section>
 

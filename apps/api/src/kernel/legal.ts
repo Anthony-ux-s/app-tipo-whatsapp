@@ -17,5 +17,5 @@ export const DELETED_ACCOUNT = {
 } as const;
 
 export const EXPORT_NOTE =
-  'El contenido de tus mensajes, archivos y tareas está cifrado de extremo a extremo: el servidor no puede leerlo ' +
+  'El contenido de tus mensajes y archivos está cifrado de extremo a extremo: el servidor no puede leerlo ' +
   'y por eso no se incluye aquí. Puedes leerlo en la app mientras conserves tu cuenta.';

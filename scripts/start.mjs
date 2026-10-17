@@ -44,8 +44,10 @@ console.log(`
   Usuarios de prueba (contraseña: Parla2026!):
     laura              la más activa: grupos, tareas y pedidos
     andres             para chatear o llamar a Laura
+    tienda             Elena, dueña de Bodega MercaYa: acepta pedidos y llama a Rapidito
     camila             creó el grupo «Diseño tienda en línea»
     +57 300 123 4567   Sofía (entra con su teléfono)
-  Servicios → Mercado: busca «un kilo de azúcar, arroz», paga con el QR y sigue el delivery.
+  Servicios → Mercado: busca «un kilo de azúcar, arroz», paga con el QR; con «tienda» acéptalo en
+  Delivery → Mi negocio, llama a Rapidito y sigue el delivery.
   Ctrl + C para detener.
 `);

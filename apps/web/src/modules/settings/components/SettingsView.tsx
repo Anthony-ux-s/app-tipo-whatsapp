@@ -1,13 +1,13 @@
-import { ChevronRight, ExternalLink, ListChecks, Lock, LogOut } from 'lucide-react';
+import { ChevronRight, ExternalLink, Lock, LogOut } from 'lucide-react';
 import { Link } from 'react-router';
 import { Avatar } from '@shared/ui/Avatar';
 import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
-import { LEGAL_LINKS, SETTINGS_GROUPS, SETTINGS_SECTIONS } from '../const/settings.const';
+import { LEGAL_LINKS, SETTINGS_HOME_SECTIONS, SETTINGS_SECTIONS } from '../const/settings.const';
 import { useSettingsHome } from '../hooks/use-settings.hook';
 import { SettingsGroup, SettingsPage, SettingsRow } from './SettingsUi';
 
-/** Ajustes: tarjeta del perfil y secciones agrupadas; cada una abre su propia pantalla. */
+/** Ajustes: tarjeta del perfil y una lista de secciones; cada una abre su propia pantalla. */
 export function SettingsView() {
   const s = useSettingsHome();
   return (
@@ -28,20 +28,14 @@ export function SettingsView() {
         <ChevronRight className="size-5 shrink-0 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5" />
       </Link>
 
-      <SettingsGroup title="Tu actividad">
-        <SettingsRow to="/app/tareas" icon={ListChecks} title="Mis tareas" summary="Lo que te asignaron y lo que pediste en tus chats" />
+      <SettingsGroup>
+        {SETTINGS_HOME_SECTIONS.map((id) => {
+          const section = SETTINGS_SECTIONS[id];
+          return <SettingsRow key={id} to={id} icon={section.icon} title={section.title} summary={s.summaries[id] ?? section.summary} />;
+        })}
       </SettingsGroup>
 
-      {SETTINGS_GROUPS.map((group) => (
-        <SettingsGroup key={group.title} title={group.title}>
-          {group.sections.map((id) => {
-            const section = SETTINGS_SECTIONS[id];
-            return <SettingsRow key={id} to={id} icon={section.icon} title={section.title} summary={s.summaries[id] ?? section.summary} />;
-          })}
-        </SettingsGroup>
-      ))}
-
-      <SettingsGroup title="Legal">
+      <SettingsGroup>
         {LEGAL_LINKS.map((link) => (
           <Link key={link.to} to={link.to} className="flex items-center justify-between gap-4 px-4 py-3.5 text-[15px] font-medium text-ink transition-colors duration-200 hover:bg-surface-2 md:px-5">
             {link.label}

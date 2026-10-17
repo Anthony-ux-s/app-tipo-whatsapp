@@ -76,6 +76,8 @@ type OrderStatus string
 const (
 	PendingPayment  OrderStatus = "pending_payment"
 	Paid            OrderStatus = "paid"
+	Preparing       OrderStatus = "preparing"
+	Rejected        OrderStatus = "rejected"
 	SearchingDriver OrderStatus = "searching_driver"
 	OnTheWay        OrderStatus = "on_the_way"
 	Delivered       OrderStatus = "delivered"
@@ -142,4 +144,6 @@ type InternalOrder struct {
 	Order
 	UserID          string `json:"userId"`
 	DeliveryQuoteID string `json:"deliveryQuoteId"`
+	// BusinessOwnerID: dueño del negocio que atiende el pedido (null en pedidos sin negocio).
+	BusinessOwnerID *string `json:"businessOwnerId"`
 }

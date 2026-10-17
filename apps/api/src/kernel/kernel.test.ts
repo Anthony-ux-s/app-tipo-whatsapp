@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { aggregateDeliveryStatus, isForwardTransition } from './delivery-status';
 import { ConflictError, ValidationError } from './domain-error';
 import { assertPasswordStrength, parseIdentifier } from './identifier';
-import { assertOrderTotals, assertOrderTransition, formatSoles, orderPush } from './order-rules';
+import { assertOrderTotals, assertOrderTransition, businessOrderPush, formatSoles, orderPush } from './order-rules';
 
 const at = new Date('2026-10-01T10:00:00Z');
 
@@ -56,7 +56,11 @@ describe('pedidos de Servicios', () => {
 
   it('un pedido solo avanza: pagado no vuelve a pendiente y entregado es final', () => {
     expect(() => assertOrderTransition('pending_payment', 'paid')).not.toThrow();
-    expect(() => assertOrderTransition('paid', 'searching_driver')).not.toThrow();
+    expect(() => assertOrderTransition('paid', 'preparing')).not.toThrow();
+    expect(() => assertOrderTransition('paid', 'rejected')).not.toThrow();
+    expect(() => assertOrderTransition('preparing', 'searching_driver')).not.toThrow();
+    expect(() => assertOrderTransition('paid', 'searching_driver')).toThrow(ConflictError);
+    expect(() => assertOrderTransition('rejected', 'preparing')).toThrow(ConflictError);
     expect(() => assertOrderTransition('searching_driver', 'on_the_way')).not.toThrow();
     expect(() => assertOrderTransition('on_the_way', 'delivered')).not.toThrow();
     expect(() => assertOrderTransition('paid', 'pending_payment')).toThrow(ConflictError);
@@ -74,8 +78,14 @@ describe('pedidos de Servicios', () => {
 
   it('los avisos al cliente hablan en soles y enlazan al pedido', () => {
     expect(formatSoles(2070)).toBe('S/ 20.70');
-    expect(orderPush('ord_1', 'paid', 2070, null)).toMatchObject({ body: expect.stringContaining('S/ 20.70'), url: '/app/pedidos/ord_1' });
-    expect(orderPush('ord_1', 'on_the_way', 2070, 'Carlos')?.body).toBe('Carlos lleva tu pedido.');
-    expect(orderPush('ord_1', 'searching_driver', 2070, null)).toBeNull();
+    expect(orderPush('ord_1', 'paid', 2070, null, 'Bodega MercaYa')).toMatchObject({ body: expect.stringContaining('S/ 20.70'), url: '/app/pedidos/ord_1' });
+    expect(orderPush('ord_1', 'preparing', 2070, null, 'Bodega MercaYa')?.body).toContain('Bodega MercaYa aceptó');
+    expect(orderPush('ord_1', 'on_the_way', 2070, 'Carlos', null)?.body).toBe('Carlos lleva tu pedido.');
+    expect(orderPush('ord_1', 'pending_payment', 2070, null, null)).toBeNull();
+  });
+
+  it('al dueño solo le avisa el pedido pagado que debe aceptar', () => {
+    expect(businessOrderPush('ord_1', 'paid', 2070, 'Laura')).toMatchObject({ body: expect.stringContaining('Laura pagó S/ 20.70'), url: '/app/negocio/pedidos/ord_1' });
+    expect(businessOrderPush('ord_1', 'preparing', 2070, 'Laura')).toBeNull();
   });
 });

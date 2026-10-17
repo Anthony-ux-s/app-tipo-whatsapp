@@ -1,13 +1,11 @@
 import type { ConversationSummary, Message } from '@parla/types';
 import type { DecryptedText } from '@shared/types/chat.types';
-import { taskTextKey } from '@shared/utils/ids';
 
 const KIND_LABELS: Record<Message['kind'], string> = {
   text: 'Nuevo mensaje',
   image: '📷 Foto',
   audio: '🎤 Nota de voz',
   video: '🎬 Video',
-  task: '📋 Nueva tarea',
   system: 'Aviso',
 };
 
@@ -22,13 +20,13 @@ export function localNotificationFor(
   myId: string,
 ): { title: string; body: string; url: string; tag: string } {
   const sender = conversation.participants.find((p) => p.user.id === message.senderId)?.user.displayName ?? 'Alguien';
-  const decrypted = message.kind === 'task' && message.task ? texts[taskTextKey(message.task.id)] : texts[message.clientId];
+  const decrypted = texts[message.clientId];
   const content = decrypted?.ok && decrypted.text ? decrypted.text : KIND_LABELS[message.kind];
   const mentioned = message.mentions.includes(myId);
   const lead = mentioned ? `${sender} te mencionó: ` : conversation.kind === 'group' ? `${sender}: ` : '';
   return {
     title: conversation.kind === 'group' ? conversation.title : sender,
-    body: `${lead}${message.kind === 'task' ? `📋 ${content}` : content}`,
+    body: `${lead}${content}`,
     url: `/app/c/${conversation.id}`,
     tag: conversation.id,
   };

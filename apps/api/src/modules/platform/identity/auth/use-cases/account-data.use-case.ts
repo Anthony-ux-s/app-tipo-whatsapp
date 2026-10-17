@@ -35,8 +35,6 @@ export class ExportAccountUseCase {
       conversations: data.conversations.map((c) => ({ ...c, joinedAt: c.joinedAt.toISOString() })),
       activity: {
         messagesSent: data.messagesSent,
-        tasksCreated: data.tasksCreated,
-        tasksAssigned: data.tasksAssigned,
         ordersPlaced: data.ordersPlaced,
       },
       note: EXPORT_NOTE,

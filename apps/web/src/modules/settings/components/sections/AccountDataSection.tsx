@@ -14,7 +14,7 @@ export function AccountDataSection() {
       <SettingsGroup title="Copia de tus datos">
         <SettingsBlock>
           <p className="text-sm text-ink-soft">
-            Un archivo JSON con tu perfil, tus preferencias, los chats en los que participas y un resumen de tu actividad (mensajes, tareas y pedidos).
+            Un archivo JSON con tu perfil, tus preferencias, los chats en los que participas y un resumen de tu actividad (mensajes y pedidos).
           </p>
           <Button className="mt-4" variant="secondary" size="sm" icon={<Download className="size-4" />} loading={data.exporting} onClick={data.exportData}>
             Descargar mis datos

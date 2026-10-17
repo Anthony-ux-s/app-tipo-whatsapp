@@ -1,6 +1,6 @@
-// Package motoya traduce la API del delivery «MotoYa» (inglés, montos como texto decimal) a los
+// Package rapidito traduce la API del delivery «Rapidito» (inglés, montos como texto decimal) a los
 // contratos de Parla, incluidos sus avisos firmados.
-package motoya
+package rapidito
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 	"github.com/parla/gateway/internal/webhook"
 )
 
-const Provider = "MotoYa"
+const Provider = "Rapidito"
 
 var (
 	ErrInvalid       = errors.New("datos inválidos del delivery")
@@ -60,7 +60,7 @@ func parseAmount(s string) (int, error) {
 }
 
 func (c Client) Quote(ctx context.Context, address services.Address) (Quote, error) {
-	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/motoya/api/quotes", map[string]any{
+	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/rapidito/api/quotes", map[string]any{
 		"dropoff": map[string]string{"address": address.Line, "notes": address.Reference},
 	})
 	if err != nil {
@@ -90,7 +90,7 @@ func (c Client) Quote(ctx context.Context, address services.Address) (Quote, err
 
 // Dispatch pide el motorizado. La referencia (id del pedido) hace el pedido idempotente.
 func (c Client) Dispatch(ctx context.Context, quoteID, reference, callbackURL string) (string, error) {
-	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/motoya/api/deliveries", map[string]string{
+	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/rapidito/api/deliveries", map[string]string{
 		"quote_id": quoteID, "reference": reference, "callback_url": callbackURL,
 	})
 	if err != nil {
@@ -114,7 +114,7 @@ func (c Client) Dispatch(ctx context.Context, quoteID, reference, callbackURL st
 	return body.DeliveryID, nil
 }
 
-// Event es un aviso de MotoYa ya traducido.
+// Event es un aviso de Rapidito ya traducido.
 type Event struct {
 	DeliveryID string
 	Reference  string

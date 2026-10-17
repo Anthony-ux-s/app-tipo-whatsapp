@@ -1,12 +1,10 @@
-import type { Message, Task } from '@parla/types';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { assertValidDueDate, messagePush, sanitizeMentions, threadRootOf } from '../../../kernel/collaboration-rules';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../../kernel/domain-error';
+import { messagePush, sanitizeMentions, threadRootOf } from '../../../kernel/collaboration-rules';
+import { NotFoundError, ValidationError } from '../../../kernel/domain-error';
 import { PresenceRegistry } from '../../../infra/realtime/presence.registry';
 import {
   InMemoryConversationsRepository,
   InMemoryPushSubscriptions,
-  InMemoryTasksRepository,
   makeUser,
   RecordingPushSender,
   RecordingRealtime,
@@ -15,37 +13,28 @@ import { GetConversationUseCase } from '../messaging/conversations/use-cases/get
 import { GetThreadUseCase } from '../messaging/conversations/use-cases/get-thread.use-case';
 import { SendMessageUseCase } from '../messaging/conversations/use-cases/send-message.use-case';
 import { NotificationDispatcher } from '../messaging/push/use-cases/notification-dispatcher';
-import { CreateTaskUseCase } from './tasks/use-cases/create-task.use-case';
-import { ListMyTasksUseCase } from './tasks/use-cases/list-tasks.use-case';
-import { UpdateTaskUseCase } from './tasks/use-cases/update-task.use-case';
 
 const body = { ciphertext: 'Y2lmcmFkbw==', iv: 'aXY=' };
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
-describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
+describe('Fase 3: hilos, menciones y notificaciones push', () => {
   const laura = makeUser({ displayName: 'Laura Méndez' });
   const andres = makeUser({ displayName: 'Andrés Rojas' });
   const sofia = makeUser({ displayName: 'Sofía Ramírez' });
   const externo = makeUser({ displayName: 'Externo' });
 
   let repo: InMemoryConversationsRepository;
-  let tasksRepo: InMemoryTasksRepository;
   let realtime: RecordingRealtime;
   let presence: PresenceRegistry;
   let subs: InMemoryPushSubscriptions;
   let sender: RecordingPushSender;
   let send: SendMessageUseCase;
   let thread: GetThreadUseCase;
-  let createTask: CreateTaskUseCase;
-  let updateTask: UpdateTaskUseCase;
-  let myTasks: ListMyTasksUseCase;
 
   beforeEach(async () => {
     repo = new InMemoryConversationsRepository();
     repo.addConversation('c1', [laura, andres, sofia]);
     repo.addConversation('otro', [laura, externo]);
-    tasksRepo = new InMemoryTasksRepository();
-    repo.taskLookup = (id) => tasksRepo.tasks.find((t) => t.id === id) ?? null;
     realtime = new RecordingRealtime();
     presence = new PresenceRegistry();
     subs = new InMemoryPushSubscriptions();
@@ -57,9 +46,6 @@ describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
     const dispatcher = new NotificationDispatcher(subs, sender, presence);
     send = new SendMessageUseCase(repo, realtime, get, dispatcher);
     thread = new GetThreadUseCase(repo, get);
-    createTask = new CreateTaskUseCase(tasksRepo, repo, realtime, get, send, dispatcher);
-    updateTask = new UpdateTaskUseCase(tasksRepo, realtime, get, dispatcher);
-    myTasks = new ListMyTasksUseCase(tasksRepo);
   });
 
   describe('hilos de respuesta', () => {
@@ -138,71 +124,6 @@ describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
       await flush();
       expect(await subs.countForUser(andres.id)).toBe(0);
       expect(await subs.countForUser(sofia.id)).toBe(1);
-    });
-  });
-
-  describe('tareas asignables', () => {
-    const newTask = (extra: Partial<Parameters<CreateTaskUseCase['execute']>[2]> = {}) => ({
-      clientId: `t-${Math.random()}`,
-      title: body,
-      assigneeId: andres.id,
-      dueDate: '2026-12-15',
-      sourceMessageId: null,
-      ...extra,
-    });
-
-    it('crear una tarea publica su tarjeta en el chat, avisa a todos y notifica a la persona asignada', async () => {
-      const task = await createTask.execute(laura.id, 'c1', newTask());
-      await flush();
-      expect(task).toMatchObject({ status: 'open', assigneeId: andres.id, createdById: laura.id, dueDate: '2026-12-15' });
-
-      const card = realtime.events('message:new').at(-1)!.payload as Message;
-      expect(card).toMatchObject({ kind: 'task', mentions: [andres.id], body: null });
-      expect(card.task?.id).toBe(task.id);
-      expect((realtime.events('task:upsert')[0].payload as Task).id).toBe(task.id);
-      expect(sender.sent.map((s) => s.payload.body)).toEqual(['Laura Méndez te asignó una tarea']);
-    });
-
-    it('valida a quién se asigna, la fecha y el mensaje de origen', async () => {
-      await expect(createTask.execute(laura.id, 'c1', newTask({ assigneeId: externo.id }))).rejects.toThrow(ValidationError);
-      await expect(createTask.execute(laura.id, 'c1', newTask({ dueDate: '2026-02-30' }))).rejects.toThrow('La fecha límite no es válida');
-      await expect(createTask.execute(laura.id, 'c1', newTask({ sourceMessageId: 'no-existe' }))).rejects.toThrow(ValidationError);
-      await expect(createTask.execute(externo.id, 'c1', newTask())).rejects.toThrow(NotFoundError);
-      expect(tasksRepo.tasks).toHaveLength(0);
-    });
-
-    it('la persona asignada la completa y la reabre; se guarda quién y cuándo', async () => {
-      const task = await createTask.execute(laura.id, 'c1', newTask());
-      const done = await updateTask.execute(andres.id, 'c1', task.id, { status: 'done' });
-      expect(done.status).toBe('done');
-      expect(done.completedById).toBe(andres.id);
-      expect(done.completedAt).not.toBeNull();
-
-      const reopened = await updateTask.execute(andres.id, 'c1', task.id, { status: 'open' });
-      expect(reopened).toMatchObject({ status: 'open', completedAt: null, completedById: null });
-    });
-
-    it('otra persona del chat no puede cambiarla, pero quien administra el grupo sí', async () => {
-      const task = await createTask.execute(andres.id, 'c1', newTask({ assigneeId: andres.id }));
-      await expect(updateTask.execute(sofia.id, 'c1', task.id, { status: 'done' })).rejects.toThrow(ForbiddenError);
-      await expect(updateTask.execute(laura.id, 'c1', task.id, { assigneeId: sofia.id })).resolves.toMatchObject({ assigneeId: sofia.id });
-    });
-
-    it('"Mis tareas" separa asignadas, creadas y hechas', async () => {
-      const a = await createTask.execute(laura.id, 'c1', newTask({ assigneeId: andres.id }));
-      await createTask.execute(andres.id, 'c1', newTask({ assigneeId: sofia.id }));
-      await updateTask.execute(andres.id, 'c1', a.id, { status: 'done' });
-
-      expect(await myTasks.execute(andres.id, 'assigned')).toHaveLength(0);
-      expect(await myTasks.execute(andres.id, 'created')).toHaveLength(1);
-      expect((await myTasks.execute(andres.id, 'done')).map((t) => t.id)).toEqual([a.id]);
-      expect(await myTasks.execute(externo.id, 'assigned')).toEqual([]);
-    });
-
-    it('fechas límite válidas', () => {
-      expect(() => assertValidDueDate('2026-12-31')).not.toThrow();
-      expect(() => assertValidDueDate(null)).not.toThrow();
-      expect(() => assertValidDueDate('31/12/2026')).toThrow(ValidationError);
     });
   });
 });

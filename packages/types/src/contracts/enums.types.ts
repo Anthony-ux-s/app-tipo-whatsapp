@@ -5,10 +5,8 @@ export type ParticipantRole = 'admin' | 'member';
 
 export type ConversationKind = 'direct' | 'group';
 
-export type MessageKind = 'text' | 'image' | 'audio' | 'video' | 'task' | 'system';
+export type MessageKind = 'text' | 'image' | 'audio' | 'video' | 'system';
 
-/** Tarea abierta o hecha. */
-export type TaskStatus = 'open' | 'done';
 export const MEDIA_MESSAGE_KINDS: readonly MessageKind[] = ['image', 'audio', 'video'];
 
 /** Transiciones: sent → delivered → read (final). */

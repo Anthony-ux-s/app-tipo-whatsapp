@@ -59,16 +59,13 @@ export const SETTINGS_SECTIONS: Record<SettingsSectionId, SettingsSectionInfo> =
     id: 'notificaciones',
     title: 'Notificaciones',
     summary: 'Avisos push en este dispositivo',
-    description: 'Entérate de mensajes, menciones, tareas y llamadas aunque Parla esté cerrada.',
+    description: 'Entérate de mensajes, menciones y llamadas aunque Parla esté cerrada.',
     icon: Bell,
   },
 };
 
-/** Grupos de la pantalla principal de Ajustes, en orden. */
-export const SETTINGS_GROUPS: { title: string; sections: SettingsSectionId[] }[] = [
-  { title: 'Cuenta', sections: ['privacidad', 'datos'] },
-  { title: 'Preferencias', sections: ['apariencia', 'chats', 'notificaciones'] },
-];
+/** Secciones de la pantalla principal de Ajustes, en orden (una sola lista, sin títulos de grupo). */
+export const SETTINGS_HOME_SECTIONS: SettingsSectionId[] = ['privacidad', 'datos', 'apariencia', 'chats', 'notificaciones'];
 
 export const LEGAL_LINKS = [
   { to: '/legal/terminos', label: 'Términos y condiciones' },

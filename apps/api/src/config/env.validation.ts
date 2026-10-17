@@ -76,7 +76,8 @@ export function loadEnv(): AppEnv {
     production,
     port,
     webOrigin,
-    publicWebUrl: (env.PUBLIC_WEB_URL ?? webOrigin[0]).replace(/\/$/, ''),
+    // En el .env de ejemplo viene vacío: entonces vale el origen de la web.
+    publicWebUrl: (env.PUBLIC_WEB_URL || webOrigin[0]).replace(/\/$/, ''),
     jwtSecret: env.JWT_SECRET!,
     jwtExpiresIn: env.JWT_EXPIRES_IN ?? '7d',
     storageDir: resolve(process.cwd(), env.STORAGE_DIR ?? './storage'),

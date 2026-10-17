@@ -21,7 +21,7 @@ export function PrivacySection() {
     <>
       <SettingsGroup title="Cifrado">
         <Point icon={<Lock className="size-5" />} title="Cifrado de extremo a extremo">
-          Mensajes, fotos, notas de voz, tareas y llamadas solo los pueden leer o ver las personas del chat.
+          Mensajes, fotos, notas de voz y llamadas solo los pueden leer o ver las personas del chat.
         </Point>
         <Point icon={<KeyRound className="size-5" />} title="Tu clave vive en este dispositivo">
           En el servidor solo se guarda una copia cifrada con tu contraseña, para que puedas entrar desde otro equipo.

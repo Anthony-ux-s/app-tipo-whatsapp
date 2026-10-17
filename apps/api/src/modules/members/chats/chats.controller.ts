@@ -4,7 +4,6 @@ import {
   Get,
   HttpCode,
   Param,
-  Patch,
   Post,
   Query,
   StreamableFile,
@@ -12,10 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { ConversationSummary, Message, MessagePage, Task, ThreadPage, UploadedFile } from '@parla/types';
-import { CreateTaskUseCase } from '../../platform/collaboration/tasks/use-cases/create-task.use-case';
-import { ListConversationTasksUseCase } from '../../platform/collaboration/tasks/use-cases/list-tasks.use-case';
-import { UpdateTaskUseCase } from '../../platform/collaboration/tasks/use-cases/update-task.use-case';
+import type { ConversationSummary, Message, MessagePage, ThreadPage, UploadedFile } from '@parla/types';
 import { GetThreadUseCase } from '../../platform/messaging/conversations/use-cases/get-thread.use-case';
 import { CurrentUser, type AuthUser } from '../../../http/current-user.decorator';
 import { CreateDirectConversationUseCase } from '../../platform/messaging/conversations/use-cases/create-direct-conversation.use-case';
@@ -39,11 +35,9 @@ import {
   AddParticipantsDto,
   CreateDirectDto,
   CreateGroupDto,
-  CreateTaskDto,
   MarkDeliveredDto,
   ReshareKeysDto,
   SendMessageDto,
-  UpdateTaskDto,
 } from './dto/chats.dto';
 
 /** Puerta de los miembros al motor de mensajería. El dueño de cada acción sale del token. */
@@ -64,9 +58,6 @@ export class ChatsController {
     private readonly uploadMedia: UploadMediaUseCase,
     private readonly downloadMedia: DownloadMediaUseCase,
     private readonly getThread: GetThreadUseCase,
-    private readonly listTasks: ListConversationTasksUseCase,
-    private readonly createTask: CreateTaskUseCase,
-    private readonly updateTask: UpdateTaskUseCase,
   ) {}
 
   @Get()
@@ -118,26 +109,6 @@ export class ChatsController {
   @Get(':id/messages/:messageId/thread')
   thread(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('messageId') messageId: string): Promise<ThreadPage> {
     return this.getThread.execute(user.userId, id, messageId);
-  }
-
-  @Get(':id/tasks')
-  tasks(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<Task[]> {
-    return this.listTasks.execute(user.userId, id);
-  }
-
-  @Post(':id/tasks')
-  addTask(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: CreateTaskDto): Promise<Task> {
-    return this.createTask.execute(user.userId, id, body);
-  }
-
-  @Patch(':id/tasks/:taskId')
-  changeTask(
-    @CurrentUser() user: AuthUser,
-    @Param('id') id: string,
-    @Param('taskId') taskId: string,
-    @Body() body: UpdateTaskDto,
-  ): Promise<Task> {
-    return this.updateTask.execute(user.userId, id, taskId, body);
   }
 
   @Post(':id/messages')

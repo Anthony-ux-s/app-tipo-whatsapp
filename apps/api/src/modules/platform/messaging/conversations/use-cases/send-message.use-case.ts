@@ -10,7 +10,6 @@ import {
   CONVERSATIONS_REPOSITORY,
   type ConversationRecord,
   type ConversationsRepository,
-  type MessageRecord,
 } from '../conversations.repository';
 import { GetConversationUseCase } from './get-conversation.use-case';
 
@@ -70,13 +69,6 @@ export class SendMessageUseCase {
     void this.notifications.notify(recipients, (recipientId) =>
       messagePush(pushContextFor(conversation, userId, recipientId), message.kind, mentioned.has(recipientId)),
     );
-    return contract;
-  }
-
-  /** Publica un mensaje ya construido por otro motor (p. ej. la tarjeta de una tarea). */
-  async publish(conversation: ConversationRecord, message: MessageRecord, actorId: string): Promise<Message> {
-    const contract = toMessage(message, actorId);
-    this.realtime.toUsers(conversation.participants.map((p) => p.user.id), 'message:new', contract);
     return contract;
   }
 

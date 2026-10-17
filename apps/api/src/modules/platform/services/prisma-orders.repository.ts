@@ -1,14 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import type { Currency, OrderStatus, ServiceId } from '@parla/types';
-import type { Order as OrderRow } from '@prisma/client';
+import type { Business as BusinessRow, Order as OrderRow } from '@prisma/client';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from './orders.repository';
 
-function toOrderRecord(row: OrderRow): OrderRecord {
+type OrderWithBusiness = OrderRow & { business: BusinessRow | null };
+
+const WITH_BUSINESS = { business: true } as const;
+
+/** Pedidos que el negocio ve: todo menos los que aún esperan el pago o se vencieron sin pagar. */
+const VISIBLE_TO_BUSINESS: OrderStatus[] = ['paid', 'preparing', 'rejected', 'searching_driver', 'on_the_way', 'delivered', 'cancelled'];
+
+function toOrderRecord(row: OrderWithBusiness): OrderRecord {
   return {
     id: row.id,
     userId: row.userId,
     service: row.service as ServiceId,
+    business: row.business ? { id: row.business.id, name: row.business.name, ownerId: row.business.ownerId } : null,
     status: row.status as OrderStatus,
     lines: JSON.parse(row.lines),
     subtotalCents: row.subtotalCents,
@@ -36,17 +44,28 @@ export class PrismaOrdersRepository implements OrdersRepository {
         address: JSON.stringify(order.address),
         payment: JSON.stringify(order.payment),
       },
+      include: WITH_BUSINESS,
     });
     return toOrderRecord(row);
   }
 
   async findById(id: string): Promise<OrderRecord | null> {
-    const row = await this.prisma.order.findUnique({ where: { id } });
+    const row = await this.prisma.order.findUnique({ where: { id }, include: WITH_BUSINESS });
     return row ? toOrderRecord(row) : null;
   }
 
   async listForUser(userId: string, limit: number): Promise<OrderRecord[]> {
-    const rows = await this.prisma.order.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: limit });
+    const rows = await this.prisma.order.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: limit, include: WITH_BUSINESS });
+    return rows.map(toOrderRecord);
+  }
+
+  async listForBusiness(businessId: string, limit: number): Promise<OrderRecord[]> {
+    const rows = await this.prisma.order.findMany({
+      where: { businessId, status: { in: VISIBLE_TO_BUSINESS } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: WITH_BUSINESS,
+    });
     return rows.map(toOrderRecord);
   }
 

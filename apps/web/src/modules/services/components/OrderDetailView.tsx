@@ -1,16 +1,21 @@
-import { Bike, Check, ExternalLink, MapPin, PackageCheck, ShoppingBasket, Smartphone } from 'lucide-react';
+import { Bike, Check, ChefHat, ExternalLink, MapPin, MessageCircle, PackageCheck, ShoppingBasket, Smartphone, Store } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { QrCode } from '@shared/ui/QrCode';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { ORDER_STEPS } from '../const/services.const';
+import { useOrderChat } from '../hooks/use-order-chat.hook';
 import { useOrderDetail } from '../hooks/use-orders.hook';
 import { AmountRow, OrderStatusBadge, PageHeader, ServicePage } from './ServicesUi';
 
-/** Un pedido: QR para pagar mientras espera, y el seguimiento del delivery en vivo después. */
+/**
+ * Un pedido: QR para pagar mientras espera; luego el negocio lo acepta y lo prepara, y Rapidito lo
+ * lleva, todo en vivo. Desde aquí se le escribe al negocio.
+ */
 export function OrderDetailView() {
   const d = useOrderDetail();
   const order = d.order;
+  const chat = useOrderChat(order?.id);
 
   if (!order) {
     return (
@@ -21,7 +26,8 @@ export function OrderDetailView() {
     );
   }
 
-  const stopped = order.status === 'payment_expired' || order.status === 'cancelled';
+  const stopped = order.status === 'payment_expired' || order.status === 'cancelled' || order.status === 'rejected';
+  const businessName = order.business?.name ?? 'El negocio';
   return (
     <ServicePage>
       <PageHeader
@@ -32,7 +38,7 @@ export function OrderDetailView() {
       />
 
       {!stopped && (
-        <ol className="grid grid-cols-4 gap-1 rounded-2xl bg-surface p-4 shadow-float" aria-label="Seguimiento del pedido">
+        <ol className="grid grid-cols-5 gap-1 rounded-2xl bg-surface p-4 shadow-float" aria-label="Seguimiento del pedido">
           {ORDER_STEPS.map((step, index) => {
             const done = index < d.step || order.status === 'delivered';
             const current = index === d.step && order.status !== 'delivered';
@@ -71,7 +77,32 @@ export function OrderDetailView() {
           >
             <Smartphone className="size-4" /> Pagar desde este celular <ExternalLink className="size-4" />
           </a>
-          <p className="max-w-sm text-xs text-ink-faint">Apenas pagues, esta pantalla se actualiza sola y despachamos tu pedido.</p>
+          <p className="max-w-sm text-xs text-ink-faint">Apenas pagues, esta pantalla se actualiza sola y {businessName} recibe tu pedido.</p>
+        </section>
+      )}
+
+      {order.business && order.status !== 'pending_payment' && order.status !== 'payment_expired' && (
+        <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Negocio" data-testid="business-card">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+            {order.status === 'preparing' ? <ChefHat className="size-6" /> : <Store className="size-6" />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-ink">
+              {order.status === 'paid'
+                ? `${businessName} está revisando tu pedido`
+                : order.status === 'preparing'
+                  ? `${businessName} está preparando tu pedido`
+                  : order.status === 'rejected'
+                    ? `${businessName} no pudo aceptar tu pedido`
+                    : businessName}
+            </p>
+            <p className="text-sm text-ink-soft">
+              {order.status === 'paid' ? 'Te avisamos apenas lo acepte.' : order.status === 'preparing' ? 'Rapidito lo recogerá cuando esté listo.' : '¿Dudas sobre tu pedido? Escríbele.'}
+            </p>
+          </div>
+          <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={chat.open} loading={chat.opening} data-testid="chat-business">
+            Escribir
+          </Button>
         </section>
       )}
 
@@ -99,8 +130,17 @@ export function OrderDetailView() {
 
       {stopped && (
         <section className="rounded-2xl bg-surface p-5 text-center shadow-float">
-          <p className="font-bold text-ink">El cobro venció sin pagarse</p>
-          <p className="mt-1 text-sm text-ink-soft">No se te cobró nada. Puedes volver a hacer el pedido cuando quieras.</p>
+          {order.status === 'rejected' ? (
+            <>
+              <p className="font-bold text-ink">{businessName} no aceptó este pedido</p>
+              <p className="mt-1 text-sm text-ink-soft">Escríbele para coordinar la devolución de tu pago o arma otro pedido.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-bold text-ink">El cobro venció sin pagarse</p>
+              <p className="mt-1 text-sm text-ink-soft">No se te cobró nada. Puedes volver a hacer el pedido cuando quieras.</p>
+            </>
+          )}
           <Button className="mt-4" icon={<ShoppingBasket className="size-4" />} onClick={d.shopAgain}>
             Volver al Mercado
           </Button>

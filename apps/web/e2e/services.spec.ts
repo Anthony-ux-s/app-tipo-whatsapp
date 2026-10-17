@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { openSession } from './helpers';
+import { openSession, unique } from './helpers';
 
 const soles = (text: string | null) => Math.round(Number((text ?? '').replace(/[^\d.]/g, '')) * 100);
 
-test.describe('Servicios: mercado, pago con QR y delivery', () => {
-  test('Laura pide azúcar y arroz, el total suma productos + delivery, paga con el QR y sigue el delivery hasta la puerta', async ({ browser }) => {
-    test.setTimeout(150_000);
+test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito', () => {
+  test('Laura paga con QR, la tienda acepta y le escribe, Laura responde, y Rapidito lo entrega', async ({ browser }) => {
+    test.setTimeout(200_000);
     const laura = await openSession(browser, 'laura');
     const page = laura.page;
 
@@ -59,12 +59,49 @@ test.describe('Servicios: mercado, pago con QR y delivery', () => {
     await expect(wallet.getByText('Pago realizado')).toBeVisible();
     await wallet.close();
 
-    // Sin recargar: el pago llega por webhook al gateway, que despacha el delivery; Parla avisa en vivo
-    await expect(page.getByTestId('order-status')).toHaveAttribute('data-status', /searching_driver|on_the_way|delivered/, { timeout: 20_000 });
-    await expect(page.getByTestId('delivery-card')).toBeVisible();
-    await expect(page.getByTestId('order-status')).toHaveAttribute('data-status', 'on_the_way', { timeout: 30_000 }).catch(() => undefined);
-    await expect(page.getByTestId('order-status')).toHaveAttribute('data-status', 'delivered', { timeout: 40_000 });
+    // Sin recargar: el pago llega por webhook al gateway y el pedido pasa al negocio
+    await expect(page.getByTestId('order-status')).toHaveAttribute('data-status', 'paid', { timeout: 20_000 });
+    await expect(page.getByTestId('business-card')).toContainText('Bodega MercaYa está revisando tu pedido');
+
+    // Elena, dueña de la tienda, lo ve en «Mi negocio» y lo acepta
+    const elena = await openSession(browser, 'tienda');
+    await elena.page.goto('/app/pedidos');
+    await elena.page.getByTestId('my-business').click();
+    await expect(elena.page.getByRole('heading', { name: 'Mi negocio' })).toBeVisible();
+    await elena.page.getByTestId('business-order-item').filter({ hasText: 'Laura Méndez' }).first().click();
+    await expect(elena.page.getByRole('region', { name: 'Productos' }).getByText(`2× ${sugarName}`)).toBeVisible();
+    await elena.page.getByTestId('accept-order').click();
+    await expect(elena.page.getByTestId('order-status')).toHaveAttribute('data-status', 'preparing');
+    await expect(page.getByTestId('order-status')).toHaveAttribute('data-status', 'preparing', { timeout: 15_000 });
+    const elenaOrderUrl = elena.page.url();
+
+    // Chat del pedido en los dos sentidos: Elena le escribe a Laura y Laura le responde desde su pedido
+    const question = unique('¿El arroz puede ser de otra marca?');
+    const answer = unique('Sí, no hay problema');
+    await elena.page.getByTestId('chat-customer').click();
+    await expect(elena.page.getByTestId('conversation-title')).toHaveText('Laura Méndez');
+    await elena.page.getByLabel('Escribe un mensaje').fill(question);
+    await elena.page.getByLabel('Escribe un mensaje').press('Enter');
+    const orderUrl = page.url();
+    await page.getByTestId('chat-business').click();
+    await expect(page.getByTestId('conversation-title')).toHaveText('Elena Condori');
+    await expect(page.getByTestId('message').filter({ hasText: question })).toBeVisible({ timeout: 15_000 });
+    await page.getByLabel('Escribe un mensaje').fill(answer);
+    await page.getByLabel('Escribe un mensaje').press('Enter');
+    await expect(elena.page.getByTestId('message').filter({ hasText: answer })).toBeVisible({ timeout: 15_000 });
+
+    // Listo: Elena llama a Rapidito y Laura sigue el delivery hasta la puerta
+    await elena.page.goto(elenaOrderUrl);
+    await elena.page.getByTestId('ready-order').click();
+    await expect(elena.page.getByTestId('order-status')).toHaveAttribute('data-status', /searching_driver|on_the_way|delivered/);
+    await page.goto(orderUrl);
+    await expect(page.getByTestId('delivery-card')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('delivery-card')).toContainText('Rapidito');
+    await expect(page.getByTestId('order-status')).toHaveAttribute('data-status', 'delivered', { timeout: 60_000 });
     await expect(page.getByTestId('delivery-card')).toContainText(/¡Entregado( por .+)?!/);
+    await expect(elena.page.getByTestId('order-status')).toHaveAttribute('data-status', 'delivered', { timeout: 15_000 });
+    expect(elena.consoleErrors).toEqual([]);
+    await elena.context.close();
 
     // Queda en «Mis pedidos»
     await page.goto('/app/pedidos');

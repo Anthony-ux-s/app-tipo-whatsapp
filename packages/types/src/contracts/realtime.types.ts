@@ -1,18 +1,19 @@
 import type { DeliveryStatus, PresenceStatus } from './enums.types';
 import type { CallAck, CallEndReason, CallInfo, CallStartRequest, SignalData } from './calls.types';
-import type { ConversationSummary, Message, Task } from './messaging.types';
+import type { ConversationSummary, Message } from './messaging.types';
 import type { PublicUser } from './identity.types';
-import type { Order } from './services.types';
+import type { BusinessOrder, Order } from './services.types';
 
 /** Eventos que el servidor emite por el socket. */
 export interface ServerToClientEvents {
   'message:new': (message: Message) => void;
   'message:replies': (payload: { conversationId: string; messageId: string; replyCount: number }) => void;
-  'task:upsert': (task: Task) => void;
   'message:status': (update: MessageStatusUpdate) => void;
   'conversation:upsert': (conversation: ConversationSummary) => void;
   /** Un pedido de Servicios cambió de estado (pagado, en camino, entregado…). */
   'order:updated': (order: Order) => void;
+  /** Al dueño del negocio: llegó un pedido pagado o cambió uno de los suyos. */
+  'business-order:updated': (order: BusinessOrder) => void;
   /** Alguien cambió su foto, nombre o usuario: los demás actualizan su vista. */
   'profile:updated': (user: PublicUser) => void;
   typing: (payload: TypingPayload) => void;

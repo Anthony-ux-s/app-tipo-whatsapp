@@ -12,7 +12,7 @@ export function MarketView() {
     <ServicePage
       footer={<CartBar count={m.count} estimateCents={m.estimate} onOpen={m.goToCart} />}
     >
-      <PageHeader title="Mercado" subtitle="Tienda MercaYa · delivery MotoYa · pago con QR" onBack={m.back} />
+      <PageHeader title="Mercado" subtitle="Tienda MercaYa · delivery Rapidito · pago con QR" onBack={m.back} />
 
       <form onSubmit={m.search} className="flex flex-col gap-2" role="search">
         <label className="relative flex items-center">

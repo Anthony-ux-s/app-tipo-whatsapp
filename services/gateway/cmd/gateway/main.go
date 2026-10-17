@@ -23,8 +23,8 @@ import (
 	"github.com/parla/gateway/internal/realtime"
 	"github.com/parla/gateway/internal/translators/chat"
 	"github.com/parla/gateway/internal/translators/mercaya"
-	"github.com/parla/gateway/internal/translators/motoya"
 	"github.com/parla/gateway/internal/translators/pagaya"
+	"github.com/parla/gateway/internal/translators/rapidito"
 )
 
 func main() {
@@ -59,13 +59,13 @@ func main() {
 	servicesAPI := &orders.HTTP{
 		Orch: &orders.Orchestrator{
 			Commerce:  mercaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
-			Delivery:  motoya.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
+			Delivery:  rapidito.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
 			Payments:  pagaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
 			Core:      orders.HTTPCore{BaseURL: cfg.CoreURL, Token: cfg.InternalToken, HTTP: client},
 			PublicURL: cfg.PublicURL,
 		},
-		PagayaSecret: cfg.PagayaSecret,
-		MotoyaSecret: cfg.MotoyaSecret,
+		PagayaSecret:   cfg.PagayaSecret,
+		RapiditoSecret: cfg.RapiditoSecret,
 	}
 
 	server := &http.Server{

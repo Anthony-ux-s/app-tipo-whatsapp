@@ -1,4 +1,4 @@
-import { AtSign, Camera, ListChecks, Mic, Video } from 'lucide-react';
+import { AtSign, Camera, Mic, Video } from 'lucide-react';
 import { Avatar } from '@shared/ui/Avatar';
 import type { ChatListEntry } from '../types/chats.types';
 import { DeliveryTicks } from './DeliveryTicks';
@@ -13,7 +13,6 @@ const MEDIA_ICON = {
   image: <Camera className="size-4 shrink-0" />,
   audio: <Mic className="size-4 shrink-0" />,
   video: <Video className="size-4 shrink-0" />,
-  task: <ListChecks className="size-4 shrink-0" />,
 };
 
 export function ChatListItem({ entry, active, onOpen }: ChatListItemProps) {

@@ -94,7 +94,7 @@ export interface AccountExport {
   termsVersion: string | null;
   termsAcceptedAt: string | null;
   conversations: { title: string; kind: string; joinedAt: string }[];
-  activity: { messagesSent: number; tasksCreated: number; tasksAssigned: number; ordersPlaced: number };
+  activity: { messagesSent: number; ordersPlaced: number };
   note: string;
 }
 

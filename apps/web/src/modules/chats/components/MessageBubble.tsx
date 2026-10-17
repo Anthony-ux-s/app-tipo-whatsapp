@@ -1,6 +1,5 @@
 import type { ConversationSummary } from '@parla/types';
-import { ChevronDown, Copy, Download, ListPlus, Lock, MessageSquareReply, MessagesSquare, Reply, RotateCcw } from 'lucide-react';
-import { TaskCard } from '@shared/ui/TaskCard';
+import { ChevronDown, Copy, Download, Lock, MessageSquareReply, MessagesSquare, Reply, RotateCcw } from 'lucide-react';
 import type { ChatMessage, DecryptedText } from '@shared/types/chat.types';
 import { formatTime } from '@shared/utils/date';
 import { pluralize } from '@shared/utils/text';
@@ -61,9 +60,8 @@ export function MessageBubble({
   const caption = text?.ok ? text.text : '';
   const mentionsMe = !outgoing && message.mentions.includes(myId);
   const mentioned = message.mentions.map((id) => ({ id, displayName: conversation.participants.find((p) => p.user.id === id)?.user.displayName ?? '' }));
-  const canAct = !message.local && message.kind !== 'task';
+  const canAct = !message.local;
   const tail = firstOfRun ? (outgoing ? 'rounded-tr-[4px]' : 'rounded-tl-[4px]') : '';
-  const taskView = message.task ? actions.taskView(message.task) : null;
 
   return (
     <div className={`group flex px-3 md:px-[6%] ${outgoing ? 'justify-end' : 'justify-start'} ${firstOfRun ? 'mt-2' : 'mt-0.5'} ${lastOfRun ? 'mb-0.5' : ''}`}>
@@ -94,9 +92,6 @@ export function MessageBubble({
                 <MessagesSquare className="size-4 text-ink-soft" /> Responder en hilo
               </button>
             )}
-            <button role="menuitem" type="button" className={menuItem} onClick={() => actions.createTaskFrom(message)}>
-              <ListPlus className="size-4 text-ink-soft" /> Convertir en tarea
-            </button>
             {isMedia && (
               <button role="menuitem" type="button" className={menuItem} onClick={() => actions.download(message)}>
                 <Download className="size-4 text-ink-soft" /> Descargar
@@ -110,7 +105,7 @@ export function MessageBubble({
           </div>
         )}
 
-        {showSender && firstOfRun && !outgoing && message.kind !== 'task' && (
+        {showSender && firstOfRun && !outgoing && (
           <p className={`pr-6 text-[13px] font-semibold ${NAME_COLORS[sender.color] ?? NAME_COLORS.teal} ${isMedia ? 'px-2 pt-1 pb-1' : ''}`}>{sender.name}</p>
         )}
 
@@ -121,22 +116,6 @@ export function MessageBubble({
               author={actions.person(message.replyTo.senderId)}
               text={texts[message.replyTo.clientId]}
               onOpen={() => actions.openThread(message.replyTo!.id)}
-            />
-          </div>
-        )}
-
-        {message.kind === 'task' && taskView && (
-          <div className="pr-5">
-            <p className="mb-1 text-xs font-semibold text-ink-soft">📋 {outgoing ? 'Creaste una tarea' : `${sender.name} creó una tarea`}</p>
-            <TaskCard
-              variant="bubble"
-              title={taskView.title}
-              done={taskView.done}
-              assignee={taskView.assignee}
-              due={taskView.due}
-              canToggle={taskView.canToggle}
-              onToggle={() => actions.toggleTask(taskView.task)}
-              onOpen={actions.openTasks}
             />
           </div>
         )}

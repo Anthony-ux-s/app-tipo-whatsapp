@@ -85,18 +85,15 @@ navegador, nunca en el servidor.
   colores de marca ajenos; los errores se muestran con ícono y texto en tonos oscuros.
 - **Tema oscuro**: incluido como preferencia del usuario, con los mismos tokens de color.
 - **Roles**: ya no hay roles de espacio (ver «Super-app» al final). Todos chatean como iguales; en
-  un grupo, quien lo crea lo administra (agrega personas y puede gestionar cualquier tarea del grupo).
+  un grupo, quien lo crea lo administra (agrega personas).
 - **Estados de un mensaje**: `sent` → `delivered` → `read`. En grupos el estado visible es el
   mínimo entre todos los destinatarios (se guarda un recibo por destinatario).
 - **Historial**: sin límite de días (la crítica a Slack); se pagina por cursor de 40 en 40.
 
-## Fase 3: tareas, hilos, menciones y notificaciones
+## Fase 3: hilos, menciones y notificaciones
 
-- **Tareas** viven en el motor `modules/platform/collaboration/tasks` (las usan todos los participantes
-  como iguales) y entran por la puerta de cada miembro (`/chats/:id/tasks` y `/tasks`). El título se
-  cifra con la clave de la conversación; fecha límite, responsable y estado van en claro porque el
-  servidor los necesita para filtrar y avisar. Cada tarea se publica también como un mensaje
-  `kind = task` para que quede en la historia del chat.
+- **Tareas**: se retiraron por completo (web, core, base de datos y pruebas). La app se enfoca en
+  chats y servicios (mercado, ofertas y delivery).
 - **Hilos**: un mensaje guarda `replyToId` apuntando siempre a la raíz (hilos de un solo nivel, como
   Slack). La misma respuesta se ve en el chat con la cita y en el panel del hilo.
 - **Menciones**: como el texto va cifrado, el navegador envía aparte la lista de ids mencionados. El
@@ -156,9 +153,9 @@ suma el delivery y el costo de los productos.
 | Administración de grupos | Quien crea el grupo lo administra | Igual que WhatsApp, sin tabla nueva: `createdById` ya existía. |
 | Quién orquesta un pedido | El **gateway (Go)**, en `internal/orders` | El gateway ya era el orquestador central. Hablar con tres sistemas externos y coordinarlos es justo su trabajo; el core no necesita conocer a ningún proveedor. |
 | Dónde se guardan los pedidos | En el **core** (tabla `Order`), vía `/api/internal/orders` | Una sola base de datos, el historial junto a la cuenta (exportar, eliminar), y los avisos al cliente salen por el mismo camino que los mensajes (core → Elixir). |
-| Traductores por proveedor | `mercaya`, `motoya` y `pagaya` en `internal/translators` | Cada API externa tiene su formato (español con céntimos, inglés con montos en texto, soles con decimales). El traductor lo convierte a contratos limpios en céntimos. Cambiar de proveedor real = escribir un traductor nuevo. |
+| Traductores por proveedor | `mercaya`, `rapidito` y `pagaya` en `internal/translators` | Cada API externa tiene su formato (español con céntimos, inglés con montos en texto, soles con decimales). El traductor lo convierte a contratos limpios en céntimos. Cambiar de proveedor real = escribir un traductor nuevo. |
 | Precios | El gateway **recotiza siempre con la tienda** (al cotizar y al crear); el core **verifica** que los montos cuadren | El navegador solo manda productos y cantidades: no puede bajar un precio. Defensa en profundidad. |
-| Avisos de pago y delivery | Webhooks a `/hooks/pagaya` y `/hooks/motoya` con **firma HMAC-SHA256** (comparación en tiempo constante) | Es como notifican Yape/Niubiz/Culqi y las empresas de delivery reales. Sin firma válida → 401. |
+| Avisos de pago y delivery | Webhooks a `/hooks/pagaya` y `/hooks/rapidito` con **firma HMAC-SHA256** (comparación en tiempo constante) | Es como notifican Yape/Niubiz/Culqi y las empresas de delivery reales. Sin firma válida → 401. |
 | Idempotencia | Transiciones con `expectStatus` (comparar y cambiar atómico) y estados que **nunca retroceden** | Los proveedores reintentan los avisos. Un pago repetido no despacha dos motos, y un aviso viejo no «desentrega» un pedido. |
 | Moneda | **Soles (PEN), montos en céntimos enteros** | Yape es peruano; enteros evitan errores de redondeo al sumar. |
 | Proveedores | **Simuladores locales** en `services/providers` (Go, sin dependencias) con formatos distintos entre sí | La regla del proyecto es no usar servicios pagos ni credenciales reales. Los simuladores reproducen lo difícil de verdad: formatos ajenos, firmas, reintentos, vencimiento del cobro y avance del delivery. |
