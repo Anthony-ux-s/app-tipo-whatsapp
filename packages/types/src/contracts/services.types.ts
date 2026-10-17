@@ -477,6 +477,8 @@ export interface InternalUpdateOrder {
   paidAt?: string;
   /** Pago devuelto (al cancelar o rechazar un pedido pagado). */
   refundedAt?: string;
+  /** Id del pago en la pasarela al confirmarse (en Mercado Pago no es el del checkout). */
+  chargeId?: string;
   delivery?: OrderDelivery;
   /** Detalle para la línea de tiempo (p. ej. «Cancelado por el cliente · pago devuelto»). */
   note?: string;

@@ -100,6 +100,7 @@ class UpdateOrderDto implements InternalUpdateOrder {
   @IsIn(ORDER_STATUSES) status: OrderStatus;
   @IsOptional() @IsISO8601() paidAt?: string;
   @IsOptional() @IsISO8601() refundedAt?: string;
+  @IsOptional() @IsString() @MaxLength(80) chargeId?: string;
   @IsOptional() @ValidateNested() @Type(() => DeliveryDto) delivery?: DeliveryDto;
   @IsOptional() @IsString() @MaxLength(200) note?: string;
 }

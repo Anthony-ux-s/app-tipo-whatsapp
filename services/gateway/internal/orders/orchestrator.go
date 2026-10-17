@@ -19,9 +19,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/parla/gateway/internal/payments"
 	"github.com/parla/gateway/internal/services"
 	"github.com/parla/gateway/internal/translators/mercaya"
-	"github.com/parla/gateway/internal/translators/pagaya"
 	"github.com/parla/gateway/internal/translators/rapidito"
 )
 
@@ -51,8 +51,8 @@ type Delivery interface {
 
 // Payments: lo que necesita de la billetera.
 type Payments interface {
-	CreateCharge(ctx context.Context, req pagaya.ChargeRequest) (pagaya.Charge, error)
-	// Cancel anula un cobro sin pagar (pagaya.ErrAlreadyPaid si ya se pagó).
+	CreateCharge(ctx context.Context, req payments.ChargeRequest) (payments.Charge, error)
+	// Cancel anula un cobro sin pagar (payments.ErrAlreadyPaid si ya se pagó).
 	Cancel(ctx context.Context, chargeID string) error
 	// Refund devuelve un cobro pagado; repetirlo no duplica la devolución.
 	Refund(ctx context.Context, chargeID string) (time.Time, error)
@@ -312,7 +312,7 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 		concept += " − cupón " + q.Coupon.Code
 		couponCode = q.Coupon.Code
 	}
-	charge, err := o.Payments.CreateCharge(ctx, pagaya.ChargeRequest{
+	charge, err := o.Payments.CreateCharge(ctx, payments.ChargeRequest{
 		AmountCents: q.TotalCents,
 		Concept:     concept,
 		Reference:   id,
@@ -330,7 +330,7 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 		DiscountCents: q.DiscountCents, CouponCode: couponCode,
 		Address: req.Address,
 		Payment: services.OrderPayment{
-			Provider: pagaya.Provider, ChargeID: charge.ID, QRText: charge.QRText, PayURL: charge.PayURL,
+			Provider: charge.Provider, ChargeID: charge.ID, QRText: charge.QRText, PayURL: charge.PayURL,
 			ExpiresAt: charge.ExpiresAt.UTC().Format(time.RFC3339),
 		},
 		DeliveryQuoteID: delivery.ID,
@@ -340,7 +340,7 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 		// Sin pedido en el core nadie lo seguiría: se anula el cobro (para que el QR no se pueda pagar) y
 		// se devuelve el stock. Si justo lo pagaron, el aviso de pago de un pedido desconocido lo devuelve.
 		slog.Error("no se pudo guardar el pedido en el core; se deshace", "pedido", id, "error", err)
-		if err := o.Payments.Cancel(ctx, charge.ID); err != nil && !errors.Is(err, pagaya.ErrAlreadyPaid) {
+		if err := o.Payments.Cancel(ctx, charge.ID); err != nil && !errors.Is(err, payments.ErrAlreadyPaid) {
 			slog.Error("no se pudo anular el cobro de un pedido fallido", "pedido", id, "cobro", charge.ID, "error", err)
 		}
 		o.release(ctx, id)
@@ -359,7 +359,7 @@ func (o *Orchestrator) release(ctx context.Context, orderID string) {
 
 // PaymentEvent aplica un aviso de la billetera: pagado → queda esperando al negocio; vencido → lo marca.
 // Es idempotente: los avisos repetidos no cambian nada.
-func (o *Orchestrator) PaymentEvent(ctx context.Context, ev pagaya.Event) error {
+func (o *Orchestrator) PaymentEvent(ctx context.Context, ev payments.Event) error {
 	order, err := o.Core.GetOrder(ctx, ev.Reference)
 	if errors.Is(err, ErrNotFound) {
 		// Un pedido que no llegó a guardarse (el core falló al crearlo): si igual lo pagaron, se devuelve.
@@ -395,9 +395,10 @@ func (o *Orchestrator) PaymentEvent(ctx context.Context, ev pagaya.Event) error 
 	}
 	// Pagó después de que se canceló o rechazó (o mientras se cancelaba): se le devuelve.
 	if (order.Status == services.Cancelled || order.Status == services.Rejected) && order.Payment.RefundedAt == nil {
-		chargeID := order.Payment.ChargeID
+		// El id del pago que llegó en el aviso es el que se devuelve (el del pedido puede ser el del checkout).
+		chargeID := ev.ChargeID
 		if chargeID == "" {
-			chargeID = ev.ChargeID
+			chargeID = order.Payment.ChargeID
 		}
 		refundedAt, err := o.Payments.Refund(ctx, chargeID)
 		if err != nil {
@@ -407,7 +408,7 @@ func (o *Orchestrator) PaymentEvent(ctx context.Context, ev pagaya.Event) error 
 		}
 		_, err = o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{
 			ExpectStatus: order.Status, Status: order.Status,
-			PaidAt: paidAt.UTC().Format(time.RFC3339), RefundedAt: refundedAt.UTC().Format(time.RFC3339),
+			PaidAt: paidAt.UTC().Format(time.RFC3339), RefundedAt: refundedAt.UTC().Format(time.RFC3339), ChargeID: chargeID,
 			Note: "Pago recibido tras cancelar · devuelto",
 		})
 		if errors.Is(err, ErrConflict) {
@@ -418,9 +419,11 @@ func (o *Orchestrator) PaymentEvent(ctx context.Context, ev pagaya.Event) error 
 	if order.Status != services.PendingPayment {
 		return nil
 	}
-	_, err = o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{
-		ExpectStatus: services.PendingPayment, Status: services.Paid, PaidAt: paidAt.UTC().Format(time.RFC3339),
-	})
+	update := services.InternalUpdateOrder{ExpectStatus: services.PendingPayment, Status: services.Paid, PaidAt: paidAt.UTC().Format(time.RFC3339)}
+	if ev.ChargeID != "" && ev.ChargeID != order.Payment.ChargeID {
+		update.ChargeID = ev.ChargeID
+	}
+	_, err = o.Core.UpdateOrder(ctx, order.ID, update)
 	if errors.Is(err, ErrConflict) {
 		return nil
 	}
@@ -536,7 +539,7 @@ func (o *Orchestrator) close(ctx context.Context, userID, orderID string, c canc
 			update.Note = "Cancelado por soporte"
 		}
 		err := o.Payments.Cancel(ctx, order.Payment.ChargeID)
-		if errors.Is(err, pagaya.ErrAlreadyPaid) {
+		if errors.Is(err, payments.ErrAlreadyPaid) {
 			err = o.refund(ctx, order, &update)
 			update.Note = c.note
 		}

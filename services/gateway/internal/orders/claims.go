@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/parla/gateway/internal/payments"
 	"github.com/parla/gateway/internal/services"
-	"github.com/parla/gateway/internal/translators/pagaya"
 )
 
 const maxClaimRefundCents = 1_000_000
@@ -60,8 +60,8 @@ func (o *Orchestrator) RefundClaim(ctx context.Context, adminUserID, claimID str
 
 	refundID, err := o.Refunds.RefundPartial(ctx, reservation.ChargeID, reservation.RefundRef, reservation.AmountCents)
 	if err != nil {
-		exceeds := errors.Is(err, pagaya.ErrExceedsCharge)
-		failure := "PagaYa no responde"
+		exceeds := errors.Is(err, payments.ErrExceedsCharge)
+		failure := "La pasarela de pagos no responde"
 		if exceeds {
 			failure = "La devolución supera lo cobrado"
 		}
@@ -72,7 +72,7 @@ func (o *Orchestrator) RefundClaim(ctx context.Context, adminUserID, claimID str
 		if exceeds {
 			return nil, &Error{Status: http.StatusConflict, Code: "conflict", Message: "El monto supera lo que queda por devolver de este pedido."}
 		}
-		return nil, &Error{Status: http.StatusBadGateway, Code: "bad_gateway", Message: "PagaYa no responde. El reclamo sigue abierto; vuelve a intentarlo."}
+		return nil, &Error{Status: http.StatusBadGateway, Code: "bad_gateway", Message: "La pasarela de pagos no responde. El reclamo sigue abierto; vuelve a intentarlo."}
 	}
 
 	claim, err := o.Claims.SettleClaimRefund(ctx, claimID, services.ClaimRefundSettle{Status: "refunded", ProviderRefundID: refundID})

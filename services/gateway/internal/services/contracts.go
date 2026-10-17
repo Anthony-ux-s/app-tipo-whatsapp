@@ -197,11 +197,13 @@ type InternalCreateOrder struct {
 }
 
 type InternalUpdateOrder struct {
-	ExpectStatus OrderStatus    `json:"expectStatus,omitempty"`
-	Status       OrderStatus    `json:"status"`
-	PaidAt       string         `json:"paidAt,omitempty"`
-	RefundedAt   string         `json:"refundedAt,omitempty"`
-	Delivery     *OrderDelivery `json:"delivery,omitempty"`
+	ExpectStatus OrderStatus `json:"expectStatus,omitempty"`
+	Status       OrderStatus `json:"status"`
+	PaidAt       string      `json:"paidAt,omitempty"`
+	RefundedAt   string      `json:"refundedAt,omitempty"`
+	// ChargeID: el id del pago en la pasarela al confirmarse (en Mercado Pago no es el del checkout).
+	ChargeID string         `json:"chargeId,omitempty"`
+	Delivery *OrderDelivery `json:"delivery,omitempty"`
 	// Note: detalle para la línea de tiempo del pedido (p. ej. «Cancelado por el cliente · pago devuelto»).
 	Note string `json:"note,omitempty"`
 }

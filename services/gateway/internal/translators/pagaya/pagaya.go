@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/parla/gateway/internal/payments"
 	"github.com/parla/gateway/internal/services"
 	"github.com/parla/gateway/internal/translators/providerapi"
 	"github.com/parla/gateway/internal/webhook"
@@ -18,15 +19,14 @@ import (
 
 const Provider = "PagaYa"
 
+// Los errores y tipos de cobro son los de cualquier pasarela (paquete payments).
 var (
-	ErrInvalid       = errors.New("datos inválidos de la billetera")
-	ErrUnknownStatus = errors.New("estado de cobro desconocido")
-	// ErrAlreadyPaid: se quiso anular un cobro que la persona ya pagó (hay que devolverlo).
-	ErrAlreadyPaid = errors.New("el cobro ya se pagó")
+	ErrInvalid       = payments.ErrInvalid
+	ErrUnknownStatus = payments.ErrUnknownStatus
+	ErrAlreadyPaid   = payments.ErrAlreadyPaid
+	ErrExceedsCharge = payments.ErrExceedsCharge
 	// ErrInvalidDestination: el número de billetera al que se quiso transferir no es válido.
 	ErrInvalidDestination = errors.New("destino de la transferencia inválido")
-	// ErrExceedsCharge: la devolución parcial pasa lo que queda del cobro.
-	ErrExceedsCharge = errors.New("la devolución supera lo cobrado")
 )
 
 // DevAPIKey: clave de la API de transferencias del simulador fuera de producción.
@@ -39,21 +39,11 @@ type Client struct {
 	APIKey string
 }
 
-// ChargeRequest: lo que Parla cobra.
-type ChargeRequest struct {
-	AmountCents int
-	Concept     string
-	Reference   string
-	NotifyURL   string
-}
-
-// Charge: el cobro creado, listo para mostrar como QR.
-type Charge struct {
-	ID        string
-	QRText    string
-	PayURL    string
-	ExpiresAt time.Time
-}
+type (
+	ChargeRequest = payments.ChargeRequest
+	Charge        = payments.Charge
+	Event         = payments.Event
+)
 
 // soles serializa céntimos como número decimal exacto (2340 → 23.40) sin redondeos de float.
 type soles int
@@ -86,7 +76,7 @@ func (c Client) CreateCharge(ctx context.Context, req ChargeRequest) (Charge, er
 	if err != nil || !services.ValidID.MatchString(body.ID) || body.QRTexto == "" || len(body.QRTexto) > 2048 || !httpURL(body.URLPago) {
 		return Charge{}, fmt.Errorf("%w: cobro %+v", ErrInvalid, body)
 	}
-	return Charge{ID: body.ID, QRText: body.QRTexto, PayURL: body.URLPago, ExpiresAt: expires}, nil
+	return Charge{ID: body.ID, Provider: Provider, QRText: body.QRTexto, PayURL: body.URLPago, ExpiresAt: expires}, nil
 }
 
 // Cancel anula un cobro sin pagar: ya no se puede pagar. Repetirlo no cambia nada; si la persona
@@ -189,15 +179,6 @@ func (c Client) Transfer(ctx context.Context, reference, destination string, amo
 func httpURL(raw string) bool {
 	u, err := url.Parse(raw)
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
-}
-
-// Event es un aviso de PagaYa ya traducido.
-type Event struct {
-	ChargeID  string
-	Reference string
-	// Status es Paid o PaymentExpired.
-	Status services.OrderStatus
-	PaidAt *time.Time
 }
 
 // ParseWebhook verifica la firma y traduce el aviso.

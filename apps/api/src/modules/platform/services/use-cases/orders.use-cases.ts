@@ -301,11 +301,12 @@ export class UpdateOrderUseCase {
     assertOrderTransition(order.status, input.status);
 
     const changes: OrderChanges = { status: input.status, note: input.note };
-    if (input.paidAt || input.refundedAt) {
+    if (input.paidAt || input.refundedAt || input.chargeId) {
       changes.payment = {
         ...order.payment,
         ...(input.paidAt ? { paidAt: input.paidAt } : {}),
         ...(input.refundedAt ? { refundedAt: input.refundedAt } : {}),
+        ...(input.chargeId ? { chargeId: input.chargeId } : {}),
       };
     }
     if (input.delivery) changes.delivery = input.delivery;
