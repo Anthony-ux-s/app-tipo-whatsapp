@@ -43,12 +43,12 @@ interface SeedUser {
 
 const USERS: SeedUser[] = [
   { key: 'laura', username: 'laura', phone: '+573104567890', displayName: 'Laura Méndez', about: 'Coordinadora de operaciones ☕', avatarColor: 'teal' },
-  { key: 'andres', username: 'andres', phone: null, displayName: 'Andrés Rojas', about: 'Logística y despachos', avatarColor: 'emerald' },
-  { key: 'camila', username: 'camila', phone: null, displayName: 'Camila Torres', about: 'Diseño de marca · Proyecto Faro', avatarColor: 'cyan' },
-  { key: 'diego', username: 'diego', phone: null, displayName: 'Diego Herrera', about: 'Ventas Bogotá', avatarColor: 'teal-dark' },
+  { key: 'andres', username: 'andres', phone: '+573005550101', displayName: 'Andrés Rojas', about: 'Logística y despachos', avatarColor: 'emerald' },
+  { key: 'camila', username: 'camila', phone: '+573005550102', displayName: 'Camila Torres', about: 'Diseño de marca · Proyecto Faro', avatarColor: 'cyan' },
+  { key: 'diego', username: 'diego', phone: '+573005550103', displayName: 'Diego Herrera', about: 'Ventas Bogotá', avatarColor: 'teal-dark' },
   { key: 'sofia', username: null, phone: '+573001234567', displayName: 'Sofía Ramírez', about: 'Atención al cliente', avatarColor: 'emerald-dark' },
-  { key: 'mateo', username: 'mateo', phone: null, displayName: 'Mateo Gómez', about: 'Finanzas', avatarColor: 'cyan-dark' },
-  { key: 'valentina', username: 'valentina', phone: null, displayName: 'Valentina Castro', about: 'Calidad y tostión', avatarColor: 'emerald' },
+  { key: 'mateo', username: 'mateo', phone: '+573005550104', displayName: 'Mateo Gómez', about: 'Finanzas', avatarColor: 'cyan-dark' },
+  { key: 'valentina', username: 'valentina', phone: '+573005550105', displayName: 'Valentina Castro', about: 'Calidad y tostión', avatarColor: 'emerald' },
 ];
 
 type Media = { kind: 'image' | 'audio'; file: 'packaging' | 'route' | 'wireframe' | 'voice' };
@@ -238,13 +238,17 @@ async function main(): Promise<void> {
 
   console.log('Creando usuarios y sus claves de cifrado…');
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
-  const people = new Map<string, { id: string; privateKey: CryptoKey; publicKey: CryptoKey; displayName: string }>();
+  const people = new Map<string, { id: string; privateKey: CryptoKey; publicKey: CryptoKey; publicKeyJwk: string; displayName: string }>();
   for (const u of USERS) {
     const pair = await generateIdentityKeyPair();
     const row = await prisma.user.create({
       data: {
         username: u.username,
         phone: u.phone,
+        phoneVerifiedAt: u.phone ? new Date(Date.now() - 30 * 24 * 3600_000) : null,
+        // Laura ya agregó su correo: puede restablecer la contraseña desde «¿Olvidaste tu contraseña?».
+        email: u.key === 'laura' ? 'laura@example.com' : null,
+        emailVerifiedAt: u.key === 'laura' ? new Date(Date.now() - 29 * 24 * 3600_000) : null,
         displayName: u.displayName,
         about: u.about,
         avatarColor: u.avatarColor,
@@ -263,6 +267,7 @@ async function main(): Promise<void> {
       displayName: u.displayName,
       privateKey: await importPrivateKey(pair.privateKeyJwk),
       publicKey: await importPublicKey(pair.publicKeyJwk),
+      publicKeyJwk: pair.publicKeyJwk,
     });
   }
   const person = (key: string) => people.get(key)!;
@@ -275,7 +280,7 @@ async function main(): Promise<void> {
     const participants = await Promise.all(
       conv.members.map(async (m) => {
         const wrapped = await wrapConversationKey(key, creator.privateKey, person(m).publicKey);
-        return { userId: person(m).id, wrappedKey: wrapped.wrappedKey, keyIv: wrapped.iv, wrappedById: creator.id, joinedAt: firstAt };
+        return { userId: person(m).id, wrappedKey: wrapped.wrappedKey, keyIv: wrapped.iv, wrappedById: creator.id, wrapperPublicKey: creator.publicKeyJwk, joinedAt: firstAt };
       }),
     );
     const ids = conv.members.map((m) => person(m).id).sort();

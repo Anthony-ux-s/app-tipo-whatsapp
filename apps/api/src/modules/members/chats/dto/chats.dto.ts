@@ -3,6 +3,7 @@ import type {
   CreateDirectConversationRequest,
   CreateGroupConversationRequest,
   CreateTaskRequest,
+  ReshareKeysRequest,
   TaskStatus,
   UpdateTaskRequest,
   EncryptedPayload,
@@ -88,4 +89,8 @@ export class UpdateTaskDto implements UpdateTaskRequest {
 
 export class MarkDeliveredDto {
   @IsArray() @ArrayMaxSize(500) @IsString({ each: true }) messageIds: string[];
+}
+
+export class ReshareKeysDto implements ReshareKeysRequest {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(256) @ValidateNested({ each: true }) @Type(() => WrappedKeyDto) keys: WrappedKeyDto[];
 }

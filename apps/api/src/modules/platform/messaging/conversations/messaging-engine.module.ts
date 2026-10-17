@@ -13,6 +13,7 @@ import { ListMessagesUseCase } from './use-cases/list-messages.use-case';
 import { AddParticipantsUseCase, LeaveConversationUseCase } from './use-cases/manage-participants.use-case';
 import { DownloadMediaUseCase, UploadMediaUseCase } from './use-cases/media.use-case';
 import { MarkDeliveredUseCase, MarkReadUseCase } from './use-cases/receipts.use-case';
+import { ReshareKeysUseCase } from './use-cases/reshare-keys.use-case';
 import { SendMessageUseCase } from './use-cases/send-message.use-case';
 
 const USE_CASES = [
@@ -22,6 +23,7 @@ const USE_CASES = [
   CreateGroupConversationUseCase,
   AddParticipantsUseCase,
   LeaveConversationUseCase,
+  ReshareKeysUseCase,
   ListMessagesUseCase,
   GetThreadUseCase,
   SendMessageUseCase,
@@ -39,6 +41,6 @@ const USE_CASES = [
     ConversationEvents,
     ...USE_CASES,
   ],
-  exports: [CONVERSATIONS_REPOSITORY, ...USE_CASES],
+  exports: [CONVERSATIONS_REPOSITORY, ConversationEvents, ...USE_CASES],
 })
 export class MessagingEngineModule {}

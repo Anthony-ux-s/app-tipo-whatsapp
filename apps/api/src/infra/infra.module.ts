@@ -6,6 +6,9 @@ import { JwtTokenService } from './identity/jwt-token-service.adapter';
 import { PASSWORD_HASHER } from './identity/password-hasher.port';
 import { TOKEN_SERVICE } from './identity/token-service.port';
 import { PrismaService } from './prisma/prisma.service';
+import { DevConsoleSender } from './messaging/dev-console-sender.adapter';
+import { OneSignalSender } from './messaging/onesignal-sender.adapter';
+import { VERIFICATION_SENDER } from './messaging/verification-sender.port';
 import { PUSH_SENDER } from './push/push-sender.port';
 import { WebPushSender } from './push/web-push-sender.adapter';
 import { PresenceRegistry } from './realtime/presence.registry';
@@ -30,6 +33,8 @@ const env = loadEnv();
     // El tiempo real vive en el servicio de Elixir (services/realtime).
     { provide: REALTIME_PUBLISHER, useClass: ElixirRealtimePublisher },
     { provide: PUSH_SENDER, useClass: WebPushSender },
+    // Códigos por SMS y correo: OneSignal, o el modo de prueba en desarrollo sin credenciales.
+    { provide: VERIFICATION_SENDER, useClass: env.oneSignal ? OneSignalSender : DevConsoleSender },
   ],
   exports: [
     APP_ENV,
@@ -40,6 +45,7 @@ const env = loadEnv();
     FILE_STORAGE,
     REALTIME_PUBLISHER,
     PUSH_SENDER,
+    VERIFICATION_SENDER,
   ],
 })
 export class InfraModule {}

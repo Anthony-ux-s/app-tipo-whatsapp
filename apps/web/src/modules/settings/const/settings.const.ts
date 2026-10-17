@@ -23,7 +23,7 @@ export const SETTINGS_SECTIONS: Record<SettingsSectionId, SettingsSectionInfo> =
   perfil: {
     id: 'perfil',
     title: 'Perfil',
-    summary: 'Nombre, info. y color de tu avatar',
+    summary: 'Foto, nombre, usuario y correo de recuperación',
     description: 'Así te ven tus contactos en los chats y al buscarte en Parla.',
     icon: UserRound,
   },

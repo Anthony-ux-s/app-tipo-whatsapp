@@ -23,7 +23,7 @@ export function ConversationHeader({ conversation, subtitle, typing, online, tas
         <ArrowLeft className="size-5" />
       </IconButton>
       <button type="button" onClick={onOpenInfo} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1 pr-2 text-left">
-        <Avatar name={conversation.title} color={conversation.avatarColor} group={conversation.kind === 'group'} online={online} size="sm" />
+        <Avatar name={conversation.title} color={conversation.avatarColor} photo={conversation.avatarUrl} group={conversation.kind === 'group'} online={online} size="sm" />
         <span className="min-w-0">
           <span className="block truncate font-display text-base font-bold text-ink" data-testid="conversation-title">
             {conversation.title}

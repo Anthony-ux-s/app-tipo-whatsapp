@@ -45,6 +45,7 @@ Otros comandos:
 
 | Comando | Para qué |
 | --- | --- |
+| — | Sin `ONESIGNAL_APP_ID`/`ONESIGNAL_API_KEY` los códigos salen en pantalla (solo en desarrollo; en producción el core no arranca sin OneSignal). |
 | `npm run dev` | Igual que `start` pero con el core en modo *watch* (sin recargar datos). |
 | `npm run start:prod` | **Producción**: compila todo y el gateway sirve web, API, tiempo real y avisos en http://localhost:4100. |
 | `npm test` | Pruebas unitarias: cifrado, casos de uso del core y utilidades de la web. |
@@ -63,6 +64,14 @@ Contraseña para todos: **`Parla2026!`**
 | `andres` | Andrés Rojas | Para chatear o llamar a Laura |
 | `camila` | Camila Torres | Creó (y administra) el grupo «Diseño tienda en línea» |
 | `+57 300 123 4567` | Sofía Ramírez | Entra con su **teléfono** |
+
+Todas las cuentas de ejemplo tienen el teléfono verificado (Andrés `+57 300 555 0101`, Camila `…0102`,
+Diego `…0103`, Mateo `…0104`, Valentina `…0105` y Laura `+57 310 456 7890`). Laura además tiene
+correo de recuperación (`laura@example.com`).
+
+**Registro nuevo**: en `/registro` escribes tu número y llega un código por SMS. Sin OneSignal
+configurado, el código aparece en pantalla como «modo de prueba» y en la consola del core. Luego
+pones tu nombre, un usuario opcional y la contraseña.
 | `diego`, `mateo`, `valentina` | Resto de contactos | |
 
 - **Llamada**: entra con `laura` en una ventana y con `andres` en otra (o en una ventana privada) y
@@ -94,8 +103,29 @@ Contraseña para todos: **`Parla2026!`**
 - **Mis pedidos**: historial con el estado de cada uno.
 - **Salud**: aparece como «Próximamente». La arquitectura ya permite sumarlo con su propio traductor.
 
-**Autenticación y perfil**
-- Registro con **teléfono o nombre de usuario** y contraseña; inicio de sesión con cualquiera de los dos.
+**Registro con el teléfono verificado (como WhatsApp)**
+- **Paso 1:** tu número, con el país. Te llega un **código de 6 cifras por SMS con OneSignal**.
+- **Paso 2:** escribes el código. En Android con Chrome se completa solo (WebOTP).
+  - El código vence en 10 minutos y admite 5 intentos.
+  - Puedes pedir uno nuevo cada minuto, hasta 5 por hora.
+- **Paso 3:** nombre, **usuario opcional** y contraseña.
+  - El usuario se pone o se cambia después en *Ajustes*.
+  - La contraseña protege tus claves de cifrado.
+- **Bienvenida** (todo opcional):
+  - **foto de perfil**, recortada y sin datos de ubicación;
+  - **correo de recuperación**, verificado con un código;
+  - **tus contactos del teléfono**: ves quiénes ya están en Parla para escribirles, e invitas a los demás.
+- **Contactos** también en *Nuevo chat → Contactos*:
+  - en Chrome para Android se leen de la libreta (Contact Picker API);
+  - en otros navegadores se escriben o se pegan los números;
+  - los números no se guardan.
+- **¿Olvidaste tu contraseña?** Llega un código al correo verificado y pones una contraseña nueva.
+  - Como la clave de cifrado dependía de la contraseña anterior, se crean claves nuevas.
+  - Tus contactos ven «X restableció su cuenta» y deciden si te vuelven a **compartir el chat**;
+    cuando lo hacen, recuperas el historial.
+
+**Perfil**
+- Inicio de sesión con teléfono o usuario y contraseña.
 - Aceptación de términos y política de privacidad (Ley 1581 / LGPD) con versión y fecha registradas.
 - **Ajustes** ordenados al estilo WhatsApp: tarjeta del perfil y secciones (Privacidad, Tus datos,
   Apariencia, Chats, Notificaciones), cada una en su propia pantalla.
@@ -196,13 +226,13 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 
 ## Pruebas
 
-- **Unitarias (Vitest, 86)**:
+- **Unitarias (Vitest, 95)**:
   - cifrado E2E (7);
-  - core (52): estados de entrega, permisos, inicio de sesión, hilos, menciones, tareas (administra el
+  - core (60): **registro con código por SMS** (envío sin código en claro, modo de prueba solo en desarrollo, reenvíos, intentos, vencimiento, comprobante de un solo uso), usuario opcional, correo verificado, foto solo JPEG, contactos con indicativo propio, **recuperación por correo** sin revelar cuentas y volver a compartir la clave del chat; estados de entrega, permisos, inicio de sesión, hilos, menciones, tareas (administra el
     grupo quien lo creó), push, puente con el tiempo real, datos personales, y **pedidos**: montos que
     cuadran, transiciones que nunca retroceden, aviso de pago repetido sin efecto, cada quien ve solo
     sus pedidos, push en cada etapa;
-  - web (27): incluye entender «un kilo de azúcar, arroz» como dos búsquedas.
+  - web (28): países e indicativos; incluye entender «un kilo de azúcar, arroz» como dos búsquedas.
 - **Gateway (Go, 36)**:
   - JWT, límite de peticiones y traductor del chat;
   - traductores de tienda, delivery y billetera: respuestas inválidas, firmas válidas y falsificadas;
@@ -211,11 +241,12 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
   - rutas sin sesión → 401.
 - **Simuladores (Go, 11)**: búsqueda, stock, cobros con vencimiento, pago idempotente y avisos firmados.
 - **Tiempo real (Elixir, 17)**: llamadas y el enlace con el gateway.
-- **Punta a punta (Playwright, 16 recorridos, navegador real, con los cinco procesos)**:
+- **Punta a punta (Playwright, 17 recorridos, navegador real, con los cinco procesos)**:
   - chat cifrado, fotos y notas de voz;
   - videollamada real por WebRTC y llamada rechazada;
   - menciones, hilos, tareas y push;
-  - una persona nueva encuentra a Laura en el directorio y conversan;
+  - **registro con código por SMS**, foto, correo verificado y **contactos del teléfono** (libreta simulada): encuentra a Laura y conversan;
+  - **recupera la cuenta con el correo**: claves nuevas, chat bloqueado hasta que Andrés se lo vuelve a compartir, y lee de nuevo el historial;
   - **compra completa**: busca, carrito, total, QR, pago en PagaYa y delivery hasta «Entregado», en vivo;
   - el gateway rechaza precios manipulados;
   - legal, exportar y eliminar la cuenta;
@@ -223,6 +254,11 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 
 ## Qué falta
 
+- **OneSignal real**: el adaptador sigue la API de mensajes (canales SMS y correo), pero no se
+  probó con una cuenta de verdad, porque necesita credenciales y un número emisor de Twilio (con
+  costo). Se configura con `ONESIGNAL_APP_ID`, `ONESIGNAL_API_KEY` y `ONESIGNAL_SMS_FROM`.
+- **Contactos en iPhone y escritorio**: esos navegadores no permiten leer la libreta, así que ahí se
+  escriben los números. Una app nativa (o la PWA empaquetada) podría leer la libreta completa.
 - **Proveedores reales**: la tienda, el delivery y la billetera son simuladores. Para salir al aire
   hay que firmar con proveedores reales (p. ej. un supermercado con API, Rappi/PedidosYa/flota propia,
   Yape Empresas/Niubiz/Culqi) y escribir su traductor en el gateway. El resto no cambia.

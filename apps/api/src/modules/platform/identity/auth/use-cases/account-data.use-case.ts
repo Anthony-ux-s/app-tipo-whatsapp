@@ -5,6 +5,7 @@ import { EXPORT_NOTE } from '../../../../../kernel/legal';
 import { PASSWORD_HASHER, type PasswordHasher } from '../../../../../infra/identity/password-hasher.port';
 import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../../infra/realtime/realtime-publisher.port';
 import { AUTH_REPOSITORY, type AuthRepository } from '../auth.repository';
+import { avatarUrlOf } from '../../user.mapper';
 
 /** Derecho de acceso y portabilidad: copia de los datos personales de la cuenta. */
 @Injectable()
@@ -24,6 +25,7 @@ export class ExportAccountUseCase {
         displayName: user.displayName,
         about: user.about,
         avatarColor: user.avatarColor,
+        avatarUrl: avatarUrlOf(user),
         lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
         createdAt: user.createdAt.toISOString(),
       },

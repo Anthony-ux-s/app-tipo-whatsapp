@@ -15,7 +15,7 @@ export function ChatListPanel() {
     <section className="flex min-h-0 flex-1 flex-col bg-surface" aria-label="Chats">
       <header className="flex items-center gap-2 px-3 pt-3 pb-2 md:px-4">
         <Link to="/app/ajustes/perfil" aria-label="Tu perfil" className="rounded-full md:hidden">
-          <Avatar name={list.user.displayName} color={list.user.avatarColor} size="sm" />
+          <Avatar name={list.user.displayName} color={list.user.avatarColor} photo={list.user.avatarUrl} size="sm" />
         </Link>
         <h1 className="min-w-0 flex-1 truncate px-1 font-display text-2xl font-extrabold text-ink">Chats</h1>
         <IconButton label="Nuevo grupo" onClick={() => list.openNewChat('group')}>

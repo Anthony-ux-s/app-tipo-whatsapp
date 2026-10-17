@@ -38,6 +38,9 @@ export function LoginView() {
         <Button type="submit" size="lg" fullWidth loading={login.loading}>
           Entrar
         </Button>
+        <Link to="/recuperar" className="-mt-1 text-center text-sm font-semibold text-brand hover:underline dark:text-teal-300">
+          ¿Olvidaste tu contraseña?
+        </Link>
       </form>
 
       <p className="mt-5 text-center text-sm text-ink-soft">

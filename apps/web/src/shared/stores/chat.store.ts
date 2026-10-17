@@ -83,6 +83,10 @@ interface ChatState {
   applyStatus: (update: MessageStatusUpdate) => void;
   applyTyping: (payload: TypingPayload) => void;
   applyPresence: (payload: PresencePayload) => void;
+  /** Alguien cambió su foto, nombre o usuario. */
+  applyProfile: (user: PublicUser) => void;
+  /** Volver a compartir la clave del chat con quien restableció su cuenta. */
+  reshareKey: (conversationId: string, me: PublicUser) => Promise<void>;
   markRead: (conversationId: string) => Promise<void>;
   sendText: (conversationId: string, text: string, options?: SendOptions) => Promise<void>;
   setReplyDraft: (conversationId: string, message: ChatMessage | null) => void;
@@ -142,7 +146,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
     }
     if (Object.keys(taskUpdates).length) set({ tasks: { ...get().tasks, ...taskUpdates } });
-    const pending = [...payloads].filter(([key]) => !get().texts[key]);
+    // También se reintentan los que fallaron: pudo llegar la clave después (chat compartido de nuevo).
+    const pending = [...payloads].filter(([key]) => !get().texts[key]?.ok);
     if (pending.length === 0) return;
     const entries = await Promise.all(
       pending.map(async ([key, payload]): Promise<[string, DecryptedText]> => {
@@ -334,6 +339,11 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
 
     upsertConversation: (conversation) => {
+      const before = get().conversations[conversation.id];
+      // Me volvieron a compartir la clave (restablecí mi cuenta): se descifra de nuevo lo que estaba bloqueado.
+      if (before && !before.myKey && conversation.myKey && get().activeId === conversation.id) {
+        queueMicrotask(() => void get().loadMessages(conversation.id).catch(() => undefined));
+      }
       set({ conversations: { ...get().conversations, [conversation.id]: conversation } });
       if (conversation.lastMessage) void decryptAll(conversation, [conversation.lastMessage]);
     },
@@ -444,6 +454,29 @@ export const useChatStore = create<ChatState>((set, get) => {
           if (expires && expires <= Date.now()) get().applyTyping({ conversationId, userId, isTyping: false });
         }, TYPING_TTL + 100);
       }
+    },
+
+    applyProfile: (user) => {
+      const conversations = Object.fromEntries(
+        Object.entries(get().conversations).map(([id, c]) => {
+          if (!c.participants.some((p) => p.user.id === user.id)) return [id, c];
+          const participants = c.participants.map((p) => (p.user.id === user.id ? { ...p, user: { ...user, presence: p.user.presence } } : p));
+          const isOther = c.kind === 'direct' && user.id !== get().myId;
+          return [id, { ...c, participants, ...(isOther ? { title: user.displayName, avatarUrl: user.avatarUrl, avatarColor: user.avatarColor, description: user.about } : {}) }];
+        }),
+      );
+      set({ conversations });
+    },
+
+    reshareKey: async (conversationId, me) => {
+      const conversation = get().conversations[conversationId];
+      if (!conversation) return;
+      const pending = conversation.participants.filter((p) => p.keyPending).map((p) => p.user);
+      if (pending.length === 0) return;
+      // La clave del chat se envuelve en este navegador con la clave pública nueva: el servidor no la ve.
+      const keys = await wrapExistingKey(await conversationKey(conversation), me.id, pending);
+      const updated = await http.post<ConversationSummary>(`/chats/${conversationId}/keys`, { keys });
+      get().upsertConversation(updated);
     },
 
     applyPresence: ({ userId, presence, lastSeenAt }) => {

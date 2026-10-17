@@ -14,10 +14,11 @@ export function RequireAuth() {
 /** Solo sin sesión (entrar y registro). */
 export function GuestOnly() {
   const status = useSessionStore((s) => s.status);
+  const onboarding = useSessionStore((s) => s.onboarding);
   const location = useLocation();
   if (status === 'booting') return <FullScreenLoader />;
   if (status === 'ready') {
-    const from = (location.state as { from?: string } | null)?.from ?? '/app';
+    const from = onboarding ? '/bienvenida' : ((location.state as { from?: string } | null)?.from ?? '/app');
     return <Navigate to={from} replace />;
   }
   return <Outlet />;

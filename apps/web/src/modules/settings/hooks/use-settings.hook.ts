@@ -6,6 +6,7 @@ import { toast } from '@shared/stores/toast.store';
 import { AVATAR_COLOR_OPTIONS } from '@shared/const/avatar.const';
 import { keyFingerprint } from '@shared/utils/fingerprint';
 import { errorMessage } from '@shared/utils/http';
+import { validateUsername } from '@shared/utils/validators';
 import { isSettingsSection, SETTINGS_SECTIONS, THEME_OPTIONS, type SettingsSectionId } from '../const/settings.const';
 
 /** Pantalla principal de Ajustes: resumen del perfil y cierre de sesión con confirmación. */
@@ -38,13 +39,18 @@ export function useProfileSettings() {
   const updateProfile = useSessionStore((s) => s.updateProfile);
   const [displayName, setDisplayName] = useState(user.displayName);
   const [about, setAbout] = useState(user.about);
+  const [username, setUsername] = useState(user.username ?? '');
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const dirty = displayName.trim() !== user.displayName || about.trim() !== user.about;
+  const usernameChanged = username.trim() !== (user.username ?? '');
+  const dirty = displayName.trim() !== user.displayName || about.trim() !== user.about || usernameChanged;
 
   return {
     user,
     displayName,
     about,
+    username,
+    usernameError,
     saving,
     dirty,
     valid: displayName.trim().length > 0,
@@ -52,14 +58,26 @@ export function useProfileSettings() {
     memberSince: new Date(user.createdAt).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' }),
     onDisplayNameChange: (value: string) => setDisplayName(value),
     onAboutChange: (value: string) => setAbout(value),
+    onUsernameChange: (value: string) => {
+      setUsername(value.toLowerCase().replace(/\s/g, ''));
+      setUsernameError(null);
+    },
     discard: () => {
       setDisplayName(user.displayName);
       setAbout(user.about);
+      setUsername(user.username ?? '');
+      setUsernameError(null);
     },
     save: async () => {
+      // El usuario es opcional: vacío lo quita.
+      const invalid = username.trim() ? validateUsername(username) : null;
+      if (invalid) {
+        setUsernameError(invalid);
+        return;
+      }
       setSaving(true);
       try {
-        await updateProfile({ displayName: displayName.trim(), about: about.trim() });
+        await updateProfile({ displayName: displayName.trim(), about: about.trim(), ...(usernameChanged ? { username: username.trim() } : {}) });
         toast('Perfil actualizado', 'success');
       } catch (err) {
         toast(errorMessage(err), 'error');

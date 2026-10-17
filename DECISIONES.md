@@ -165,3 +165,26 @@ suma el delivery y el costo de los productos.
 | QR | **qrcode-generator** (MIT, sin dependencias) dibujado como SVG con React | Sin HTML inyectado. Funciona con cualquier lector de QR del celular. |
 | Búsqueda | El navegador parte el pedido hablado («un kilo de azúcar, arroz») en términos y busca cada uno | La gente escribe así su lista. Es simple y se puede probar. |
 | Salud | Se muestra como «Próximamente» | Primero un flujo completo que funcione de punta a punta. Sumar Salud es otro traductor y otra pantalla. |
+
+
+## Registro con el teléfono verificado, perfil y contactos
+
+Pedido explícito: un registro que primero pida el número y envíe un código por SMS con **OneSignal**;
+luego nombre y usuario opcional (cambiable en Ajustes); después correo para recuperar la cuenta, foto
+de perfil y traer los contactos del teléfono.
+
+| Decisión | Elección | Por qué |
+| --- | --- | --- |
+| Quién genera el código | **Parla** (6 cifras con azar criptográfico); se guarda solo su **HMAC**; OneSignal solo lo entrega | Se puede cambiar de proveedor de envío sin tocar la seguridad, y una copia de la base no revela códigos. |
+| OneSignal | Adaptador detrás del puerto `VerificationSender` con la API de mensajes (`POST /notifications?c=sms` y `?c=email`, `Authorization: Key …`) | Es el proveedor pedido. El puerto permite cambiarlo (Twilio Verify, AWS SNS) cambiando una línea. |
+| Sin credenciales | **Modo de prueba** solo en desarrollo: el código vuelve en la respuesta y sale en consola. En producción el core **no arranca** sin OneSignal | Se puede probar sin pagar SMS, y el modo de prueba no puede llegar a producción por descuido. |
+| Límites | 10 min de vigencia, 5 intentos, 1 envío por minuto y 5 por hora por número, y límite por IP | Frena la fuerza bruta y el «SMS pumping» (cada SMS cuesta dinero). |
+| Paso entre verificación y registro | **Comprobante de un solo uso** (30 min) en vez de volver a mandar el teléfono | El número que queda en la cuenta es justo el que se verificó, y el comprobante no sirve dos veces. |
+| Contraseña | **Se mantiene** en el paso de datos | Cifra la copia de la clave privada (cifrado E2E) y permite entrar desde otro dispositivo. Sin contraseña habría que confiarle las claves al servidor. |
+| Usuario | **Opcional**; se cambia en Ajustes (vacío lo quita) | Como se pidió: el teléfono basta para encontrar a alguien. |
+| Correo | Opcional y **verificado con código** antes de contar | Un correo sin verificar podría dejar a alguien sin poder recuperar su cuenta, o servir para tomar la de otro. |
+| Restablecer contraseña | Código al correo → contraseña y **claves nuevas** → los demás deciden **volver a compartir** cada chat (aviso en el chat) | Con cifrado de extremo a extremo, la clave anterior no se puede recuperar sin la contraseña. Compartir de nuevo solo con aceptación evita que quien robe un correo lea el historial sin que nadie se entere. |
+| Clave de quien envolvió | Se guarda **la clave pública de quien envolvió** junto a cada copia de la clave del chat | Si alguien cambia sus claves, las copias que envolvió antes se siguen pudiendo abrir. Este problema lo descubrió la prueba E2E de recuperación. |
+| Foto de perfil | El navegador recorta a 512×512 y re-codifica a **JPEG** (sin EXIF/GPS); el core valida que de verdad sea JPEG y ≤ 300 KB; URL impredecible y caché inmutable | Privacidad (sin ubicación), seguridad (ni SVG ni HTML disfrazado) y rendimiento. |
+| Contactos | **Contact Picker API** (Chrome en Android; la persona elige y puede elegir todos) o escribir los números; se envían, se cruzan con las cuentas y **no se guardan** | Es lo que permite la web. Los números sin indicativo se completan con el del propio teléfono. |
+| Lectura automática del SMS | **WebOTP** (`@dominio #código` al final del SMS) y `autocomplete="one-time-code"` | En Android el código se completa solo, y en iPhone aparece sobre el teclado. |

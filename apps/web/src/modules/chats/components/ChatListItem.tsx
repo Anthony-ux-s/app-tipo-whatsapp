@@ -28,7 +28,7 @@ export function ChatListItem({ entry, active, onOpen }: ChatListItemProps) {
         data-testid="chat-item"
         className={`group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors duration-200 ease-in-out md:px-4 ${active ? 'bg-teal-50 dark:bg-teal-950/50' : 'hover:bg-surface-2'}`}
       >
-        <Avatar name={conversation.title} color={conversation.avatarColor} group={conversation.kind === 'group'} online={online} />
+        <Avatar name={conversation.title} color={conversation.avatarColor} photo={conversation.avatarUrl} group={conversation.kind === 'group'} online={online} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5 border-b border-line py-1 group-last:border-transparent">
           <span className="flex items-baseline justify-between gap-2">
             <span className={`truncate text-[15px] text-ink ${unread ? 'font-bold' : 'font-semibold'}`}>{conversation.title}</span>

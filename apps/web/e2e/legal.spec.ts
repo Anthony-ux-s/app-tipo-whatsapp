@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { PASSWORD } from './helpers';
+import { PASSWORD, registerNewUser } from './helpers';
 
 test.describe('Legal y datos personales', () => {
   test('los términos y la privacidad son públicos y el registro enlaza a ellos', async ({ page }) => {
@@ -15,12 +15,9 @@ test.describe('Legal y datos personales', () => {
 
   test('una persona descarga sus datos y elimina su cuenta; ya no puede volver a entrar', async ({ page }) => {
     const username = `borrar${Date.now().toString(36)}`;
-    await page.goto('/registro');
-    await page.getByLabel('Tu nombre').fill('Persona Temporal');
-    await page.getByLabel('Nombre de usuario').fill(username);
-    await page.getByLabel('Contraseña').fill(PASSWORD);
-    await page.getByRole('checkbox').check();
-    await page.getByRole('button', { name: 'Crear cuenta' }).click();
+    const { phone } = await registerNewUser(page, 'Persona Temporal', { username });
+    await page.getByRole('button', { name: 'Omitir' }).click();
+    await page.getByRole('button', { name: 'Entrar a Parla' }).click();
     await expect(page.getByText('¿No tienes chats aún?')).toBeVisible();
     await page.goto('/app/ajustes/datos');
 
@@ -30,6 +27,7 @@ test.describe('Legal y datos personales', () => {
     expect(file.suggestedFilename()).toMatch(/^parla-mis-datos-\d{4}-\d{2}-\d{2}\.json$/);
     const data = JSON.parse(await (await file.createReadStream()).toArray().then((chunks) => Buffer.concat(chunks).toString('utf8')));
     expect(data.profile.username).toBe(username);
+    expect(data.profile.phone).toBe(phone);
     expect(data.termsVersion).toBe('2026-10');
     expect(data.activity).toEqual({ messagesSent: 0, tasksCreated: 0, tasksAssigned: 0, ordersPlaced: 0 });
     expect(data).not.toHaveProperty('workspaces');
@@ -39,7 +37,7 @@ test.describe('Legal y datos personales', () => {
     await page.getByRole('button', { name: 'Eliminar definitivamente' }).click();
     await expect(page).toHaveURL(/\/entrar/);
 
-    await page.getByLabel('Usuario o teléfono').fill(username);
+    await page.getByLabel('Usuario o teléfono').fill(phone);
     await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: 'Entrar' }).click();
     await expect(page.getByRole('alert')).toHaveText('Usuario, teléfono o contraseña incorrectos');

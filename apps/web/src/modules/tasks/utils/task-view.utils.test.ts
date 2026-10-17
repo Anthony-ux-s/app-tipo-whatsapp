@@ -21,8 +21,8 @@ const task = (id: string, extra: Partial<Task> = {}): Task => ({
 });
 
 const participants: ConversationParticipant[] = [
-  { user: { id: 'me', username: null, displayName: 'Laura Méndez', about: '', avatarColor: 'teal', presence: 'online', lastSeenAt: null, publicKey: '{}' }, role: 'admin' },
-  { user: { id: 'a', username: null, displayName: 'Andrés Rojas', about: '', avatarColor: 'emerald', presence: 'offline', lastSeenAt: null, publicKey: '{}' }, role: 'member' },
+  { user: { id: 'me', username: null, displayName: 'Laura Méndez', about: '', avatarColor: 'teal', avatarUrl: null, presence: 'online', lastSeenAt: null, publicKey: '{}' }, role: 'admin', keyPending: false },
+  { user: { id: 'a', username: null, displayName: 'Andrés Rojas', about: '', avatarColor: 'emerald', avatarUrl: null, presence: 'offline', lastSeenAt: null, publicKey: '{}' }, role: 'member', keyPending: false },
 ];
 
 describe('fecha límite de las tareas', () => {
@@ -59,7 +59,7 @@ describe('vista de tareas', () => {
 
 describe('aviso local con la app en segundo plano', () => {
   const conversation = {
-    id: 'c1', kind: 'group' as const, title: 'Logística', description: '', avatarColor: 'teal',
+    id: 'c1', kind: 'group' as const, title: 'Logística', description: '', avatarColor: 'teal', avatarUrl: null,
     participants, myKey: null, lastMessage: null, unreadCount: 0, mentionCount: 0, openTaskCount: 0,
     createdById: 'me', createdAt: '', updatedAt: '',
   };

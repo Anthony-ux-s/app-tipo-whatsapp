@@ -2,7 +2,8 @@ import type { EncryptedKeyBackup, UserPreferences } from '@parla/types';
 import type { UserRecord } from '../user.record';
 
 export interface NewUser {
-  phone: string | null;
+  phone: string;
+  phoneVerifiedAt: Date;
   username: string | null;
   displayName: string;
   avatarColor: string;
@@ -16,6 +17,14 @@ export interface NewUser {
 
 export interface ProfileChanges {
   displayName?: string;
+  /** null quita el nombre de usuario. */
+  username?: string | null;
+  email?: string;
+  emailVerifiedAt?: Date;
+  avatarFileId?: string | null;
+  passwordHash?: string;
+  publicKey?: string;
+  keyBackup?: EncryptedKeyBackup;
   about?: string;
   avatarColor?: string;
   preferences?: UserPreferences;
@@ -25,6 +34,10 @@ export interface AuthRepository {
   findById(id: string): Promise<UserRecord | null>;
   findByPhone(phone: string): Promise<UserRecord | null>;
   findByUsername(username: string): Promise<UserRecord | null>;
+  /** Solo cuentas con ese correo ya verificado. */
+  findByVerifiedEmail(email: string): Promise<UserRecord | null>;
+  /** Cuentas activas con alguno de esos teléfonos (para cruzar la libreta de contactos). */
+  findActiveByPhones(phones: string[]): Promise<UserRecord[]>;
   /** Cuentas activas con esos ids (las eliminadas no aparecen). */
   findActiveByIds(ids: string[]): Promise<UserRecord[]>;
   /** Directorio de Parla: cuentas activas por nombre, usuario o teléfono, sin incluir a quien busca. */

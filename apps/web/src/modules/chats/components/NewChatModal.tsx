@@ -5,6 +5,7 @@ import { Field, FieldError } from '@shared/ui/Field';
 import { Modal } from '@shared/ui/Modal';
 import { ListSkeleton } from '@shared/ui/States';
 import { formatLastSeen } from '@shared/utils/date';
+import { ContactsFinder } from '../../account/components/ContactsFinder';
 import { useNewChat } from '../hooks/use-new-chat.hook';
 import type { NewChatMode } from '../types/chats.types';
 
@@ -20,8 +21,8 @@ export function NewChatModal({ mode, onClose }: NewChatModalProps) {
     <Modal
       open={mode !== null}
       onClose={onClose}
-      title={isGroup ? 'Nuevo grupo' : 'Nuevo chat'}
-      description={isGroup ? 'Crea un grupo con personas de Parla.' : 'Escribe en privado a cualquier persona de Parla.'}
+      title={isGroup ? 'Nuevo grupo' : chat.mode === 'contacts' ? 'Tus contactos' : 'Nuevo chat'}
+      description={isGroup ? 'Crea un grupo con personas de Parla.' : chat.mode === 'contacts' ? 'Mira quiénes de tu teléfono ya están en Parla.' : 'Escribe en privado a cualquier persona de Parla.'}
       footer={
         isGroup ? (
           <>
@@ -35,18 +36,23 @@ export function NewChatModal({ mode, onClose }: NewChatModalProps) {
         ) : undefined
       }
     >
-      <div className="mb-4 grid grid-cols-2 gap-1 rounded-[var(--radius-card)] bg-surface-3 p-1">
-        {(['direct', 'group'] as const).map((m) => (
+      <div className="mb-4 grid grid-cols-3 gap-1 rounded-[var(--radius-card)] bg-surface-3 p-1">
+        {(['direct', 'group', 'contacts'] as const).map((m) => (
           <button
             key={m}
             type="button"
             onClick={() => chat.setMode(m)}
             className={`h-9 rounded-md text-sm font-semibold transition-all duration-200 ${chat.mode === m ? 'bg-surface text-ink shadow-float' : 'text-ink-soft'}`}
           >
-            {m === 'direct' ? 'Persona' : 'Grupo'}
+            {m === 'direct' ? 'Persona' : m === 'group' ? 'Grupo' : 'Contactos'}
           </button>
         ))}
       </div>
+
+      {chat.mode === 'contacts' ? (
+        <ContactsFinder onOpenChat={onClose} />
+      ) : (
+        <>
 
       {isGroup && (
         <div className="mb-4 flex flex-col gap-3">
@@ -60,7 +66,7 @@ export function NewChatModal({ mode, onClose }: NewChatModalProps) {
                   onClick={() => chat.pickPerson(p)}
                   className="flex animate-pop items-center gap-1.5 rounded-full bg-teal-100 py-1 pr-2.5 pl-1 text-xs font-semibold text-teal-900 dark:bg-teal-900/60 dark:text-teal-100"
                 >
-                  <Avatar name={p.displayName} color={p.avatarColor} size="xs" />
+                  <Avatar name={p.displayName} color={p.avatarColor} photo={p.avatarUrl} size="xs" />
                   {p.displayName.split(' ')[0]} ✕
                 </button>
               ))}
@@ -103,7 +109,7 @@ export function NewChatModal({ mode, onClose }: NewChatModalProps) {
                   onClick={() => chat.pickPerson(person)}
                   className="flex w-full items-center gap-3 rounded-[var(--radius-card)] px-2 py-2 text-left transition-colors duration-200 hover:bg-surface-2 disabled:opacity-60"
                 >
-                  <Avatar name={person.displayName} color={person.avatarColor} size="sm" online={person.presence === 'online'} />
+                  <Avatar name={person.displayName} color={person.avatarColor} photo={person.avatarUrl} size="sm" online={person.presence === 'online'} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[15px] font-semibold text-ink">{person.displayName}</span>
                     <span className="block truncate text-xs text-ink-soft">
@@ -126,6 +132,8 @@ export function NewChatModal({ mode, onClose }: NewChatModalProps) {
       <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-ink-faint">
         <Lock className="size-3.5" /> Las claves del chat se crean en tu dispositivo.
       </p>
+        </>
+      )}
     </Modal>
   );
 }

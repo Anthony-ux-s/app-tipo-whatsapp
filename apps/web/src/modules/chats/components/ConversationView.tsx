@@ -5,6 +5,7 @@ import { TasksPanel } from '../../tasks/components/TasksPanel';
 import { useConversation } from '../hooks/use-conversation.hook';
 import { Composer } from './Composer';
 import { ConversationHeader } from './ConversationHeader';
+import { KeyReshareBanner } from './KeyReshareBanner';
 import { ConversationInfoPanel } from './ConversationInfoPanel';
 import { MessageBubble } from './MessageBubble';
 import { ThreadPanel } from './ThreadPanel';
@@ -37,6 +38,7 @@ export function ConversationView() {
           onOpenInfo={chat.openInfo}
           onOpenTasks={chat.openTasks}
         />
+        <KeyReshareBanner conversation={conversation} />
 
         <div
           ref={chat.scrollRef}

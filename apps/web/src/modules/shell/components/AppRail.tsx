@@ -38,7 +38,7 @@ export function AppRail({ user, section, unread }: AppRailProps) {
         <settings.icon className="size-5" />
       </Link>
       <Link to="/app/ajustes/perfil" title={user.displayName} aria-label="Tu perfil" className="mt-1">
-        <Avatar name={user.displayName} color={user.avatarColor} size="sm" online />
+        <Avatar name={user.displayName} color={user.avatarColor} photo={user.avatarUrl} size="sm" online />
       </Link>
     </nav>
   );

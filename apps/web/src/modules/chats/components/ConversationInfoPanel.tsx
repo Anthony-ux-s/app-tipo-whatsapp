@@ -30,7 +30,7 @@ export function ConversationInfoPanel({ conversation, open, onClose }: Conversat
 
       <div className="flex-1 overflow-y-auto">
         <section className="flex flex-col items-center gap-2 bg-surface px-6 py-7 text-center">
-          <Avatar name={conversation.title} color={conversation.avatarColor} group={info.isGroup} size="xl" />
+          <Avatar name={conversation.title} color={conversation.avatarColor} photo={conversation.avatarUrl} group={info.isGroup} size="xl" />
           <h3 className="mt-2 text-xl font-bold text-ink">{conversation.title}</h3>
           <p className="text-sm text-ink-soft">
             {info.isGroup
@@ -97,7 +97,7 @@ export function ConversationInfoPanel({ conversation, open, onClose }: Conversat
                       return (
                         <li key={c.id}>
                           <button type="button" onClick={() => info.toggleCandidate(c.id)} className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-surface-2">
-                            <Avatar name={c.displayName} color={c.avatarColor} size="xs" />
+                            <Avatar name={c.displayName} color={c.avatarColor} photo={c.avatarUrl} size="xs" />
                             <span className="flex-1 truncate text-left text-sm text-ink">{c.displayName}</span>
                             <span className={`flex size-5 items-center justify-center rounded-full border-2 ${picked ? 'border-brand bg-brand text-white' : 'border-line'}`}>
                               {picked && <Check className="size-3" strokeWidth={3} />}
@@ -122,7 +122,7 @@ export function ConversationInfoPanel({ conversation, open, onClose }: Conversat
             <ul>
               {info.members.map((p) => (
                 <li key={p.user.id} className="flex items-center gap-3 px-5 py-2">
-                  <Avatar name={p.user.displayName} color={p.user.avatarColor} size="sm" online={p.user.presence === 'online'} />
+                  <Avatar name={p.user.displayName} color={p.user.avatarColor} photo={p.user.avatarUrl} size="sm" online={p.user.presence === 'online'} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[15px] font-medium text-ink">
                       {p.user.id === info.user.id ? 'Tú' : p.user.displayName}

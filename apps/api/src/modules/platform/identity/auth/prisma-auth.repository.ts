@@ -24,6 +24,17 @@ export class PrismaAuthRepository implements AuthRepository {
     return row ? toUserRecord(row) : null;
   }
 
+  async findByVerifiedEmail(email: string): Promise<UserRecord | null> {
+    const row = await this.prisma.user.findFirst({ where: { email, emailVerifiedAt: { not: null }, deletedAt: null } });
+    return row ? toUserRecord(row) : null;
+  }
+
+  async findActiveByPhones(phones: string[]): Promise<UserRecord[]> {
+    if (phones.length === 0) return [];
+    const rows = await this.prisma.user.findMany({ where: { phone: { in: phones }, deletedAt: null } });
+    return rows.map(toUserRecord);
+  }
+
   async findActiveByIds(ids: string[]): Promise<UserRecord[]> {
     if (ids.length === 0) return [];
     const rows = await this.prisma.user.findMany({ where: { id: { in: ids }, deletedAt: null } });
@@ -74,10 +85,14 @@ export class PrismaAuthRepository implements AuthRepository {
   }
 
   async update(id: string, changes: ProfileChanges): Promise<UserRecord> {
-    const { preferences, ...rest } = changes;
+    const { preferences, keyBackup, ...rest } = changes;
     const row = await this.prisma.user.update({
       where: { id },
-      data: { ...rest, ...(preferences ? { preferences: JSON.stringify(preferences) } : {}) },
+      data: {
+        ...rest,
+        ...(preferences ? { preferences: JSON.stringify(preferences) } : {}),
+        ...(keyBackup ? { keyBackup: JSON.stringify(keyBackup) } : {}),
+      },
     });
     return toUserRecord(row);
   }
@@ -104,6 +119,10 @@ export class PrismaAuthRepository implements AuthRepository {
           ...DELETED_ACCOUNT,
           username: null,
           phone: null,
+          phoneVerifiedAt: null,
+          email: null,
+          emailVerifiedAt: null,
+          avatarFileId: null,
           passwordHash: '!',
           keyBackup: JSON.stringify({ ciphertext: '', iv: '', salt: '', iterations: 0 }),
           preferences: '{}',

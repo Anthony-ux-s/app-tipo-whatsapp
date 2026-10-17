@@ -81,6 +81,11 @@ export function useRealtime(userId: string | undefined) {
     });
     // Servicios: cada cambio de un pedido (pagado, en camino, entregado) llega al instante.
     socket.on('order:updated', (order) => useOrdersStore.getState().upsert(order));
+    // Fotos, nombres y usuarios nuevos de los contactos (y los míos, si cambié desde otro dispositivo).
+    socket.on('profile:updated', (profile) => {
+      useChatStore.getState().applyProfile(profile);
+      useSessionStore.getState().applyOwnProfile(profile);
+    });
 
     // Al volver a la pestaña, lo que está abierto queda leído.
     const onFocus = () => {

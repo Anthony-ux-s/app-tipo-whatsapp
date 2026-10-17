@@ -28,6 +28,11 @@ export interface ConversationParticipant {
   user: PublicUser;
   /** admin = quien creó el grupo; en chats individuales, ambos son member. */
   role: ParticipantRole;
+  /**
+   * La persona restableció su cuenta (claves nuevas) y espera que alguien del chat le vuelva a
+   * compartir la clave de la conversación.
+   */
+  keyPending: boolean;
 }
 
 /** Resumen del mensaje al que se responde (para dibujar la cita). */
@@ -69,6 +74,8 @@ export interface ConversationSummary {
   title: string;
   description: string;
   avatarColor: string;
+  /** En chats individuales, la foto de la otra persona; en grupos, null. */
+  avatarUrl: string | null;
   participants: ConversationParticipant[];
   /** La clave de la conversación envuelta para quien consulta, con la clave pública de quien la envolvió. */
   myKey: (WrappedKey & { wrapperPublicKey: string }) | null;
@@ -169,4 +176,9 @@ export interface PushPayload {
 export interface UploadedFile {
   fileId: string;
   size: number;
+}
+
+/** Volver a compartir la clave del chat con quien restableció su cuenta. */
+export interface ReshareKeysRequest {
+  keys: WrappedKey[];
 }

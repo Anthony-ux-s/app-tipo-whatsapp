@@ -75,7 +75,8 @@ function toConversationRecord(row: ConversationRow, counters: Counters): Convers
       wrappedKey: p.wrappedKey,
       keyIv: p.keyIv,
       wrappedById: p.wrappedById,
-      wrapperPublicKey: p.wrappedBy.publicKey,
+      // Copia guardada al envolver; las filas antiguas (sin copia) usan la clave actual.
+      wrapperPublicKey: p.wrapperPublicKey || p.wrappedBy.publicKey,
     })),
     lastMessage: row.messages[0] ? toMessageRecord(row.messages[0]) : null,
     unreadCount: counters.unread,
@@ -84,12 +85,25 @@ function toConversationRecord(row: ConversationRow, counters: Counters): Convers
   };
 }
 
-const keyRows = (keys: WrappedKey[]) =>
-  keys.map((k) => ({ userId: k.userId, wrappedKey: k.wrappedKey, keyIv: k.iv, wrappedById: k.wrappedById }));
+const keyRows = (keys: WrappedKey[], publicKeyOf: Map<string, string>) =>
+  keys.map((k) => ({
+    userId: k.userId,
+    wrappedKey: k.wrappedKey,
+    keyIv: k.iv,
+    wrappedById: k.wrappedById,
+    wrapperPublicKey: publicKeyOf.get(k.wrappedById) ?? '',
+  }));
 
 @Injectable()
 export class PrismaConversationsRepository implements ConversationsRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** Claves públicas actuales de quienes envuelven: se guardan junto a cada copia de la clave del chat. */
+  private async wrapperKeys(keys: WrappedKey[]): Promise<Map<string, string>> {
+    const ids = [...new Set(keys.map((k) => k.wrappedById))];
+    const rows = await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, publicKey: true } });
+    return new Map(rows.map((r) => [r.id, r.publicKey]));
+  }
 
 /** No leídos, menciones sin leer y tareas abiertas por conversación, en tres consultas agrupadas. */
   private async counters(userId: string, conversationIds: string[]): Promise<(id: string) => Counters> {
@@ -155,7 +169,7 @@ export class PrismaConversationsRepository implements ConversationsRepository {
   async create(input: NewConversation): Promise<string> {
     const { keys, ...data } = input;
     const row = await this.prisma.conversation.create({
-      data: { ...data, participants: { create: keyRows(keys) } },
+      data: { ...data, participants: { create: keyRows(keys, await this.wrapperKeys(keys)) } },
       select: { id: true },
     });
     return row.id;
@@ -163,7 +177,7 @@ export class PrismaConversationsRepository implements ConversationsRepository {
 
   async addParticipants(conversationId: string, keys: WrappedKey[]): Promise<void> {
     await this.prisma.conversationParticipant.createMany({
-      data: keyRows(keys).map((k) => ({ ...k, conversationId })),
+      data: keyRows(keys, await this.wrapperKeys(keys)).map((k) => ({ ...k, conversationId })),
     });
   }
 
@@ -172,6 +186,24 @@ export class PrismaConversationsRepository implements ConversationsRepository {
       this.prisma.conversationParticipant.deleteMany({ where: { conversationId, userId } }),
       this.prisma.messageReceipt.deleteMany({ where: { conversationId, userId } }),
     ]);
+  }
+
+  async markKeysPending(userId: string): Promise<string[]> {
+    const rows = await this.prisma.conversationParticipant.findMany({ where: { userId }, select: { conversationId: true } });
+    await this.prisma.conversationParticipant.updateMany({ where: { userId }, data: { wrappedKey: '', keyIv: '' } });
+    return rows.map((r) => r.conversationId);
+  }
+
+  async reshareKeys(conversationId: string, keys: WrappedKey[]): Promise<void> {
+    const rows = keyRows(keys, await this.wrapperKeys(keys));
+    await this.prisma.$transaction(
+      rows.map((k) =>
+        this.prisma.conversationParticipant.updateMany({
+          where: { conversationId, userId: k.userId, wrappedKey: '' },
+          data: { wrappedKey: k.wrappedKey, keyIv: k.keyIv, wrappedById: k.wrappedById, wrapperPublicKey: k.wrapperPublicKey },
+        }),
+      ),
+    );
   }
 
   async createMessage(input: NewMessage): Promise<MessageRecord> {

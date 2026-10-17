@@ -33,6 +33,7 @@ import {
   UploadMediaUseCase,
 } from '../../platform/messaging/conversations/use-cases/media.use-case';
 import { MarkDeliveredUseCase, MarkReadUseCase } from '../../platform/messaging/conversations/use-cases/receipts.use-case';
+import { ReshareKeysUseCase } from '../../platform/messaging/conversations/use-cases/reshare-keys.use-case';
 import { SendMessageUseCase } from '../../platform/messaging/conversations/use-cases/send-message.use-case';
 import {
   AddParticipantsDto,
@@ -40,6 +41,7 @@ import {
   CreateGroupDto,
   CreateTaskDto,
   MarkDeliveredDto,
+  ReshareKeysDto,
   SendMessageDto,
   UpdateTaskDto,
 } from './dto/chats.dto';
@@ -54,6 +56,7 @@ export class ChatsController {
     private readonly createGroup: CreateGroupConversationUseCase,
     private readonly addParticipants: AddParticipantsUseCase,
     private readonly leaveConversation: LeaveConversationUseCase,
+    private readonly reshareKeys: ReshareKeysUseCase,
     private readonly listMessages: ListMessagesUseCase,
     private readonly sendMessage: SendMessageUseCase,
     private readonly markDelivered: MarkDeliveredUseCase,
@@ -152,6 +155,12 @@ export class ChatsController {
   @Post(':id/read')
   read(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.markRead.execute(user.userId, id);
+  }
+
+  /** Volver a compartir la clave del chat con quien restableció su cuenta. */
+  @Post(':id/keys')
+  reshare(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: ReshareKeysDto): Promise<ConversationSummary> {
+    return this.reshareKeys.execute(user.userId, id, body);
   }
 
   @Post(':id/media')

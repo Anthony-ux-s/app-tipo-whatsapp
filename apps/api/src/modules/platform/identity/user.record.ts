@@ -5,6 +5,11 @@ export interface UserRecord {
   id: string;
   username: string | null;
   phone: string | null;
+  phoneVerifiedAt: Date | null;
+  /** Correo verificado (para restablecer la contraseña). */
+  email: string | null;
+  emailVerifiedAt: Date | null;
+  avatarFileId: string | null;
   displayName: string;
   about: string;
   avatarColor: string;

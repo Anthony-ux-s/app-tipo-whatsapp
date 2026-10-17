@@ -15,6 +15,13 @@ model User {
   id           String    @id @default(cuid())
   username     String?   @unique
   phone        String?   @unique
+  /// Cuándo se verificó el teléfono con un código por SMS (las cuentas nuevas siempre lo verifican).
+  phoneVerifiedAt DateTime?
+  /// Correo para restablecer la contraseña; solo cuenta una vez verificado con un código.
+  email        String?   @unique
+  emailVerifiedAt DateTime?
+  /// Foto de perfil (archivo público con nombre impredecible); null = iniciales y color.
+  avatarFileId String?
   displayName  String
   about        String    @default("")
   avatarColor  String
@@ -72,6 +79,9 @@ model ConversationParticipant {
   wrappedKey     String
   keyIv          String
   wrappedById    String
+  /// Clave pública de quien envolvió, tal como era al envolver: si después cambia sus claves
+  /// (restablece su cuenta), esta copia se sigue pudiendo abrir.
+  wrapperPublicKey String @default("")
   joinedAt       DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -222,4 +232,30 @@ model Order {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+/**
+ * Código de verificación de un solo uso (SMS al registrarse; correo al agregarlo o para restablecer la
+ * contraseña). Solo se guarda el hash del código. Al verificarse entrega un comprobante de un solo uso.
+ */
+model VerificationCode {
+  id          String    @id @default(cuid())
+  /// VerificationChannel: sms | email
+  channel     String
+  /// VerificationPurpose: register | email | reset_password
+  purpose     String
+  /// Teléfono E.164 o correo en minúsculas.
+  target      String
+  /// Cuenta que lo pidió (agregar correo); null al registrarse.
+  userId      String?
+  codeHash    String
+  attempts    Int       @default(0)
+  expiresAt   DateTime
+  verifiedAt  DateTime?
+  /// Hash del comprobante que se entrega al verificar (para registrarse o restablecer).
+  proofHash   String?
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([target, purpose, createdAt])
 }

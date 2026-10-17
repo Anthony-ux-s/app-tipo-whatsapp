@@ -19,7 +19,7 @@ export function SettingsView() {
         aria-label="Perfil"
         className="group flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float transition-colors duration-200 hover:bg-surface-2 md:p-5"
       >
-        <Avatar name={s.user.displayName} color={s.user.avatarColor} size="lg" />
+        <Avatar name={s.user.displayName} color={s.user.avatarColor} photo={s.user.avatarUrl} size="lg" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-lg font-bold text-ink">{s.user.displayName}</span>
           <span className="block truncate text-sm text-ink-soft">{s.user.about || 'Agrega una info. para tus contactos'}</span>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { defaultCountry, toE164 } from '../const/countries.const';
 import { formatDayLabel, formatDuration, formatListTimestamp } from './date';
 import { initials, matchesSearch } from './text';
 import { passwordStrength, validatePassword, validatePhone, validateUsername } from './validators';
@@ -44,5 +45,15 @@ describe('texto', () => {
     expect(initials('sofía')).toBe('S');
     expect(matchesSearch('Andrés Rojas', 'andres')).toBe(true);
     expect(matchesSearch('Andrés Rojas', 'camila')).toBe(false);
+  });
+});
+
+describe('países e indicativos', () => {
+  it('elige el país por el idioma del navegador y arma el número internacional', () => {
+    expect(defaultCountry('es-PE').name).toBe('Perú');
+    expect(defaultCountry('es-MX').code).toBe('52');
+    expect(defaultCountry('en').iso).toBe('CO');
+    expect(toE164(defaultCountry('es-CO'), '300 123 4567')).toBe('+573001234567');
+    expect(toE164(defaultCountry('es-AR'), '011 2345-6789')).toBe('+541123456789');
   });
 });

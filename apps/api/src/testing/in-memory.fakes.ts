@@ -18,6 +18,11 @@ import type { PushResult, PushSender, PushTarget } from '../infra/push/push-send
 import type { PushSubscriptionsRepository, StoredSubscription } from '../modules/platform/messaging/push/push-subscriptions.repository';
 import type { PushPayload, TaskScope } from '@parla/types';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
+import type { AppEnv } from '../config/env.validation';
+import type { VerificationSender } from '../infra/messaging/verification-sender.port';
+import type { NewVerification, VerificationCodesRepository, VerificationRecord } from '../modules/platform/identity/verification/verification-codes.repository';
+import type { VerificationPurpose } from '../kernel/verification-rules';
+import type { WrappedKey } from '@parla/types';
 
 let seq = 0;
 const nextId = (prefix: string) => `${prefix}${++seq}`;
@@ -27,6 +32,10 @@ export function makeUser(overrides: Partial<UserRecord> = {}): UserRecord {
     id: nextId('u'),
     username: null,
     phone: null,
+    phoneVerifiedAt: null,
+    email: null,
+    emailVerifiedAt: null,
+    avatarFileId: null,
     displayName: 'Persona',
     about: '',
     avatarColor: 'teal',
@@ -54,6 +63,12 @@ export class InMemoryAuthRepository implements AuthRepository {
   async findByUsername(username: string) {
     return this.users.find((u) => u.username === username) ?? null;
   }
+  async findByVerifiedEmail(email: string) {
+    return this.users.find((u) => u.email === email && u.emailVerifiedAt && !u.deletedAt) ?? null;
+  }
+  async findActiveByPhones(phones: string[]) {
+    return this.users.filter((u) => u.phone && phones.includes(u.phone) && !u.deletedAt);
+  }
   async findActiveByIds(ids: string[]) {
     return this.users.filter((u) => ids.includes(u.id) && !u.deletedAt);
   }
@@ -77,7 +92,7 @@ export class InMemoryAuthRepository implements AuthRepository {
   async update(id: string, changes: ProfileChanges) {
     const user = (await this.findById(id))!;
     Object.assign(user, Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)));
-    return user;
+    return { ...user };
   }
   async touchLastSeen(id: string, at: Date) {
     const user = await this.findById(id);
@@ -160,6 +175,24 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
   }
   async addParticipants() {}
   async removeParticipant() {}
+  async markKeysPending(userId: string) {
+    const ids: string[] = [];
+    for (const c of this.conversations) {
+      const p = c.participants.find((x) => x.user.id === userId);
+      if (p) {
+        p.wrappedKey = '';
+        ids.push(c.id);
+      }
+    }
+    return ids;
+  }
+  async reshareKeys(conversationId: string, keys: WrappedKey[]) {
+    const c = this.conversations.find((x) => x.id === conversationId)!;
+    for (const k of keys) {
+      const p = c.participants.find((x) => x.user.id === k.userId && x.wrappedKey === '');
+      if (p) Object.assign(p, { wrappedKey: k.wrappedKey, keyIv: k.iv, wrappedById: k.wrappedById });
+    }
+  }
   async createMessage(input: NewMessage) {
     const existing = this.messages.find((m) => m.senderId === input.senderId && m.clientId === input.clientId);
     if (existing) return existing;
@@ -299,5 +332,73 @@ export class InMemoryOrdersRepository implements OrdersRepository {
     if (!order || order.status !== expected) return null;
     Object.assign(order, changes, { updatedAt: new Date() });
     return { ...order };
+  }
+}
+
+/** Entorno mínimo para los casos de uso que lo leen (verificación por código). */
+export const testEnv = {
+  production: false,
+  jwtSecret: 'secreto-de-prueba',
+  publicWebUrl: 'http://localhost:3100',
+} as AppEnv;
+
+export class InMemoryVerificationCodes implements VerificationCodesRepository {
+  rows: VerificationRecord[] = [];
+  async create(input: NewVerification) {
+    const row: VerificationRecord = { ...input, id: nextId('v'), attempts: 0, verifiedAt: null, proofHash: null, consumedAt: null, createdAt: new Date() };
+    this.rows.push(row);
+    return row;
+  }
+  async listRecent(target: string, purpose: VerificationPurpose, since: Date) {
+    return this.rows.filter((r) => r.target === target && r.purpose === purpose && r.createdAt >= since);
+  }
+  async findLatestPending(query: { purpose: VerificationPurpose; target?: string; userId?: string }) {
+    return (
+      [...this.rows]
+        .reverse()
+        .find((r) => r.purpose === query.purpose && !r.verifiedAt && (!query.target || r.target === query.target) && (!query.userId || r.userId === query.userId)) ?? null
+    );
+  }
+  async countAttempt(id: string) {
+    this.rows.find((r) => r.id === id)!.attempts += 1;
+  }
+  async markVerified(id: string, proofHash: string, at: Date) {
+    Object.assign(this.rows.find((r) => r.id === id)!, { verifiedAt: at, proofHash });
+  }
+  async findByProof(proofHash: string) {
+    return this.rows.find((r) => r.proofHash === proofHash) ?? null;
+  }
+  async consume(id: string, at: Date) {
+    const row = this.rows.find((r) => r.id === id)!;
+    if (row.consumedAt) return false;
+    row.consumedAt = at;
+    return true;
+  }
+  /** Para simular el paso del tiempo en las pruebas. */
+  age(ms: number) {
+    for (const r of this.rows) {
+      r.createdAt = new Date(r.createdAt.getTime() - ms);
+      r.expiresAt = new Date(r.expiresAt.getTime() - ms);
+      if (r.verifiedAt) r.verifiedAt = new Date(r.verifiedAt.getTime() - ms);
+    }
+  }
+}
+
+/** Guarda lo que se habría enviado por SMS y correo (para leer el código en la prueba). */
+export class RecordingVerificationSender implements VerificationSender {
+  constructor(readonly provider: 'onesignal' | 'dev' = 'onesignal') {}
+  sms: { phone: string; text: string }[] = [];
+  emails: { to: string; subject: string; html: string }[] = [];
+  async sendSms(phone: string, text: string) {
+    this.sms.push({ phone, text });
+  }
+  async sendEmail(to: string, subject: string, html: string) {
+    this.emails.push({ to, subject, html });
+  }
+  lastSmsCode() {
+    return this.sms.at(-1)!.text.match(/(\d{6})/)![1];
+  }
+  lastEmailCode() {
+    return this.emails.at(-1)!.subject.match(/(\d{6})/)![1];
   }
 }

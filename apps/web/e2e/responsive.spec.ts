@@ -17,7 +17,7 @@ test('en el celular la lista ocupa la pantalla y el chat se abre a pantalla comp
   // Cada sección abre su propia pantalla, sin la barra inferior, y se vuelve con la flecha
   await page.getByRole('link', { name: 'Perfil' }).click();
   await expect(page.getByRole('heading', { name: 'Perfil' })).toBeVisible();
-  await expect(page.getByLabel('Nombre')).toBeVisible();
+  await expect(page.getByLabel('Nombre', { exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeHidden();
   await page.getByRole('link', { name: 'Volver a Ajustes' }).click();
   await expect(page.getByRole('heading', { name: 'Ajustes' })).toBeVisible();

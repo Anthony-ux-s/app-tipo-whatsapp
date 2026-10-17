@@ -1,5 +1,5 @@
 import { decryptPrivateKey, encryptPrivateKey, generateIdentityKeyPair } from '@parla/crypto';
-import type { AuthResponse, SessionUser, ThemePreference, UpdateProfileRequest } from '@parla/types';
+import type { AuthResponse, PublicUser, SessionUser, ThemePreference, UpdateProfileRequest } from '@parla/types';
 import { create } from 'zustand';
 import { lockVault, restoreVault, unlockVault } from '../utils/crypto-vault';
 import { http, setUnauthorizedHandler, tokenStorage } from '../utils/http';
@@ -8,19 +8,31 @@ import { disconnectSocket } from '../utils/socket';
 export type SessionStatus = 'booting' | 'anonymous' | 'ready';
 
 export interface RegisterInput {
-  method: 'phone' | 'username';
-  phone: string;
-  username: string;
+  /** Comprobante del teléfono verificado por SMS. */
+  verificationToken: string;
   displayName: string;
+  /** Opcional. */
+  username: string;
   password: string;
 }
 
 interface SessionState {
   status: SessionStatus;
   user: SessionUser | null;
+  /** Recién registrada: toca la bienvenida (foto, correo, contactos) antes de entrar. */
+  onboarding: boolean;
+  finishOnboarding: () => void;
   boot: () => Promise<void>;
   login: (identifier: string, password: string) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
+  /** Contraseña nueva con el comprobante del correo: claves nuevas creadas en este dispositivo. */
+  resetPassword: (verificationToken: string, password: string) => Promise<void>;
+  /** La sesión cambió en el servidor (correo verificado, foto nueva…). */
+  setUser: (user: SessionUser) => void;
+  /** Llegó por tiempo real un cambio del propio perfil hecho desde otro dispositivo. */
+  applyOwnProfile: (profile: PublicUser) => void;
+  uploadAvatar: (photo: Blob) => Promise<void>;
+  removeAvatar: () => Promise<void>;
   logout: () => void;
   updateProfile: (changes: UpdateProfileRequest) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
@@ -52,7 +64,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
     tokenStorage.clear();
     localStorage.removeItem(LAST_USER_KEY);
     disconnectSocket();
-    set({ status: 'anonymous', user: null });
+    set({ status: 'anonymous', user: null, onboarding: false });
   };
 
   setUnauthorizedHandler(logout);
@@ -60,6 +72,8 @@ export const useSessionStore = create<SessionState>((set, get) => {
   return {
     status: 'booting',
     user: null,
+    onboarding: false,
+    finishOnboarding: () => set({ onboarding: false }),
 
     boot: async () => {
       const token = tokenStorage.get();
@@ -86,15 +100,47 @@ export const useSessionStore = create<SessionState>((set, get) => {
       const pair = await generateIdentityKeyPair();
       const keyBackup = await encryptPrivateKey(pair.privateKeyJwk, input.password);
       const response = await http.post<AuthResponse>('/auth/register', {
-        phone: input.method === 'phone' ? input.phone : undefined,
-        username: input.method === 'username' ? input.username : undefined,
+        verificationToken: input.verificationToken,
+        username: input.username.trim() || undefined,
         displayName: input.displayName,
         password: input.password,
         publicKey: pair.publicKeyJwk,
         keyBackup,
         acceptTerms: true,
       });
+      set({ onboarding: true });
       await startSession(response, input.password);
+    },
+
+    resetPassword: async (verificationToken, password) => {
+      // La clave privada anterior estaba cifrada con la contraseña olvidada: se crean claves nuevas.
+      const pair = await generateIdentityKeyPair();
+      const keyBackup = await encryptPrivateKey(pair.privateKeyJwk, password);
+      const response = await http.post<AuthResponse>('/auth/password/reset', {
+        verificationToken,
+        password,
+        publicKey: pair.publicKeyJwk,
+        keyBackup,
+      });
+      await startSession(response, password);
+    },
+
+    setUser: (user) => set({ user }),
+
+    applyOwnProfile: (profile) => {
+      const user = get().user;
+      if (!user || user.id !== profile.id) return;
+      set({ user: { ...user, displayName: profile.displayName, username: profile.username, about: profile.about, avatarColor: profile.avatarColor, avatarUrl: profile.avatarUrl } });
+    },
+
+    uploadAvatar: async (photo) => {
+      const form = new FormData();
+      form.append('file', photo, 'foto.jpg');
+      set({ user: await http.upload<SessionUser>('/auth/me/avatar', form) });
+    },
+
+    removeAvatar: async () => {
+      set({ user: await http.delete<SessionUser>('/auth/me/avatar') });
     },
 
     logout,

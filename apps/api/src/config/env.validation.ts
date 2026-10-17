@@ -21,6 +21,8 @@ export interface AppEnv {
   /** Servicio de tiempo real (Elixir) y token compartido entre servicios internos. */
   realtimeUrl: string;
   internalToken: string;
+  /** Códigos por SMS y correo: OneSignal si está configurado; si no (solo desarrollo), modo de prueba. */
+  oneSignal: { appId: string; apiKey: string; smsFrom: string | null } | null;
 }
 
 export const DEV_JWT_SECRET = 'parla-dev-secret-cambiar-en-produccion';
@@ -45,6 +47,14 @@ export function loadEnv(): AppEnv {
   const internalToken = env.INTERNAL_TOKEN ?? DEV_INTERNAL_TOKEN;
   if (production && (internalToken === DEV_INTERNAL_TOKEN || internalToken.length < 24)) {
     throw new Error('En producción INTERNAL_TOKEN debe ser un secreto propio de al menos 24 caracteres');
+  }
+
+  const oneSignal =
+    env.ONESIGNAL_APP_ID && env.ONESIGNAL_API_KEY
+      ? { appId: env.ONESIGNAL_APP_ID, apiKey: env.ONESIGNAL_API_KEY, smsFrom: env.ONESIGNAL_SMS_FROM || null }
+      : null;
+  if (production && !oneSignal) {
+    throw new Error('En producción se necesita ONESIGNAL_APP_ID y ONESIGNAL_API_KEY para enviar los códigos de verificación');
   }
 
   const port = Number(env.PORT ?? 4101);
@@ -79,6 +89,7 @@ export function loadEnv(): AppEnv {
     ice: { iceServers },
     realtimeUrl: (env.REALTIME_URL ?? 'http://localhost:4102').replace(/\/$/, ''),
     internalToken,
+    oneSignal,
   };
 }
 

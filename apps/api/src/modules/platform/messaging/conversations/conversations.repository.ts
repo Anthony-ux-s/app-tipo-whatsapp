@@ -97,6 +97,13 @@ export interface ConversationsRepository {
   create(input: NewConversation): Promise<string>;
   addParticipants(conversationId: string, keys: WrappedKey[]): Promise<void>;
   removeParticipant(conversationId: string, userId: string): Promise<void>;
+  /**
+   * La persona cambió de claves (restableció su cuenta): su copia de cada clave de conversación ya no
+   * sirve y queda pendiente. Devuelve los chats afectados.
+   */
+  markKeysPending(userId: string): Promise<string[]>;
+  /** Vuelve a dejar la clave de la conversación para quienes la tenían pendiente. */
+  reshareKeys(conversationId: string, keys: WrappedKey[]): Promise<void>;
   /** Idempotente por (remitente, clientId): un reintento devuelve el mensaje ya guardado. */
   createMessage(input: NewMessage): Promise<MessageRecord>;
   listMessages(conversationId: string, before: string | null, take: number): Promise<MessageRecord[]>;

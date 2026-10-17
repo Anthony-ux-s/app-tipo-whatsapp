@@ -12,7 +12,8 @@ export interface ChatListEntry {
   mine: boolean;
 }
 
-export type NewChatMode = 'direct' | 'group';
+/** Persona, grupo, o buscar entre los contactos del teléfono. */
+export type NewChatMode = 'direct' | 'group' | 'contacts';
 
 export interface PendingAttachment {
   file: File;

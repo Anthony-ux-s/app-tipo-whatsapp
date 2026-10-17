@@ -13,6 +13,9 @@ No reemplaza una auditoría externa ni la revisión legal de un abogado.
 | Puerta única | El gateway (Go) es lo único expuesto: valida el JWT (solo HS256, con vencimiento; cierra el WebSocket con 4401 al vencer), limita peticiones por IP y responde 404 a `/api/internal/*` | `services/gateway` | Pruebas de Go + `curl` contra el entorno arrancado |
 | Traductores | Lista blanca de eventos, IDs y tamaños validados, campos desconocidos descartados; el usuario sale del token y nunca del mensaje | `services/gateway/internal/translators` | Pruebas de Go |
 | Entre servicios | `INTERNAL_TOKEN` en el enlace gateway↔Elixir y en las rutas internas del core y de Elixir; en producción ningún servicio arranca con el token de desarrollo | `http/internal-token.guard.ts`, `router.ex`, `config.go` | Pruebas + `curl` sin token (401) |
+| Verificación por SMS/correo | Códigos de 6 cifras con azar criptográfico, guardados solo como HMAC; 10 min, 5 intentos, 1 envío/min y 5/h por destino + límite por IP; comprobante de un solo uso para registrarse o restablecer; «olvidé mi contraseña» responde igual exista o no el correo | `kernel/verification-rules.ts`, `identity/verification` | Pruebas unitarias + E2E |
+| Fotos de perfil | Solo JPEG verificado por su contenido, ≤ 300 KB, nombre impredecible, `nosniff`; el navegador quita EXIF/GPS | `avatar.use-case.ts`, `shared/utils/image.ts` | Pruebas unitarias + E2E |
+| Contactos | Los números se cruzan y se descartan (no se guardan); máximo 2000 por consulta y 10 consultas/min | `match-contacts.use-case.ts` | Pruebas unitarias + E2E |
 | Contraseñas | bcrypt; mismo mensaje y mismo tiempo para cuenta inexistente o contraseña errónea | `identity/auth` | Pruebas unitarias |
 | Sesiones | JWT; en producción el secreto debe ser propio y de 32+ caracteres o la API no arranca | `config/env.validation.ts` | Arranque manual con el secreto de desarrollo |
 | Fuerza bruta | 10 intentos/min por IP **y** cuenta en inicio de sesión y registro; 600/min por IP en el resto | `http/account-throttler.guard.ts` | E2E (se observó el bloqueo al repetir la suite) |
@@ -53,3 +56,10 @@ No reemplaza una auditoría externa ni la revisión legal de un abogado.
     de despachar y revisar sus términos de datos personales.
 11. **Pedido a medias**: si guardar el pedido falla después de reservar en la tienda y crear el cobro,
     no se deshace automáticamente (en producción: saga con compensaciones o cola con reintentos).
+12. **Recuperación por correo**: quien controle el correo de alguien puede restablecer su contraseña.
+    Mitigación: el historial no vuelve solo; cada contacto ve «restableció su cuenta» y decide si le
+    comparte el chat. Pendiente: avisar por SMS al número verificado cuando se restablece.
+13. **SMS pumping**: alguien podría pedir códigos para muchos números y generar costos. Mitigación:
+    límites por número y por IP. Pendiente para producción: CAPTCHA y lista de países permitidos.
+14. **Directorio por teléfono**: saber si un número usa Parla es inherente al registro por teléfono
+    (igual que en WhatsApp). Pendiente: limitar el cruce de contactos por cuenta y por día.

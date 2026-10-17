@@ -1,4 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router';
+import { WelcomeView } from '../modules/account/components/WelcomeView';
+import { ForgotPasswordView } from '../modules/auth/components/ForgotPasswordView';
 import { LoginView } from '../modules/auth/components/LoginView';
 import { RegisterView } from '../modules/auth/components/RegisterView';
 import { ConversationView } from '../modules/chats/components/ConversationView';
@@ -25,11 +27,13 @@ export const router = createBrowserRouter([
     children: [
       { path: '/entrar', element: <LoginView /> },
       { path: '/registro', element: <RegisterView /> },
+      { path: '/recuperar', element: <ForgotPasswordView /> },
     ],
   },
   {
     element: <RequireAuth />,
     children: [
+      { path: '/bienvenida', element: <WelcomeView /> },
       {
         path: '/app',
         element: <AppShellView />,

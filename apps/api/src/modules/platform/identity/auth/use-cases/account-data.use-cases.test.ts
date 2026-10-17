@@ -5,11 +5,16 @@ import {
   fakeHasher,
   fakeTokens,
   InMemoryAuthRepository,
+  InMemoryVerificationCodes,
+  RecordingVerificationSender,
+  testEnv,
   makeUser,
   RecordingRealtime,
 } from '../../../../../testing/in-memory.fakes';
 import { DeleteAccountUseCase, ExportAccountUseCase } from './account-data.use-case';
 import { RegisterUserUseCase } from './register-user.use-case';
+import { StartPhoneVerificationUseCase, VerifyPhoneUseCase } from './phone-verification.use-case';
+import { CodeVerifier } from '../../verification/code-verifier';
 
 const keys = { publicKey: '{"kty":"EC"}', keyBackup: { ciphertext: 'c', iv: 'i', salt: 's', iterations: 1000 } };
 
@@ -25,9 +30,13 @@ describe('aspectos legales de la cuenta', () => {
   });
 
   it('el registro exige aceptar los términos y guarda versión y fecha', async () => {
-    const register = new RegisterUserUseCase(users, fakeHasher, fakeTokens);
-    await expect(register.execute({ username: 'ana', displayName: 'Ana', password: 'Clave2026', acceptTerms: false, ...keys })).rejects.toThrow(ValidationError);
-    await register.execute({ username: 'ana', displayName: 'Ana', password: 'Clave2026', acceptTerms: true, ...keys });
+    const sender = new RecordingVerificationSender();
+    const verifier = new CodeVerifier(new InMemoryVerificationCodes(), sender, testEnv);
+    const register = new RegisterUserUseCase(users, fakeHasher, fakeTokens, verifier);
+    await new StartPhoneVerificationUseCase(users, verifier).execute('+573001112233');
+    const { verificationToken } = await new VerifyPhoneUseCase(verifier).execute('+573001112233', sender.lastSmsCode());
+    await expect(register.execute({ verificationToken, displayName: 'Ana', password: 'Clave2026', acceptTerms: false, ...keys })).rejects.toThrow(ValidationError);
+    await register.execute({ verificationToken, displayName: 'Ana', password: 'Clave2026', acceptTerms: true, ...keys });
     expect(users.users[0].termsVersion).toBe(TERMS_VERSION);
     expect(users.users[0].termsAcceptedAt).toBeInstanceOf(Date);
   });
