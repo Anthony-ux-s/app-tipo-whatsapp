@@ -1,5 +1,5 @@
 import type { ConversationSummary } from '@parla/types';
-import { ChevronDown, Copy, ListPlus, Lock, MessageSquareReply, MessagesSquare, Reply, RotateCcw } from 'lucide-react';
+import { ChevronDown, Copy, Download, ListPlus, Lock, MessageSquareReply, MessagesSquare, Reply, RotateCcw } from 'lucide-react';
 import { TaskCard } from '@shared/ui/TaskCard';
 import type { ChatMessage, DecryptedText } from '@shared/types/chat.types';
 import { formatTime } from '@shared/utils/date';
@@ -97,6 +97,11 @@ export function MessageBubble({
             <button role="menuitem" type="button" className={menuItem} onClick={() => actions.createTaskFrom(message)}>
               <ListPlus className="size-4 text-ink-soft" /> Convertir en tarea
             </button>
+            {isMedia && (
+              <button role="menuitem" type="button" className={menuItem} onClick={() => actions.download(message)}>
+                <Download className="size-4 text-ink-soft" /> Descargar
+              </button>
+            )}
             {caption && (
               <button role="menuitem" type="button" className={menuItem} onClick={() => actions.copyText(message)}>
                 <Copy className="size-4 text-ink-soft" /> Copiar texto
@@ -143,7 +148,7 @@ export function MessageBubble({
             media={message.media}
             localPreviewUrl={message.localPreviewUrl}
             outgoing={outgoing}
-            onOpenImage={actions.openImage}
+            onOpenImage={(url) => actions.openImage(url, message)}
           />
         )}
         {message.kind === 'text' && !text && <p className="text-[15px] text-ink-faint italic">Descifrando…</p>}

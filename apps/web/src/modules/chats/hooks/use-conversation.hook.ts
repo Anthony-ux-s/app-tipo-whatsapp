@@ -7,7 +7,9 @@ import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
 import type { ChatMessage } from '@shared/types/chat.types';
+import { mediaFileName, saveFile } from '@shared/utils/download';
 import { errorMessage } from '@shared/utils/http';
+import { decryptedMediaUrl } from '@shared/utils/media-cache';
 import { isGroupAdmin, toTaskView } from '../../tasks/utils/task-view.utils';
 import type { TaskPrefill } from '../../tasks/types/tasks.types';
 import type { MessageActions } from '../types/message-actions.types';
@@ -39,7 +41,7 @@ export function useConversation() {
   const callBusy = useCallStore((s) => s.phase !== 'idle');
   const [panel, setPanel] = useState<SidePanel>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; fileName: string } | null>(null);
   const [showJump, setShowJump] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
@@ -150,7 +152,17 @@ export function useConversation() {
         .then(() => toast('Texto copiado', 'success'))
         .catch(() => toast('No se pudo copiar', 'error'));
     },
-    openImage: (url) => setLightbox(url),
+    openImage: (url, message) => setLightbox({ url, fileName: mediaFileName(message.media?.mimeType ?? 'image/jpeg', message.createdAt) }),
+    download: (message) => {
+      setMenuFor(null);
+      const media = message.media;
+      if (!media) return;
+      const fileName = mediaFileName(media.mimeType, message.createdAt);
+      // Ya está descifrado en caché si se vio en pantalla; si no, se descifra ahora.
+      const url = message.localPreviewUrl ? Promise.resolve(message.localPreviewUrl) : conversation ? decryptedMediaUrl(conversation, media) : null;
+      if (!url) return;
+      void url.then((u) => saveFile(u, fileName)).catch(() => toast('No se pudo descargar el archivo', 'error'));
+    },
     retry: (clientId) => retry(clientId).catch((err) => toast(errorMessage(err), 'error')),
     toggleTask: (task: Task) =>
       updateTask(task, { status: task.status === 'done' ? 'open' : 'done' }).catch((err) => toast(errorMessage(err), 'error')),

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultCountry, toE164 } from '../const/countries.const';
+import { mediaFileName } from './download';
 import { formatDayLabel, formatDuration, formatListTimestamp } from './date';
 import { initials, matchesSearch } from './text';
 import { passwordStrength, validatePassword, validatePhone, validateUsername } from './validators';
@@ -55,5 +56,18 @@ describe('países e indicativos', () => {
     expect(defaultCountry('en').iso).toBe('CO');
     expect(toE164(defaultCountry('es-CO'), '300 123 4567')).toBe('+573001234567');
     expect(toE164(defaultCountry('es-AR'), '011 2345-6789')).toBe('+541123456789');
+  });
+});
+
+describe('nombre de archivos descargados', () => {
+  it('usa el tipo y la fecha del mensaje', () => {
+    const sentAt = new Date(2026, 9, 17, 15, 30, 12);
+    expect(mediaFileName('image/jpeg', sentAt)).toBe('Parla-IMG-20261017-153012.jpg');
+    expect(mediaFileName('video/mp4', sentAt)).toBe('Parla-VID-20261017-153012.mp4');
+    expect(mediaFileName('audio/webm;codecs=opus', sentAt)).toBe('Parla-AUD-20261017-153012.webm');
+  });
+
+  it('no deja pasar caracteres raros del tipo', () => {
+    expect(mediaFileName('image/svg+xml', 'no es fecha')).toBe('Parla-IMG-archivo.svgxm');
   });
 });
