@@ -1,12 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CallKind, PresenceStatus } from '@parla/types';
-import { effectivePlan, planById } from '../../../../../kernel/billing-plans';
-import { callLabel } from '../../../../../kernel/call-rules';
+import { callLabel, MAX_CALL_PARTICIPANTS } from '../../../../../kernel/call-rules';
 import { NotFoundError } from '../../../../../kernel/domain-error';
 import { PresenceRegistry } from '../../../../../infra/realtime/presence.registry';
 import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../../infra/realtime/realtime-publisher.port';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../../identity/auth/auth.repository';
-import { WORKSPACES_REPOSITORY, type WorkspacesRepository } from '../../../workspaces/workspaces.repository';
 import { CONVERSATIONS_REPOSITORY, type ConversationsRepository } from '../../conversations/conversations.repository';
 import { MarkDeliveredUseCase } from '../../conversations/use-cases/receipts.use-case';
 import { pushContextFor, SendMessageUseCase } from '../../conversations/use-cases/send-message.use-case';
@@ -15,7 +13,6 @@ import { NotificationDispatcher } from '../../push/use-cases/notification-dispat
 /** Contexto de una conversación que el tiempo real necesita para autorizar "escribiendo" y llamadas. */
 export interface ConversationContext {
   conversationId: string;
-  workspaceId: string;
   kind: 'direct' | 'group';
   title: string;
   participants: { id: string; name: string }[];
@@ -32,7 +29,6 @@ export class PresenceChangedUseCase {
     private readonly presence: PresenceRegistry,
     private readonly markDelivered: MarkDeliveredUseCase,
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
-    @Inject(WORKSPACES_REPOSITORY) private readonly workspaces: WorkspacesRepository,
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
   ) {}
 
@@ -42,7 +38,7 @@ export class PresenceChangedUseCase {
     this.presence.set(userId, status);
     if (status === 'online') await this.markDelivered.everythingPending(userId);
     else await this.users.touchLastSeen(userId, at);
-    const contacts = await this.workspaces.listContactIds(userId);
+    const contacts = await this.users.contactIds(userId);
     this.realtime.toUsers(contacts, 'presence', {
       userId,
       presence: status,
@@ -53,24 +49,18 @@ export class PresenceChangedUseCase {
 
 @Injectable()
 export class ConversationContextUseCase {
-  constructor(
-    @Inject(CONVERSATIONS_REPOSITORY) private readonly conversations: ConversationsRepository,
-    @Inject(WORKSPACES_REPOSITORY) private readonly workspaces: WorkspacesRepository,
-  ) {}
+  constructor(@Inject(CONVERSATIONS_REPOSITORY) private readonly conversations: ConversationsRepository) {}
 
   /** 404 si la persona no participa: el tiempo real nunca recibe datos de chats ajenos. */
   async execute(conversationId: string, userId: string): Promise<ConversationContext> {
     const conversation = await this.conversations.findForUser(conversationId, userId);
     if (!conversation) throw new NotFoundError('Conversación no encontrada');
-    const ws = await this.workspaces.findById(conversation.workspaceId);
-    const plan = planById(ws ? effectivePlan(ws.plan, ws.planExpiresAt) : 'free');
     return {
       conversationId: conversation.id,
-      workspaceId: conversation.workspaceId,
       kind: conversation.kind,
       title: conversation.title,
       participants: conversation.participants.map((p) => ({ id: p.user.id, name: p.user.displayName })),
-      maxCallParticipants: plan.maxCallParticipants,
+      maxCallParticipants: MAX_CALL_PARTICIPANTS,
     };
   }
 }
@@ -109,7 +99,7 @@ export class NotifyIncomingCallUseCase {
       return {
         title: ctx.conversationTitle,
         body: `${ctx.senderName} te está llamando · ${callLabel(input.kind)}`,
-        url: `/app/w/${conversation.workspaceId}/c/${conversation.id}`,
+        url: `/app/c/${conversation.id}`,
         tag: `call-${input.callId}`,
       };
     });

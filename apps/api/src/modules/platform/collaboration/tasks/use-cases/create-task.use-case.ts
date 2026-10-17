@@ -39,7 +39,6 @@ export class CreateTaskUseCase {
 
     const task = await this.tasks.create({
       conversationId,
-      workspaceId: conversation.workspaceId,
       titleCiphertext: input.title.ciphertext,
       titleIv: input.title.iv,
       assigneeId: input.assigneeId,

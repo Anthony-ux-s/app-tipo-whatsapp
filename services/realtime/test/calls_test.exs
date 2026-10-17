@@ -20,7 +20,6 @@ defmodule ParlaRealtime.CallsTest do
   defp context(id, users, kind, max) do
     %{
       "conversationId" => id,
-      "workspaceId" => "w1",
       "kind" => kind,
       "title" => id,
       "participants" => Enum.map(users, &%{"id" => &1, "name" => String.capitalize(&1)}),

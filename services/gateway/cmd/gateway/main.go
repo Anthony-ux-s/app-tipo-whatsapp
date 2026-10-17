@@ -2,6 +2,7 @@
 //
 //	navegador ──/api──► core NestJS        (HTTP, con límite de peticiones)
 //	navegador ──/ws───► realtime Elixir    (WebSocket multiplexado, traductor del chat)
+//	navegador ──/api/services──► tienda, delivery y billetera (traductores + orquestador de pedidos)
 package main
 
 import (
@@ -17,9 +18,13 @@ import (
 
 	"github.com/parla/gateway/internal/config"
 	"github.com/parla/gateway/internal/httpapi"
+	"github.com/parla/gateway/internal/orders"
 	"github.com/parla/gateway/internal/ratelimit"
 	"github.com/parla/gateway/internal/realtime"
 	"github.com/parla/gateway/internal/translators/chat"
+	"github.com/parla/gateway/internal/translators/mercaya"
+	"github.com/parla/gateway/internal/translators/motoya"
+	"github.com/parla/gateway/internal/translators/pagaya"
 )
 
 func main() {
@@ -50,9 +55,25 @@ func main() {
 		}
 	}()
 
+	client := &http.Client{Timeout: 10 * time.Second}
+	servicesAPI := &orders.HTTP{
+		Orch: &orders.Orchestrator{
+			Commerce:  mercaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
+			Delivery:  motoya.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
+			Payments:  pagaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
+			Core:      orders.HTTPCore{BaseURL: cfg.CoreURL, Token: cfg.InternalToken, HTTP: client},
+			PublicURL: cfg.PublicURL,
+		},
+		PagayaSecret: cfg.PagayaSecret,
+		MotoyaSecret: cfg.MotoyaSecret,
+	}
+
 	server := &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Port),
-		Handler:           httpapi.New(httpapi.Options{Core: cfg.CoreURL, Realtime: hub, LinkUp: link.Connected, Limiter: limiter, TrustProxy: cfg.Production}),
+		Addr: fmt.Sprintf(":%d", cfg.Port),
+		Handler: httpapi.New(httpapi.Options{
+			Core: cfg.CoreURL, Realtime: hub, LinkUp: link.Connected, Limiter: limiter, TrustProxy: cfg.Production,
+			JWTSecret: cfg.JWTSecret, Services: servicesAPI,
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
@@ -62,7 +83,7 @@ func main() {
 		_ = server.Shutdown(shutdown)
 	}()
 
-	slog.Info("gateway de Parla escuchando", "url", fmt.Sprintf("http://localhost:%d", cfg.Port), "core", cfg.CoreURL.String(), "realtime", cfg.RealtimeLinkURL)
+	slog.Info("gateway de Parla escuchando", "url", fmt.Sprintf("http://localhost:%d", cfg.Port), "core", cfg.CoreURL.String(), "realtime", cfg.RealtimeLinkURL, "proveedores", cfg.ProvidersURL)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("el gateway se detuvo", "error", err)
 		os.Exit(1)

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { parseInviteCode } from '../../modules/workspaces/utils/invite-link.utils';
 import { formatDayLabel, formatDuration, formatListTimestamp } from './date';
 import { initials, matchesSearch } from './text';
 import { passwordStrength, validatePassword, validatePhone, validateUsername } from './validators';
@@ -45,11 +44,5 @@ describe('texto', () => {
     expect(initials('sofía')).toBe('S');
     expect(matchesSearch('Andrés Rojas', 'andres')).toBe(true);
     expect(matchesSearch('Andrés Rojas', 'camila')).toBe(false);
-  });
-
-  it('acepta el enlace de invitación completo o solo el código', () => {
-    expect(parseInviteCode('https://parla.app/invitacion/andino2026')).toBe('andino2026');
-    expect(parseInviteCode(' andino2026 ')).toBe('andino2026');
-    expect(parseInviteCode('???')).toBeNull();
   });
 });

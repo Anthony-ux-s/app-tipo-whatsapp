@@ -24,6 +24,44 @@ export class PrismaAuthRepository implements AuthRepository {
     return row ? toUserRecord(row) : null;
   }
 
+  async findActiveByIds(ids: string[]): Promise<UserRecord[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.user.findMany({ where: { id: { in: ids }, deletedAt: null } });
+    return rows.map(toUserRecord);
+  }
+
+  async searchDirectory(excludeId: string, query: string, limit: number): Promise<UserRecord[]> {
+    const q = query.trim();
+    const digits = q.replace(/\D/g, '');
+    const rows = await this.prisma.user.findMany({
+      where: {
+        id: { not: excludeId },
+        deletedAt: null,
+        ...(q
+          ? {
+              OR: [
+                { displayName: { contains: q } },
+                { username: { contains: q.replace(/^@/, '').toLowerCase() } },
+                ...(digits.length >= 3 ? [{ phone: { contains: digits } }] : []),
+              ],
+            }
+          : {}),
+      },
+      orderBy: { displayName: 'asc' },
+      take: limit,
+    });
+    return rows.map(toUserRecord);
+  }
+
+  async contactIds(userId: string): Promise<string[]> {
+    const rows = await this.prisma.conversationParticipant.findMany({
+      where: { conversation: { participants: { some: { userId } } }, userId: { not: userId } },
+      select: { userId: true },
+      distinct: ['userId'],
+    });
+    return rows.map((r) => r.userId);
+  }
+
   async create(user: NewUser): Promise<UserRecord> {
     const row = await this.prisma.user.create({
       data: {
@@ -59,7 +97,6 @@ export class PrismaAuthRepository implements AuthRepository {
       this.prisma.messageReceipt.deleteMany({ where: { userId: id } }),
       this.prisma.messageMention.deleteMany({ where: { userId: id } }),
       this.prisma.conversationParticipant.deleteMany({ where: { userId: id } }),
-      this.prisma.workspaceMember.deleteMany({ where: { userId: id } }),
       this.prisma.task.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } }),
       this.prisma.user.update({
         where: { id },
@@ -78,8 +115,7 @@ export class PrismaAuthRepository implements AuthRepository {
   }
 
   async exportData(id: string): Promise<AccountData> {
-    const [memberships, participants, messagesSent, tasksCreated, tasksAssigned] = await Promise.all([
-      this.prisma.workspaceMember.findMany({ where: { userId: id }, include: { workspace: { select: { name: true } } } }),
+    const [participants, messagesSent, tasksCreated, tasksAssigned, ordersPlaced] = await Promise.all([
       this.prisma.conversationParticipant.findMany({
         where: { userId: id },
         include: {
@@ -91,9 +127,9 @@ export class PrismaAuthRepository implements AuthRepository {
       this.prisma.message.count({ where: { senderId: id, kind: { not: 'system' } } }),
       this.prisma.task.count({ where: { createdById: id } }),
       this.prisma.task.count({ where: { assigneeId: id } }),
+      this.prisma.order.count({ where: { userId: id } }),
     ]);
     return {
-      workspaces: memberships.map((m) => ({ name: m.workspace.name, role: m.role, joinedAt: m.joinedAt })),
       conversations: participants.map((p) => ({
         kind: p.conversation.kind,
         title:
@@ -105,6 +141,7 @@ export class PrismaAuthRepository implements AuthRepository {
       messagesSent,
       tasksCreated,
       tasksAssigned,
+      ordersPlaced,
     };
   }
 }

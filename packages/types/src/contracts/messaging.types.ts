@@ -1,4 +1,4 @@
-import type { ConversationKind, DeliveryStatus, MessageKind, TaskStatus, WorkspaceRole } from './enums.types';
+import type { ConversationKind, DeliveryStatus, MessageKind, TaskStatus, ParticipantRole } from './enums.types';
 import type { PublicUser } from './identity.types';
 
 /** Clave de la conversación envuelta para un miembro concreto. */
@@ -26,8 +26,8 @@ export interface MediaAttachment {
 
 export interface ConversationParticipant {
   user: PublicUser;
-  /** Rol del participante dentro del espacio de trabajo. */
-  role: WorkspaceRole;
+  /** admin = quien creó el grupo; en chats individuales, ambos son member. */
+  role: ParticipantRole;
 }
 
 /** Resumen del mensaje al que se responde (para dibujar la cita). */
@@ -64,7 +64,6 @@ export interface Message {
 
 export interface ConversationSummary {
   id: string;
-  workspaceId: string;
   kind: ConversationKind;
   /** Título del grupo; en chats individuales se usa el nombre del otro participante. */
   title: string;
@@ -90,13 +89,11 @@ export interface MessagePage {
 }
 
 export interface CreateDirectConversationRequest {
-  workspaceId: string;
   userId: string;
   keys: WrappedKey[];
 }
 
 export interface CreateGroupConversationRequest {
-  workspaceId: string;
   title: string;
   description?: string;
   memberIds: string[];
@@ -128,7 +125,6 @@ export interface ThreadPage {
 export interface Task {
   id: string;
   conversationId: string;
-  workspaceId: string;
   title: EncryptedPayload;
   assigneeId: string | null;
   createdById: string;

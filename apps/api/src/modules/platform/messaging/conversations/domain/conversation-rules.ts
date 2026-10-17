@@ -4,8 +4,8 @@ import { ValidationError } from '../../../../../kernel/domain-error';
 export const MAX_GROUP_SIZE = 256;
 
 /** Clave estable para no duplicar chats individuales entre las mismas dos personas. */
-export function directKeyFor(workspaceId: string, a: string, b: string): string {
-  return [workspaceId, ...[a, b].sort()].join(':');
+export function directKeyFor(a: string, b: string): string {
+  return [a, b].sort().join(':');
 }
 
 /**

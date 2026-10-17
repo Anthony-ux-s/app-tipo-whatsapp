@@ -1,0 +1,143 @@
+// Package services define los contratos limpios de Parla para los servicios de terceros (tienda,
+// delivery, pagos). Son el espejo de packages/types/src/contracts/services.types.ts: los
+// traductores convierten cada API externa a estas estructuras. Montos siempre en céntimos.
+package services
+
+import "regexp"
+
+type ServiceID string
+
+const (
+	Mercado ServiceID = "mercado"
+	Salud   ServiceID = "salud"
+)
+
+const Currency = "PEN"
+
+// ValidID: formato de identificadores que aceptamos de navegadores y proveedores.
+var ValidID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+type ServiceInfo struct {
+	ID          ServiceID `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Provider    string    `json:"provider"`
+	Available   bool      `json:"available"`
+}
+
+type Product struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Unit       string  `json:"unit"`
+	PriceCents int     `json:"priceCents"`
+	Currency   string  `json:"currency"`
+	Stock      int     `json:"stock"`
+	Category   string  `json:"category"`
+	ImageURL   *string `json:"imageUrl"`
+}
+
+type CartItem struct {
+	ProductID string `json:"productId"`
+	Quantity  int    `json:"quantity"`
+}
+
+type Address struct {
+	Line      string `json:"line"`
+	Reference string `json:"reference"`
+}
+
+type QuoteRequest struct {
+	Items   []CartItem `json:"items"`
+	Address Address    `json:"address"`
+}
+
+type OrderLine struct {
+	ProductID      string `json:"productId"`
+	Name           string `json:"name"`
+	Unit           string `json:"unit"`
+	Quantity       int    `json:"quantity"`
+	UnitPriceCents int    `json:"unitPriceCents"`
+	TotalCents     int    `json:"totalCents"`
+}
+
+type OrderQuote struct {
+	Lines            []OrderLine `json:"lines"`
+	SubtotalCents    int         `json:"subtotalCents"`
+	DeliveryFeeCents int         `json:"deliveryFeeCents"`
+	TotalCents       int         `json:"totalCents"`
+	Currency         string      `json:"currency"`
+	ETAMinutes       int         `json:"etaMinutes"`
+}
+
+type OrderStatus string
+
+const (
+	PendingPayment  OrderStatus = "pending_payment"
+	Paid            OrderStatus = "paid"
+	SearchingDriver OrderStatus = "searching_driver"
+	OnTheWay        OrderStatus = "on_the_way"
+	Delivered       OrderStatus = "delivered"
+	PaymentExpired  OrderStatus = "payment_expired"
+	Cancelled       OrderStatus = "cancelled"
+)
+
+type OrderPayment struct {
+	Provider  string  `json:"provider"`
+	QRText    string  `json:"qrText"`
+	PayURL    string  `json:"payUrl"`
+	ExpiresAt string  `json:"expiresAt"`
+	PaidAt    *string `json:"paidAt"`
+}
+
+type OrderDelivery struct {
+	Provider   string  `json:"provider"`
+	DriverName *string `json:"driverName"`
+	Vehicle    *string `json:"vehicle"`
+	ETAMinutes *int    `json:"etaMinutes"`
+	UpdatedAt  string  `json:"updatedAt"`
+}
+
+type Order struct {
+	ID               string         `json:"id"`
+	Service          ServiceID      `json:"service"`
+	Status           OrderStatus    `json:"status"`
+	Lines            []OrderLine    `json:"lines"`
+	SubtotalCents    int            `json:"subtotalCents"`
+	DeliveryFeeCents int            `json:"deliveryFeeCents"`
+	TotalCents       int            `json:"totalCents"`
+	Currency         string         `json:"currency"`
+	Address          Address        `json:"address"`
+	Payment          OrderPayment   `json:"payment"`
+	Delivery         *OrderDelivery `json:"delivery"`
+	CreatedAt        string         `json:"createdAt"`
+	UpdatedAt        string         `json:"updatedAt"`
+}
+
+// ── Contratos internos gateway ↔ core ─────────────────────────────────────────
+
+type InternalCreateOrder struct {
+	ID               string       `json:"id"`
+	UserID           string       `json:"userId"`
+	Service          ServiceID    `json:"service"`
+	Lines            []OrderLine  `json:"lines"`
+	SubtotalCents    int          `json:"subtotalCents"`
+	DeliveryFeeCents int          `json:"deliveryFeeCents"`
+	TotalCents       int          `json:"totalCents"`
+	Currency         string       `json:"currency"`
+	Address          Address      `json:"address"`
+	Payment          OrderPayment `json:"payment"`
+	DeliveryQuoteID  string       `json:"deliveryQuoteId"`
+}
+
+type InternalUpdateOrder struct {
+	ExpectStatus OrderStatus    `json:"expectStatus,omitempty"`
+	Status       OrderStatus    `json:"status"`
+	PaidAt       string         `json:"paidAt,omitempty"`
+	Delivery     *OrderDelivery `json:"delivery,omitempty"`
+}
+
+type InternalOrder struct {
+	Order
+	UserID          string `json:"userId"`
+	DeliveryQuoteID string `json:"deliveryQuoteId"`
+}

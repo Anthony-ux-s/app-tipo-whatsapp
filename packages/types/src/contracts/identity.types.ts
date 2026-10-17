@@ -85,8 +85,7 @@ export interface AccountExport {
   preferences: UserPreferences;
   termsVersion: string | null;
   termsAcceptedAt: string | null;
-  workspaces: { name: string; role: string; joinedAt: string }[];
   conversations: { title: string; kind: string; joinedAt: string }[];
-  activity: { messagesSent: number; tasksCreated: number; tasksAssigned: number };
+  activity: { messagesSent: number; tasksCreated: number; tasksAssigned: number; ordersPlaced: number };
   note: string;
 }

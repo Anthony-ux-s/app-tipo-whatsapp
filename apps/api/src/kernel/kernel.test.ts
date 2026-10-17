@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { aggregateDeliveryStatus, isForwardTransition } from './delivery-status';
-import { ConflictError, ForbiddenError, ValidationError } from './domain-error';
+import { ConflictError, ValidationError } from './domain-error';
 import { assertPasswordStrength, parseIdentifier } from './identifier';
-import { assertCanCreateGroup, assertIsAdmin, assertKeepsAnAdmin } from './workspace-permissions';
-import { generateInviteCode } from './invite-code';
+import { assertOrderTotals, assertOrderTransition, formatSoles, orderPush } from './order-rules';
 
 const at = new Date('2026-10-01T10:00:00Z');
 
@@ -50,30 +49,33 @@ describe('identificador de inicio de sesión', () => {
   });
 });
 
-describe('permisos del espacio de trabajo', () => {
-  it('solo un administrador administra', () => {
-    expect(() => assertIsAdmin('member')).toThrow(ForbiddenError);
-    expect(() => assertIsAdmin('admin')).not.toThrow();
+describe('pedidos de Servicios', () => {
+  const line = (unitPriceCents: number, quantity: number) => ({
+    productId: 'AZ-1KG', name: 'Azúcar rubia', unit: '1 kg', quantity, unitPriceCents, totalCents: unitPriceCents * quantity,
   });
 
-  it('los colaboradores crean grupos solo si el espacio lo permite', () => {
-    expect(() => assertCanCreateGroup('member', false)).toThrow(ForbiddenError);
-    expect(() => assertCanCreateGroup('member', true)).not.toThrow();
-    expect(() => assertCanCreateGroup('admin', false)).not.toThrow();
-    expect(() => assertCanCreateGroup(null, true)).toThrow(ForbiddenError);
+  it('un pedido solo avanza: pagado no vuelve a pendiente y entregado es final', () => {
+    expect(() => assertOrderTransition('pending_payment', 'paid')).not.toThrow();
+    expect(() => assertOrderTransition('paid', 'searching_driver')).not.toThrow();
+    expect(() => assertOrderTransition('searching_driver', 'on_the_way')).not.toThrow();
+    expect(() => assertOrderTransition('on_the_way', 'delivered')).not.toThrow();
+    expect(() => assertOrderTransition('paid', 'pending_payment')).toThrow(ConflictError);
+    expect(() => assertOrderTransition('delivered', 'on_the_way')).toThrow(ConflictError);
+    expect(() => assertOrderTransition('payment_expired', 'paid')).toThrow(ConflictError);
   });
 
-  it('el espacio nunca se queda sin administradores', () => {
-    expect(() => assertKeepsAnAdmin(1, 'admin', 'member')).toThrow(ConflictError);
-    expect(() => assertKeepsAnAdmin(1, 'admin', 'removed')).toThrow(ConflictError);
-    expect(() => assertKeepsAnAdmin(2, 'admin', 'member')).not.toThrow();
-    expect(() => assertKeepsAnAdmin(1, 'member', 'removed')).not.toThrow();
+  it('los montos deben cuadrar: líneas, subtotal y total con delivery', () => {
+    expect(() => assertOrderTotals([line(450, 2), line(520, 1)], 1420, 650, 2070)).not.toThrow();
+    expect(() => assertOrderTotals([], 0, 650, 650)).toThrow(ValidationError);
+    expect(() => assertOrderTotals([{ ...line(450, 2), totalCents: 100 }], 100, 0, 100)).toThrow('no cuadra');
+    expect(() => assertOrderTotals([line(450, 2)], 800, 650, 1450)).toThrow('subtotal');
+    expect(() => assertOrderTotals([line(450, 2)], 900, 650, 900)).toThrow('total');
   });
 
-  it('los códigos de invitación son legibles y distintos', () => {
-    const a = generateInviteCode();
-    expect(a).toMatch(/^[a-zA-Z2-9]{10}$/);
-    expect(a).not.toMatch(/[01lIoO]/);
-    expect(generateInviteCode()).not.toBe(a);
+  it('los avisos al cliente hablan en soles y enlazan al pedido', () => {
+    expect(formatSoles(2070)).toBe('S/ 20.70');
+    expect(orderPush('ord_1', 'paid', 2070, null)).toMatchObject({ body: expect.stringContaining('S/ 20.70'), url: '/app/pedidos/ord_1' });
+    expect(orderPush('ord_1', 'on_the_way', 2070, 'Carlos')?.body).toBe('Carlos lleva tu pedido.');
+    expect(orderPush('ord_1', 'searching_driver', 2070, null)).toBeNull();
   });
 });

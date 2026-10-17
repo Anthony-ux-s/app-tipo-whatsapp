@@ -103,7 +103,7 @@ export function SelectChatIllustration() {
   );
 }
 
-/** Sin espacios de trabajo: equipo armando su espacio. */
+/** Equipo trabajando junto: estados vacíos de tareas. */
 export function TeamIllustration() {
   return (
     <svg viewBox="0 0 320 220" {...svgProps} aria-label="Equipo de trabajo">
@@ -125,26 +125,6 @@ export function TeamIllustration() {
       <path d="M30 126l-4 10 14-10z" fill="#a5f3fc" />
       <rect x="262" y="132" width="44" height="30" rx="10" fill="#a7f3d0" />
       <path d="M296 162l4 10-14-10z" fill="#a7f3d0" />
-    </svg>
-  );
-}
-
-/** Enlace de invitación. */
-export function InviteIllustration() {
-  return (
-    <svg viewBox="0 0 280 200" {...svgProps} aria-label="Sobre de invitación">
-      <ellipse cx="140" cy="184" rx="100" ry="9" fill="#0f766e" fillOpacity="0.08" />
-      <rect x="50" y="60" width="180" height="116" rx="14" fill="#0f766e" />
-      <rect x="70" y="30" width="140" height="110" rx="10" fill="var(--surface)" stroke="#99f6e4" strokeWidth="2" />
-      <rect x="90" y="52" width="70" height="10" rx="5" fill="#0f766e" />
-      <rect x="90" y="72" width="100" height="8" rx="4" fill="#ccfbf1" />
-      <rect x="90" y="88" width="84" height="8" rx="4" fill="#ccfbf1" />
-      <path d="M50 74l90 62 90-62v88a14 14 0 0 1-14 14H64a14 14 0 0 1-14-14z" fill="#14b8a6" />
-      <path d="M50 176l72-56M230 176l-72-56" stroke="#0f766e" strokeWidth="2" />
-      <g transform="translate(214 52)">
-        <circle r="20" fill="#22d3ee" />
-        <path d="M-6 4a6 6 0 0 1 0-8l4-4a6 6 0 0 1 8 8l-2 2M6 -4a6 6 0 0 1 0 8l-4 4a6 6 0 0 1-8-8l2-2" stroke="#ffffff" strokeWidth="2.6" fill="none" strokeLinecap="round" />
-      </g>
     </svg>
   );
 }

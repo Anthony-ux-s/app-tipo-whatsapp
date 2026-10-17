@@ -18,9 +18,10 @@ test('en el celular la lista ocupa la pantalla y el chat se abre a pantalla comp
   await page.getByRole('link', { name: 'Perfil' }).click();
   await expect(page.getByRole('heading', { name: 'Perfil' })).toBeVisible();
   await expect(page.getByLabel('Nombre')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Equipo' })).toBeHidden();
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toBeHidden();
   await page.getByRole('link', { name: 'Volver a Ajustes' }).click();
   await expect(page.getByRole('heading', { name: 'Ajustes' })).toBeVisible();
-  await page.getByRole('link', { name: 'Equipo' }).click();
-  await expect(page.getByRole('heading', { name: 'Miembros' })).toBeVisible();
+  await page.getByRole('link', { name: 'Servicios' }).click();
+  await expect(page.getByRole('heading', { name: 'Servicios' })).toBeVisible();
+  await expect(page.getByTestId('service-mercado')).toBeVisible();
 });

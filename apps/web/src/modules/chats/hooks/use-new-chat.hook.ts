@@ -1,21 +1,19 @@
 import type { PublicUser } from '@parla/types';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
-import { useWorkspaceStore } from '@shared/stores/workspace.store';
+import { usePeopleStore } from '@shared/stores/people.store';
 import { errorMessage } from '@shared/utils/http';
-import { matchesSearch } from '@shared/utils/text';
 import type { NewChatMode } from '../types/chats.types';
+import { usePeopleSearch } from './use-people-search.hook';
 
-/** Nuevo chat individual o grupo: elegir personas del espacio, nombrar el grupo y crear las claves. */
+/** Nuevo chat individual o grupo: elegir personas de Parla, nombrar el grupo y crear las claves. */
 export function useNewChat(initialMode: NewChatMode | null, onClose: () => void) {
-  const { workspaceId = '' } = useParams();
   const navigate = useNavigate();
   const user = useSessionStore((s) => s.user)!;
-  const detail = useWorkspaceStore((s) => s.details[workspaceId]);
-  const loadDetail = useWorkspaceStore((s) => s.loadDetail);
+  const known = usePeopleStore((s) => s.known);
   const startDirect = useChatStore((s) => s.startDirect);
   const createGroup = useChatStore((s) => s.createGroup);
   const [mode, setMode] = useState<NewChatMode>('direct');
@@ -32,25 +30,20 @@ export function useNewChat(initialMode: NewChatMode | null, onClose: () => void)
     setSelected([]);
     setTitle('');
     setError(null);
-    if (workspaceId) void loadDetail(workspaceId).catch((err) => setError(errorMessage(err)));
-  }, [initialMode, workspaceId, loadDetail]);
+  }, [initialMode]);
+
+  const directory = usePeopleSearch(search, initialMode !== null);
 
   const me: PublicUser = useMemo(
     () => ({ ...user, publicKey: user.publicKey }),
     [user],
   );
-  const people = useMemo(
-    () =>
-      (detail?.members ?? [])
-        .map((m) => m.user)
-        .filter((u) => u.id !== user.id && matchesSearch(`${u.displayName} ${u.username ?? ''}`, search)),
-    [detail, user.id, search],
-  );
-  const canCreateGroups = detail ? detail.role === 'admin' || detail.allowMemberGroups : false;
+  const people = directory.people.filter((u) => u.id !== user.id);
+  const selectedPeople = selected.map((id) => known[id]).filter((u): u is PublicUser => Boolean(u));
 
   const finish = (conversationId: string) => {
     onClose();
-    navigate(`/app/w/${workspaceId}/c/${conversationId}`);
+    navigate(`/app/c/${conversationId}`);
   };
 
   const pickPerson = async (person: PublicUser) => {
@@ -60,7 +53,7 @@ export function useNewChat(initialMode: NewChatMode | null, onClose: () => void)
     }
     setBusy(true);
     try {
-      finish((await startDirect(workspaceId, me, person)).id);
+      finish((await startDirect(me, person)).id);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -80,8 +73,7 @@ export function useNewChat(initialMode: NewChatMode | null, onClose: () => void)
     setBusy(true);
     setError(null);
     try {
-      const members = (detail?.members ?? []).map((m) => m.user).filter((u) => selected.includes(u.id));
-      const conversation = await createGroup(workspaceId, me, title.trim(), members);
+      const conversation = await createGroup(me, title.trim(), selectedPeople);
       toast(`Grupo «${conversation.title}» creado con cifrado de extremo a extremo`, 'success');
       finish(conversation.id);
     } catch (err) {
@@ -94,14 +86,14 @@ export function useNewChat(initialMode: NewChatMode | null, onClose: () => void)
   return {
     mode,
     people,
-    loading: !detail,
+    loading: directory.loading && people.length === 0,
+    directoryError: directory.error,
     search,
     selected,
-    selectedPeople: (detail?.members ?? []).map((m) => m.user).filter((u) => selected.includes(u.id)),
+    selectedPeople,
     title,
     busy,
     error,
-    canCreateGroups,
     setMode: (value: NewChatMode) => {
       setMode(value);
       setError(null);

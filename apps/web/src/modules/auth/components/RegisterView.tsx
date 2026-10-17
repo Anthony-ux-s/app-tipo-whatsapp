@@ -30,7 +30,7 @@ export function RegisterView() {
 
         <Field
           label="Tu nombre"
-          placeholder="Como te verá tu equipo"
+          placeholder="Como te verán en tus chats"
           autoComplete="name"
           icon={<UserRound className="size-5" />}
           value={form.displayName}

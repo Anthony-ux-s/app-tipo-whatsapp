@@ -3,7 +3,6 @@ import type { TaskRecord } from './task.record';
 
 export interface NewTask {
   conversationId: string;
-  workspaceId: string;
   titleCiphertext: string;
   titleIv: string;
   assigneeId: string | null;
@@ -28,7 +27,7 @@ export interface TasksRepository {
   /** Tareas del chat: abiertas primero (por fecha límite), luego las hechas. */
   listForConversation(conversationId: string): Promise<TaskRecord[]>;
   /** Tareas del usuario en un espacio, solo de chats donde participa. */
-  listForUser(workspaceId: string, userId: string, scope: TaskScope): Promise<TaskRecord[]>;
+  listForUser(userId: string, scope: TaskScope): Promise<TaskRecord[]>;
 }
 
 export const TASKS_REPOSITORY = Symbol('TASKS_REPOSITORY');

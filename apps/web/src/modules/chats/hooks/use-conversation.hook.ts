@@ -6,10 +6,9 @@ import { useCallStore } from '@shared/stores/call.store';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
-import { useWorkspaceStore } from '@shared/stores/workspace.store';
 import type { ChatMessage } from '@shared/types/chat.types';
 import { errorMessage } from '@shared/utils/http';
-import { toTaskView } from '../../tasks/utils/task-view.utils';
+import { isGroupAdmin, toTaskView } from '../../tasks/utils/task-view.utils';
 import type { TaskPrefill } from '../../tasks/types/tasks.types';
 import type { MessageActions } from '../types/message-actions.types';
 import { buildTimeline } from '../utils/message-timeline.utils';
@@ -25,11 +24,10 @@ export type SidePanel =
 
 /** Conversación abierta: carga, lectura, desplazamiento, paneles laterales y acciones de cada mensaje. */
 export function useConversation() {
-  const { workspaceId = '', conversationId = '' } = useParams();
+  const { conversationId = '' } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const user = useSessionStore((s) => s.user)!;
-  const isAdmin = useWorkspaceStore((s) => s.details[workspaceId]?.role === 'admin');
   const conversation = useChatStore((s) => s.conversations[conversationId]);
   const listStatus = useChatStore((s) => s.listStatus);
   const thread = useChatStore((s) => s.threads[conversationId]);
@@ -76,9 +74,9 @@ export function useConversation() {
   useEffect(() => {
     if (conversation || listStatus !== 'ready' || !conversationId) return;
     void fetchConversation(conversationId).then((found) => {
-      if (!found) navigate(`/app/w/${workspaceId}`, { replace: true });
+      if (!found) navigate('/app', { replace: true });
     });
-  }, [conversation, listStatus, conversationId, fetchConversation, navigate, workspaceId]);
+  }, [conversation, listStatus, conversationId, fetchConversation, navigate]);
 
   const timeline = useMemo(() => buildTimeline(thread?.items ?? []), [thread?.items]);
 
@@ -157,7 +155,7 @@ export function useConversation() {
     toggleTask: (task: Task) =>
       updateTask(task, { status: task.status === 'done' ? 'open' : 'done' }).catch((err) => toast(errorMessage(err), 'error')),
     openTasks: () => setPanel({ type: 'tasks', prefill: null }),
-    taskView: (task) => toTaskView(tasks[task.id] ?? task, conversation?.participants ?? [], texts, user.id, isAdmin),
+    taskView: (task) => toTaskView(tasks[task.id] ?? task, conversation?.participants ?? [], texts, user.id, conversation ? isGroupAdmin(conversation, user.id) : false),
     person,
   };
 
@@ -192,6 +190,6 @@ export function useConversation() {
       if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     },
     reload: () => loadMessages(conversationId).catch((err) => toast(errorMessage(err), 'error')),
-    back: () => navigate(`/app/w/${workspaceId}`),
+    back: () => navigate('/app'),
   };
 }

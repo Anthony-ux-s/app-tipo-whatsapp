@@ -47,13 +47,11 @@ class MediaAttachmentDto implements MediaAttachment {
 }
 
 export class CreateDirectDto implements CreateDirectConversationRequest {
-  @IsString() @IsNotEmpty() workspaceId: string;
   @IsString() @IsNotEmpty() userId: string;
   @IsArray() @ValidateNested({ each: true }) @Type(() => WrappedKeyDto) keys: WrappedKeyDto[];
 }
 
 export class CreateGroupDto implements CreateGroupConversationRequest {
-  @IsString() @IsNotEmpty() workspaceId: string;
   @IsString() @MaxLength(60) title: string;
   @IsOptional() @IsString() @MaxLength(200) description?: string;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(255) @IsString({ each: true }) memberIds: string[];

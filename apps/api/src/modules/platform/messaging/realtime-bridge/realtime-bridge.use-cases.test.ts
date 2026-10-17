@@ -6,7 +6,6 @@ import {
   InMemoryAuthRepository,
   InMemoryConversationsRepository,
   InMemoryPushSubscriptions,
-  InMemoryWorkspacesRepository,
   makeUser,
   RecordingPushSender,
   RecordingRealtime,
@@ -32,7 +31,6 @@ describe('puente con el tiempo real (Elixir)', () => {
   const externo = makeUser({ displayName: 'Externo' });
   let users: InMemoryAuthRepository;
   let repo: InMemoryConversationsRepository;
-  let workspaces: InMemoryWorkspacesRepository;
   let realtime: RecordingRealtime;
   let presence: PresenceRegistry;
   let push: RecordingPushSender;
@@ -44,12 +42,7 @@ describe('puente con el tiempo real (Elixir)', () => {
     users.users.push(laura, andres, sofia, externo);
     repo = new InMemoryConversationsRepository();
     repo.addConversation('c1', [laura, andres, sofia]);
-    workspaces = new InMemoryWorkspacesRepository();
-    workspaces.workspaces.push({
-      id: 'w1', name: 'Café Andino', description: '', color: 'teal', inviteCode: 'x', allowMemberGroups: true,
-      creatorId: laura.id, createdAt: new Date(), memberCount: 3, plan: 'team', planExpiresAt: new Date(Date.now() + 86_400_000),
-    });
-    for (const u of [laura, andres, sofia]) workspaces.add(u, 'w1', 'member');
+    users.contacts.set(laura.id, [andres.id, sofia.id]);
     realtime = new RecordingRealtime();
     presence = new PresenceRegistry();
     const subs = new InMemoryPushSubscriptions();
@@ -64,7 +57,7 @@ describe('puente con el tiempo real (Elixir)', () => {
     await send.execute(andres.id, 'c1', { clientId: 'm1', kind: 'text', body: { ciphertext: 'x', iv: 'y' }, media: null });
     const events = new ConversationEvents(repo, realtime, presence);
     const markDelivered = new MarkDeliveredUseCase(repo, new GetConversationUseCase(repo, presence), events);
-    const presenceChanged = new PresenceChangedUseCase(presence, markDelivered, users, workspaces, realtime);
+    const presenceChanged = new PresenceChangedUseCase(presence, markDelivered, users, realtime);
 
     await presenceChanged.execute(laura.id, 'online', new Date());
     expect(presence.statusOf(laura.id)).toBe('online');
@@ -74,11 +67,12 @@ describe('puente con el tiempo real (Elixir)', () => {
     await presenceChanged.execute(laura.id, 'offline', at);
     expect(presence.statusOf(laura.id)).toBe('offline');
     expect(users.users[0].lastSeenAt).toEqual(at);
+    expect(realtime.events('presence').at(-1)?.userIds).toEqual([andres.id, sofia.id]);
     expect(realtime.events('presence').at(-1)?.payload).toEqual({ userId: laura.id, presence: 'offline', lastSeenAt: at.toISOString() });
   });
 
-  it('el contexto de la conversación solo se entrega a sus participantes, con el máximo de llamada del plan', async () => {
-    const context = new ConversationContextUseCase(repo, workspaces);
+  it('el contexto de la conversación solo se entrega a sus participantes, con el máximo por llamada', async () => {
+    const context = new ConversationContextUseCase(repo);
     const result = await context.execute('c1', andres.id);
     expect(result.participants.map((p) => p.id)).toEqual([laura.id, andres.id, sofia.id]);
     expect(result.maxCallParticipants).toBe(8);

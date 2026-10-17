@@ -13,10 +13,9 @@ export class TasksController {
   @Get()
   mine(
     @CurrentUser() user: AuthUser,
-    @Query('workspaceId') workspaceId: string,
     @Query('scope') scope: string,
   ): Promise<Task[]> {
     const safeScope = SCOPES.includes(scope as TaskScope) ? (scope as TaskScope) : 'assigned';
-    return this.listMine.execute(user.userId, workspaceId ?? '', safeScope);
+    return this.listMine.execute(user.userId, safeScope);
   }
 }

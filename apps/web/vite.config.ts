@@ -22,9 +22,9 @@ export default defineConfig({
       devOptions: { enabled: true, type: 'module' },
       includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
-        name: 'Parla — mensajería para equipos',
+        name: 'Parla — chats y servicios',
         short_name: 'Parla',
-        description: 'Chat para equipos de trabajo con cifrado de extremo a extremo.',
+        description: 'Chats cifrados de extremo a extremo y servicios: mercado, pago con QR y delivery.',
         lang: 'es',
         start_url: '/',
         display: 'standalone',

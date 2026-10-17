@@ -21,7 +21,6 @@ export function pushContextFor(conversation: ConversationRecord, senderId: strin
   const sender = conversation.participants.find((p) => p.user.id === senderId)?.user.displayName ?? 'Alguien';
   return {
     conversationId: conversation.id,
-    workspaceId: conversation.workspaceId,
     conversationKind: conversation.kind,
     conversationTitle:
       conversation.kind === 'direct'

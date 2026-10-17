@@ -1,0 +1,151 @@
+// Package mercaya traduce la API de la tienda «MercaYa» (español, céntimos) a los contratos de Parla.
+package mercaya
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/parla/gateway/internal/services"
+	"github.com/parla/gateway/internal/translators/providerapi"
+)
+
+var (
+	ErrNotFound = errors.New("producto no encontrado")
+	// ErrInvalid: el proveedor devolvió datos que no tienen sentido; se descartan.
+	ErrInvalid = errors.New("datos inválidos de la tienda")
+)
+
+// OutOfStockError: la tienda no tiene suficiente de un producto.
+type OutOfStockError struct{ ProductID string }
+
+func (e OutOfStockError) Error() string { return "sin stock: " + e.ProductID }
+
+const maxPriceCents = 1_000_000 // S/ 10 000 por unidad: más que eso es un error del proveedor.
+
+type Client struct {
+	BaseURL string
+	HTTP    *http.Client
+}
+
+type producto struct {
+	SKU            string  `json:"sku"`
+	Nombre         string  `json:"nombre"`
+	Presentacion   string  `json:"presentacion"`
+	PrecioCentimos *int    `json:"precio_centimos"`
+	Stock          *int    `json:"stock"`
+	Categoria      string  `json:"categoria"`
+	Imagen         *string `json:"imagen"`
+}
+
+// translate valida un producto de MercaYa y lo convierte; los campos desconocidos se pierden.
+func translate(p producto) (services.Product, error) {
+	switch {
+	case !services.ValidID.MatchString(p.SKU),
+		strings.TrimSpace(p.Nombre) == "" || utf8.RuneCountInString(p.Nombre) > 120,
+		p.PrecioCentimos == nil || *p.PrecioCentimos <= 0 || *p.PrecioCentimos > maxPriceCents,
+		p.Stock == nil || *p.Stock < 0:
+		return services.Product{}, fmt.Errorf("%w: %q", ErrInvalid, p.SKU)
+	}
+	var image *string
+	if p.Imagen != nil {
+		if u, err := url.Parse(*p.Imagen); err == nil && u.Scheme == "https" && u.Host != "" {
+			image = p.Imagen
+		}
+	}
+	return services.Product{
+		ID: p.SKU, Name: strings.TrimSpace(p.Nombre), Unit: strings.TrimSpace(p.Presentacion),
+		PriceCents: *p.PrecioCentimos, Currency: services.Currency, Stock: *p.Stock,
+		Category: strings.TrimSpace(p.Categoria), ImageURL: image,
+	}, nil
+}
+
+// Search busca en el catálogo. Los productos mal formados se omiten en vez de romper la lista.
+func (c Client) Search(ctx context.Context, query string) ([]services.Product, error) {
+	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodGet, c.BaseURL+"/mercaya/v1/catalogo?buscar="+url.QueryEscape(query), nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("%w: catálogo respondió %d", providerapi.ErrUnavailable, status)
+	}
+	var body struct {
+		Resultados []producto `json:"resultados"`
+	}
+	if err := providerapi.Decode(raw, &body); err != nil {
+		return nil, err
+	}
+	products := make([]services.Product, 0, len(body.Resultados))
+	for _, p := range body.Resultados {
+		if product, err := translate(p); err == nil {
+			products = append(products, product)
+		}
+	}
+	return products, nil
+}
+
+// Product trae el precio y stock vigentes de un producto.
+func (c Client) Product(ctx context.Context, id string) (services.Product, error) {
+	if !services.ValidID.MatchString(id) {
+		return services.Product{}, ErrNotFound
+	}
+	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodGet, c.BaseURL+"/mercaya/v1/productos/"+url.PathEscape(id), nil)
+	if err != nil {
+		return services.Product{}, err
+	}
+	switch status {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return services.Product{}, ErrNotFound
+	default:
+		return services.Product{}, fmt.Errorf("%w: producto respondió %d", providerapi.ErrUnavailable, status)
+	}
+	var p producto
+	if err := providerapi.Decode(raw, &p); err != nil {
+		return services.Product{}, err
+	}
+	product, err := translate(p)
+	if err != nil {
+		return services.Product{}, err
+	}
+	if product.ID != id {
+		return services.Product{}, fmt.Errorf("%w: pedí %q y llegó %q", ErrInvalid, id, product.ID)
+	}
+	return product, nil
+}
+
+// Reserve aparta el stock del pedido. La referencia (id del pedido) hace la reserva idempotente.
+func (c Client) Reserve(ctx context.Context, reference string, items []services.CartItem) error {
+	type linea struct {
+		SKU      string `json:"sku"`
+		Cantidad int    `json:"cantidad"`
+	}
+	lineas := make([]linea, len(items))
+	for i, item := range items {
+		lineas[i] = linea{SKU: item.ProductID, Cantidad: item.Quantity}
+	}
+	status, raw, err := providerapi.Call(ctx, c.HTTP, http.MethodPost, c.BaseURL+"/mercaya/v1/pedidos", map[string]any{"referencia": reference, "lineas": lineas})
+	if err != nil {
+		return err
+	}
+	var body struct {
+		Estado string `json:"estado"`
+		Error  string `json:"error"`
+		SKU    string `json:"sku"`
+	}
+	_ = providerapi.Decode(raw, &body)
+	switch {
+	case status == http.StatusCreated && body.Estado == "RESERVADO":
+		return nil
+	case status == http.StatusConflict && body.Error == "SIN_STOCK":
+		return OutOfStockError{ProductID: body.SKU}
+	case status == http.StatusUnprocessableEntity:
+		return ErrNotFound
+	default:
+		return fmt.Errorf("%w: reserva respondió %d %s", providerapi.ErrUnavailable, status, body.Error)
+	}
+}

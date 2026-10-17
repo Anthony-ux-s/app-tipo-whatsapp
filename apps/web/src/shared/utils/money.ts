@@ -1,6 +1,6 @@
-/** Importe en pesos (u otra moneda) sin decimales: "$ 49.900". */
-export function formatMoney(amount: number, currency = 'COP'): string {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+/** Montos en céntimos → «S/ 4.50» (soles peruanos, como Yape). */
+export function formatSoles(cents: number): string {
+  return `S/ ${(cents / 100).toFixed(2)}`;
 }
 
 export function formatLongDate(iso: string): string {

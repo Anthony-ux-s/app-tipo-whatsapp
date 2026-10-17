@@ -84,10 +84,8 @@ navegador, nunca en el servidor.
   fondos y texto, que la investigación ya define (`#F0F2F5`, `#111B21`). No se usan rojos ni otros
   colores de marca ajenos; los errores se muestran con ícono y texto en tonos oscuros.
 - **Tema oscuro**: incluido como preferencia del usuario, con los mismos tokens de color.
-- **Roles**: dos roles por espacio de trabajo, `admin` y `member` (colaborador). El administrador
-  crea el espacio, invita por enlace, cambia roles y crea canales; el colaborador se une con el
-  enlace y conversa. Ambos chatean como iguales, por eso el motor de mensajería vive en
-  `modules/platform/messaging` y cada rol pone su propia puerta.
+- **Roles**: ya no hay roles de espacio (ver «Super-app» al final). Todos chatean como iguales; en
+  un grupo, quien lo crea lo administra (agrega personas y puede gestionar cualquier tarea del grupo).
 - **Estados de un mensaje**: `sent` → `delivered` → `read`. En grupos el estado visible es el
   mínimo entre todos los destinatarios (se guarda un recibo por destinatario).
 - **Historial**: sin límite de días (la crítica a Slack); se pagina por cursor de 40 en 40.
@@ -117,11 +115,11 @@ navegador, nunca en el servidor.
 | Pieza | Elección | Por qué |
 | --- | --- | --- |
 | Llamadas de voz y video | **WebRTC** nativo del navegador, señalización por el mismo **Socket.IO** | Gratis y sin servidores de medios: el audio y el video van P2P, cifrados con DTLS-SRTP, coherente con el cifrado E2E. |
-| Llamadas grupales | **Malla P2P** (cada persona envía a todas) con tope por plan (4 / 8) | Sin SFU que mantener; funciona bien hasta ~8 personas. Para más, un SFU libre (LiveKit/mediasoup) en una fase futura. |
+| Llamadas grupales | **Malla P2P** (cada persona envía a todas) con tope de 8 personas | Sin SFU que mantener; funciona bien hasta ~8 personas. Para más, un SFU libre (LiveKit/mediasoup) en una fase futura. |
 | STUN / TURN | STUN públicos de Google (gratuitos) y TURN opcional por variables | No requiere credenciales para empezar; TURN propio (coturn) solo si alguna red lo exige. |
-| Planes | Por espacio de trabajo, **prepago mensual sin cobros automáticos** (Gratis / Equipo / Empresa) | Coincide con el modelo freemium de la investigación; prepago evita gestionar suscripciones y cobros fallidos. |
-| Pasarela | **MercadoPago Checkout Pro** detrás del puerto `PaymentGateway`; **sandbox** por defecto | Enfoque latinoamericano (respuesta a la pregunta 3); el sandbox permite probar todo sin credenciales. Stripe sería otro adaptador. |
-| Plan vigente | Se guarda en el espacio (`plan`, `planExpiresAt`) y se calcula el efectivo al leer | El motor de espacios aplica el límite sin depender del de pagos (evita dependencias circulares). |
+| Planes *(retirados en la super-app)* | Por espacio de trabajo, **prepago mensual sin cobros automáticos** (Gratis / Equipo / Empresa) | Coincide con el modelo freemium de la investigación; prepago evita gestionar suscripciones y cobros fallidos. |
+| Pasarela *(retirada en la super-app)* | **MercadoPago Checkout Pro** detrás del puerto `PaymentGateway`; **sandbox** por defecto | Enfoque latinoamericano (respuesta a la pregunta 3); el sandbox permite probar todo sin credenciales. Stripe sería otro adaptador. |
+| Plan vigente *(retirado)* | Se guarda en el espacio (`plan`, `planExpiresAt`) y se calcula el efectivo al leer | El motor de espacios aplica el límite sin depender del de pagos (evita dependencias circulares). |
 | Eliminación de cuenta | **Anonimizar** en vez de borrar la fila | Los demás necesitan la clave pública de quien envolvió la clave de la conversación para seguir leyendo sus chats. |
 | Producción | **Un solo proceso**: la API sirve la PWA compilada; **Docker + PostgreSQL** con docker-compose | Menos piezas que operar; mismo origen para cookies, CSP y WebSockets. Render/Fly/Railway o un VPS sirven igual. |
 | Seguridad web | **helmet** con CSP estricta (el script de tema salió del HTML para no necesitar `unsafe-inline`) | Mitiga XSS, que es el riesgo principal para claves guardadas en el navegador. |
@@ -143,3 +141,27 @@ cada app; vistas en **Next.js**. Esto reemplaza las guías originales (todo en N
 | Seguridad entre servicios | `INTERNAL_TOKEN` (comparación en tiempo constante) en `/link`, `/internal/publish` y `/api/internal/*`; el gateway responde 404 a `/api/internal/*` | Las rutas internas no existen hacia fuera aunque alguien adivine la URL. |
 | Orden del cambio | **Fase 1** (hecha): Elixir + gateway + traductor del chat, con la web actual y las 17 pruebas E2E como red de seguridad. **Fase 2**: la web a Next.js. **Fase 3**: los backends de las otras apps, cada una con su traductor | Cambiar backend y frontend a la vez dejaría sin forma de saber qué rompió qué. |
 | Librerías | Go: `coder/websocket` (única dependencia), JWT HS256 propio con la biblioteca estándar. Elixir: Bandit + Plug + WebSockAdapter + Jason + Req | Pocas dependencias, mantenidas y sin servicios externos. |
+
+## Super-app: un solo espacio y Servicios (estilo WeChat)
+
+Pedido explícito: quitar los espacios de trabajo («que sea uno solo, como WhatsApp») y agregar
+servicios dentro de la app, como WeChat o los servicios de Yape. Ejemplo pedido: un cliente busca
+«un kilo de azúcar, arroz», paga con un QR tipo Yape, otra API manda un delivery en moto, y Parla
+suma el delivery y el costo de los productos.
+
+| Decisión | Elección | Por qué |
+| --- | --- | --- |
+| Espacios de trabajo | **Eliminados** de la base, la API y la web (no escondidos). Cualquiera le escribe a cualquiera; directorio en `GET /people` | Es el modelo de WhatsApp que se pidió. Dejar un «espacio global» oculto sería deuda: lógica muerta que alguien tendría que entender. |
+| Planes por espacio y MercadoPago | **Retirados** | Cobraban por espacio y por miembros; sin espacios no tienen sentido. El cobro ahora es por pedido, con la billetera. |
+| Administración de grupos | Quien crea el grupo lo administra | Igual que WhatsApp, sin tabla nueva: `createdById` ya existía. |
+| Quién orquesta un pedido | El **gateway (Go)**, en `internal/orders` | El gateway ya era el orquestador central. Hablar con tres sistemas externos y coordinarlos es justo su trabajo; el core no necesita conocer a ningún proveedor. |
+| Dónde se guardan los pedidos | En el **core** (tabla `Order`), vía `/api/internal/orders` | Una sola base de datos, el historial junto a la cuenta (exportar, eliminar), y los avisos al cliente salen por el mismo camino que los mensajes (core → Elixir). |
+| Traductores por proveedor | `mercaya`, `motoya` y `pagaya` en `internal/translators` | Cada API externa tiene su formato (español con céntimos, inglés con montos en texto, soles con decimales). El traductor lo convierte a contratos limpios en céntimos. Cambiar de proveedor real = escribir un traductor nuevo. |
+| Precios | El gateway **recotiza siempre con la tienda** (al cotizar y al crear); el core **verifica** que los montos cuadren | El navegador solo manda productos y cantidades: no puede bajar un precio. Defensa en profundidad. |
+| Avisos de pago y delivery | Webhooks a `/hooks/pagaya` y `/hooks/motoya` con **firma HMAC-SHA256** (comparación en tiempo constante) | Es como notifican Yape/Niubiz/Culqi y las empresas de delivery reales. Sin firma válida → 401. |
+| Idempotencia | Transiciones con `expectStatus` (comparar y cambiar atómico) y estados que **nunca retroceden** | Los proveedores reintentan los avisos. Un pago repetido no despacha dos motos, y un aviso viejo no «desentrega» un pedido. |
+| Moneda | **Soles (PEN), montos en céntimos enteros** | Yape es peruano; enteros evitan errores de redondeo al sumar. |
+| Proveedores | **Simuladores locales** en `services/providers` (Go, sin dependencias) con formatos distintos entre sí | La regla del proyecto es no usar servicios pagos ni credenciales reales. Los simuladores reproducen lo difícil de verdad: formatos ajenos, firmas, reintentos, vencimiento del cobro y avance del delivery. |
+| QR | **qrcode-generator** (MIT, sin dependencias) dibujado como SVG con React | Sin HTML inyectado. Funciona con cualquier lector de QR del celular. |
+| Búsqueda | El navegador parte el pedido hablado («un kilo de azúcar, arroz») en términos y busca cada uno | La gente escribe así su lista. Es simple y se puede probar. |
+| Salud | Se muestra como «Próximamente» | Primero un flujo completo que funcione de punta a punta. Sumar Salud es otro traductor y otra pantalla. |

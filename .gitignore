@@ -20,5 +20,6 @@ apps/api/.secrets/
 
 # Servicios compilados
 services/gateway/bin/
+services/providers/bin/
 services/realtime/_build/
 services/realtime/deps/

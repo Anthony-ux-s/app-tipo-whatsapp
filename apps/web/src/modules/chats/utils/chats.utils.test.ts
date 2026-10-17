@@ -36,7 +36,6 @@ const msg = (id: string, senderId: string, createdAt: string, extra: Partial<Mes
 
 const group = (lastMessage: Message | null): ConversationSummary => ({
   id: 'c1',
-  workspaceId: 'w1',
   kind: 'group',
   title: 'Logística',
   description: '',

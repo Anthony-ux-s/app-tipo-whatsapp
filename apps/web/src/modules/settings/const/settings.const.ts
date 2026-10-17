@@ -24,7 +24,7 @@ export const SETTINGS_SECTIONS: Record<SettingsSectionId, SettingsSectionInfo> =
     id: 'perfil',
     title: 'Perfil',
     summary: 'Nombre, info. y color de tu avatar',
-    description: 'Así te ve tu equipo en los chats y en el directorio.',
+    description: 'Así te ven tus contactos en los chats y al buscarte en Parla.',
     icon: UserRound,
   },
   privacidad: {

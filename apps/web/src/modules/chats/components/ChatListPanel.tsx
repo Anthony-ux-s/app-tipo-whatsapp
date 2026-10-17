@@ -1,54 +1,23 @@
-import { ChevronDown, ListChecks, MessageSquarePlus, Search, Users, X } from 'lucide-react';
+import { MessageSquarePlus, Search, Users, X } from 'lucide-react';
 import { Link } from 'react-router';
 import { Avatar } from '@shared/ui/Avatar';
 import { Button, IconButton } from '@shared/ui/Button';
 import { EmptyChatsIllustration, NoResultsIllustration } from '@shared/ui/illustrations';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
-import { WorkspaceBadge } from '@shared/ui/WorkspaceBadge';
 import { useChatList } from '../hooks/use-chat-list.hook';
 import { ChatListItem } from './ChatListItem';
 import { NewChatModal } from './NewChatModal';
 
-/** Barra lateral: perfil y espacio, nuevo chat, búsqueda, filtros y la lista de conversaciones. */
+/** Barra lateral: nuevo chat o grupo, búsqueda, filtros y la lista de conversaciones. */
 export function ChatListPanel() {
   const list = useChatList();
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-surface" aria-label="Chats">
       <header className="flex items-center gap-2 px-3 pt-3 pb-2 md:px-4">
-        <button
-          type="button"
-          onClick={list.toggleSwitcher}
-          aria-expanded={list.switcherOpen}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1 py-1 text-left transition-colors duration-200 hover:bg-surface-2"
-        >
-          <span className="md:hidden">
-            <Avatar name={list.user.displayName} color={list.user.avatarColor} size="sm" />
-          </span>
-          {list.workspace && (
-            <span className="hidden md:inline-flex">
-              <WorkspaceBadge name={list.workspace.name} color={list.workspace.color} size="sm" />
-            </span>
-          )}
-          <span className="min-w-0">
-            <span className="flex items-center gap-1">
-              <span className="truncate font-display text-lg font-extrabold text-ink">{list.workspace?.name ?? 'Chats'}</span>
-              <ChevronDown className={`size-4 shrink-0 text-ink-soft transition-transform duration-200 ${list.switcherOpen ? 'rotate-180' : ''}`} />
-            </span>
-            <span className="block truncate text-xs text-ink-soft">
-              {list.user.displayName} · {list.workspace?.role === 'admin' ? 'Administrador' : 'Colaborador'}
-            </span>
-          </span>
-        </button>
-        {list.workspace && (
-          <Link
-            to={`/app/w/${list.workspace.id}/tareas`}
-            aria-label="Mis tareas"
-            title="Mis tareas"
-            className="hidden size-10 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors duration-200 hover:bg-surface-3 hover:text-ink md:inline-flex"
-          >
-            <ListChecks className="size-5" />
-          </Link>
-        )}
+        <Link to="/app/ajustes/perfil" aria-label="Tu perfil" className="rounded-full md:hidden">
+          <Avatar name={list.user.displayName} color={list.user.avatarColor} size="sm" />
+        </Link>
+        <h1 className="min-w-0 flex-1 truncate px-1 font-display text-2xl font-extrabold text-ink">Chats</h1>
         <IconButton label="Nuevo grupo" onClick={() => list.openNewChat('group')}>
           <Users className="size-5" />
         </IconButton>
@@ -56,31 +25,6 @@ export function ChatListPanel() {
           <MessageSquarePlus className="size-5" />
         </IconButton>
       </header>
-
-      {list.switcherOpen && (
-        <div className="mx-3 mb-2 animate-rise overflow-hidden rounded-xl border border-line bg-surface shadow-pop md:mx-4">
-          <p className="px-3 pt-3 pb-1 text-xs font-semibold tracking-wide text-ink-faint uppercase">Tus espacios</p>
-          <ul>
-            {list.workspaces.map((ws) => (
-              <li key={ws.id}>
-                <button
-                  type="button"
-                  onClick={() => list.switchWorkspace(ws.id)}
-                  className={`flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-2 ${ws.id === list.workspace?.id ? 'bg-teal-50 dark:bg-teal-950/40' : ''}`}
-                >
-                  <WorkspaceBadge name={ws.name} color={ws.color} size="sm" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-ink">{ws.name}</span>
-                    <span className="block text-xs text-ink-soft">
-                      {ws.memberCount} miembros · {ws.role === 'admin' ? 'Administrador' : 'Colaborador'}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <div className="px-3 pb-2 md:px-4">
         <label className="relative flex items-center">
@@ -126,7 +70,7 @@ export function ChatListPanel() {
             compact
             illustration={<EmptyChatsIllustration />}
             title="¿No tienes chats aún?"
-            description="Inicia una nueva conversación con alguien de tu equipo. Todo queda cifrado de extremo a extremo."
+            description="Escríbele a cualquier persona de Parla o crea un grupo. Todo queda cifrado de extremo a extremo."
             action={
               <Button icon={<MessageSquarePlus className="size-4" />} onClick={() => list.openNewChat('direct')}>
                 Iniciar una conversación

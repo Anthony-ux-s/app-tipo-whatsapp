@@ -1,5 +1,5 @@
-# Parla en un servidor propio: gateway (Go, único puerto público) → core (NestJS) + tiempo real
-# (Elixir), con PostgreSQL.
+# Parla en un servidor propio: gateway (Go, único puerto público de la app) → core (NestJS) + tiempo
+# real (Elixir) + APIs de servicios (simuladas en «providers»: tienda, delivery y billetera), con PostgreSQL.
 #   cp .env.production.example .env.production   (y completa los valores)
 #   docker compose --env-file .env.production up -d --build
 # Luego pon un proxy con HTTPS delante (Caddy, Nginx, Traefik): la cámara, el micrófono, las
@@ -23,7 +23,7 @@ services:
   gateway:
     build: services/gateway
     restart: unless-stopped
-    depends_on: [core, realtime]
+    depends_on: [core, realtime, providers]
     ports:
       - '8080:4100'
     environment:
@@ -33,6 +33,23 @@ services:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?Define INTERNAL_TOKEN (24+ caracteres)}
       JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET (32+ caracteres)}
       WEB_ORIGIN: ${PUBLIC_URL}
+      PROVIDERS_URL: http://providers:4103
+      # Los avisos de pago y delivery viajan por la red interna de Docker
+      GATEWAY_PUBLIC_URL: http://gateway:4100
+      PAGAYA_WEBHOOK_SECRET: ${PAGAYA_WEBHOOK_SECRET:?Define PAGAYA_WEBHOOK_SECRET (24+ caracteres)}
+      MOTOYA_WEBHOOK_SECRET: ${MOTOYA_WEBHOOK_SECRET:?Define MOTOYA_WEBHOOK_SECRET (24+ caracteres)}
+
+  # Simuladores de tienda (MercaYa), delivery (MotoYa) y billetera con QR (PagaYa). Para producción
+  # real se reemplazan por los proveedores verdaderos y solo cambian los traductores del gateway.
+  providers:
+    build: services/providers
+    restart: unless-stopped
+    ports:
+      - '8081:4103' # la página de pago que abre el QR
+    environment:
+      PROVIDERS_PUBLIC_URL: ${PROVIDERS_PUBLIC_URL:?Define PROVIDERS_PUBLIC_URL}
+      PAGAYA_WEBHOOK_SECRET: ${PAGAYA_WEBHOOK_SECRET}
+      MOTOYA_WEBHOOK_SECRET: ${MOTOYA_WEBHOOK_SECRET}
 
   realtime:
     build: services/realtime
@@ -53,11 +70,7 @@ services:
       DATABASE_URL: postgresql://parla:${POSTGRES_PASSWORD}@db:5432/parla
       JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET (32+ caracteres)}
       PUBLIC_WEB_URL: ${PUBLIC_URL:?Define PUBLIC_URL, p. ej. https://chat.miempresa.com}
-      PUBLIC_API_URL: ${PUBLIC_URL}
       WEB_ORIGIN: ${PUBLIC_URL}
-      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-sandbox}
-      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
-      MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:soporte@parla.app}

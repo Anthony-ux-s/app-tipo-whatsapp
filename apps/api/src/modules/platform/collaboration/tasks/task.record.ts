@@ -4,7 +4,6 @@ import type { TaskStatus } from '@parla/types';
 export interface TaskRecord {
   id: string;
   conversationId: string;
-  workspaceId: string;
   titleCiphertext: string;
   titleIv: string;
   assigneeId: string | null;

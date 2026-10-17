@@ -1,4 +1,4 @@
-import type { ConversationParticipant, Task } from '@parla/types';
+import type { ConversationParticipant, ConversationSummary, Task } from '@parla/types';
 import type { DecryptedText } from '@shared/types/chat.types';
 import { formatDue } from '@shared/utils/date';
 import { taskTextKey } from '@shared/utils/ids';
@@ -12,7 +12,12 @@ export interface TaskView {
   canToggle: boolean;
 }
 
-/** Quién puede marcarla: quien la creó, la persona asignada o un administrador (igual que la API). */
+/** Administra el grupo quien lo creó (como en WhatsApp, igual que la API). */
+export function isGroupAdmin(conversation: Pick<ConversationSummary, 'kind' | 'createdById'>, myId: string): boolean {
+  return conversation.kind === 'group' && conversation.createdById === myId;
+}
+
+/** Quién puede marcarla: quien la creó, la persona asignada o quien administra el grupo (igual que la API). */
 export function canEditTask(task: Task, myId: string, isAdmin: boolean): boolean {
   return task.createdById === myId || task.assigneeId === myId || isAdmin;
 }

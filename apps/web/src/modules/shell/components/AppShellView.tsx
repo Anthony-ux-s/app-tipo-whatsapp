@@ -1,38 +1,41 @@
 import { Outlet } from 'react-router';
-import { ErrorState, FullScreenLoader } from '@shared/ui/States';
 import { CallOverlay } from '../../calls/components/CallOverlay';
-import { CreateWorkspaceModal } from '../../workspaces/components/CreateWorkspaceModal';
+import { ChatListPanel } from '../../chats/components/ChatListPanel';
 import { useAppShell } from '../hooks/use-app-shell.hook';
+import { useMainLayout } from '../hooks/use-main-layout.hook';
+import { AppRail } from './AppRail';
 import { ConnectionBanner } from './ConnectionBanner';
-import { WorkspaceRail } from './WorkspaceRail';
+import { MobileNav } from './MobileNav';
 
+/**
+ * Armazón de la app: barra de secciones (escritorio), lista de chats y el panel abierto.
+ * En el celular se ve la lista o el panel, con la barra inferior en las pantallas principales.
+ */
 export function AppShellView() {
   const shell = useAppShell();
+  const layout = useMainLayout();
   if (!shell.user) return null;
-  if (shell.status === 'loading' || shell.status === 'idle') return <FullScreenLoader label="Abriendo tus espacios…" />;
-  if (shell.status === 'error') {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <ErrorState message={shell.error ?? 'Revisa tu conexión.'} onRetry={shell.reload} compact={false} />
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-dvh overflow-hidden bg-canvas">
-      <WorkspaceRail
-        user={shell.user}
-        workspaces={shell.workspaces}
-        activeWorkspaceId={shell.activeWorkspaceId}
-        onCreate={shell.openCreate}
-      />
+      <AppRail user={shell.user} section={layout.section} unread={layout.totalUnread} />
       <div className="flex min-w-0 flex-1 flex-col">
         <ConnectionBanner connection={shell.connection} />
-        <div className="flex min-h-0 flex-1">
-          <Outlet context={{ openCreateWorkspace: shell.openCreate }} />
+        <div className="flex min-h-0 min-w-0 flex-1">
+          <aside
+            className={`${layout.showListOnMobile ? 'flex' : 'hidden'} w-full shrink-0 flex-col border-r border-line md:flex md:w-[340px] lg:w-[380px]`}
+          >
+            <ChatListPanel />
+            <MobileNav section={layout.section} unread={layout.totalUnread} />
+          </aside>
+          <main className={`${layout.showListOnMobile ? 'hidden' : 'flex'} min-w-0 flex-1 flex-col md:flex`}>
+            <div className="flex min-h-0 flex-1 animate-fade-in">
+              <Outlet />
+            </div>
+            {layout.showMobileNavInMain && <MobileNav section={layout.section} unread={layout.totalUnread} />}
+          </main>
         </div>
       </div>
-      <CreateWorkspaceModal open={shell.createOpen} onClose={shell.closeCreate} />
       <CallOverlay />
     </div>
   );

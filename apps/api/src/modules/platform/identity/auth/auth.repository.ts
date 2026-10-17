@@ -25,6 +25,12 @@ export interface AuthRepository {
   findById(id: string): Promise<UserRecord | null>;
   findByPhone(phone: string): Promise<UserRecord | null>;
   findByUsername(username: string): Promise<UserRecord | null>;
+  /** Cuentas activas con esos ids (las eliminadas no aparecen). */
+  findActiveByIds(ids: string[]): Promise<UserRecord[]>;
+  /** Directorio de Parla: cuentas activas por nombre, usuario o teléfono, sin incluir a quien busca. */
+  searchDirectory(excludeId: string, query: string, limit: number): Promise<UserRecord[]>;
+  /** Personas con las que comparte al menos un chat (a quienes les importa su presencia). */
+  contactIds(userId: string): Promise<string[]>;
   create(user: NewUser): Promise<UserRecord>;
   update(id: string, changes: ProfileChanges): Promise<UserRecord>;
   touchLastSeen(id: string, at: Date): Promise<void>;
@@ -35,11 +41,11 @@ export interface AuthRepository {
 }
 
 export interface AccountData {
-  workspaces: { name: string; role: string; joinedAt: Date }[];
   conversations: { title: string; kind: string; joinedAt: Date }[];
   messagesSent: number;
   tasksCreated: number;
   tasksAssigned: number;
+  ordersPlaced: number;
 }
 
 export const AUTH_REPOSITORY = Symbol('AUTH_REPOSITORY');

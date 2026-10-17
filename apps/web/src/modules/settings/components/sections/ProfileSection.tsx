@@ -35,7 +35,7 @@ export function ProfileSection() {
               label="Info."
               value={p.about}
               maxLength={140}
-              placeholder="Cuéntale a tu equipo qué haces"
+              placeholder="Cuéntales a tus contactos algo de ti"
               onChange={(e) => p.onAboutChange(e.target.value)}
             />
             <div className="flex justify-end gap-2">

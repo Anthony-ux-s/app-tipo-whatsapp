@@ -23,7 +23,6 @@ async function bootstrap(): Promise<void> {
   await app.listen(env.port);
   Logger.log(`API de Parla escuchando en http://localhost:${env.port}/api`, 'Bootstrap');
   if (env.webDist) Logger.log(`Web servida desde ${env.webDist} en http://localhost:${env.port}`, 'Bootstrap');
-  Logger.log(`Pagos: ${env.paymentProvider === 'sandbox' ? 'modo de prueba (no se cobra)' : 'MercadoPago'}`, 'Bootstrap');
 }
 
 void bootstrap();

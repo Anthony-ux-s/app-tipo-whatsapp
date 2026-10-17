@@ -1,11 +1,11 @@
-import type { ConversationKind, MediaAttachment, MessageKind, WorkspaceRole, WrappedKey } from '@parla/types';
+import type { ConversationKind, MediaAttachment, MessageKind, ParticipantRole, WrappedKey } from '@parla/types';
 import type { ReceiptState } from '../../../../kernel/delivery-status';
 import type { UserRecord } from '../../identity/user.record';
 import type { TaskRecord } from '../../collaboration/tasks/task.record';
 
 export interface ParticipantRecord {
   user: UserRecord;
-  role: WorkspaceRole;
+  role: ParticipantRole;
   wrappedKey: string;
   keyIv: string;
   wrappedById: string;
@@ -41,7 +41,6 @@ export interface MessageRecord {
 
 export interface ConversationRecord {
   id: string;
-  workspaceId: string;
   kind: ConversationKind;
   title: string;
   description: string;
@@ -57,7 +56,6 @@ export interface ConversationRecord {
 }
 
 export interface NewConversation {
-  workspaceId: string;
   kind: ConversationKind;
   title: string;
   description: string;
@@ -91,7 +89,7 @@ export interface ReceiptChange {
 }
 
 export interface ConversationsRepository {
-  listForUser(userId: string, workspaceId: string): Promise<ConversationRecord[]>;
+  listForUser(userId: string): Promise<ConversationRecord[]>;
   /** null si no existe o si el usuario no participa. */
   findForUser(conversationId: string, userId: string): Promise<ConversationRecord | null>;
   findIdByDirectKey(directKey: string): Promise<string | null>;

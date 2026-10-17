@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { ConversationKind, MessageKind, WorkspaceRole, WrappedKey } from '@parla/types';
+import type { ConversationKind, MessageKind, WrappedKey } from '@parla/types';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../infra/prisma/prisma.service';
 import { toTaskRecord } from '../../../../infra/prisma/task-row';
@@ -22,19 +22,15 @@ const messageInclude = {
 } satisfies Prisma.MessageInclude;
 type MessageRow = Prisma.MessageGetPayload<{ include: typeof messageInclude }>;
 
-const conversationInclude = (workspaceId: string) =>
-  ({
-    participants: {
-      orderBy: { joinedAt: 'asc' },
-      include: {
-        user: { include: { memberships: { where: { workspaceId }, select: { role: true } } } },
-        wrappedBy: { select: { publicKey: true } },
-      },
-    },
-    messages: { orderBy: { createdAt: 'desc' }, take: 1, include: messageInclude },
-  }) satisfies Prisma.ConversationInclude;
+const conversationInclude = {
+  participants: {
+    orderBy: { joinedAt: 'asc' },
+    include: { user: true, wrappedBy: { select: { publicKey: true } } },
+  },
+  messages: { orderBy: { createdAt: 'desc' }, take: 1, include: messageInclude },
+} satisfies Prisma.ConversationInclude;
 
-type ConversationRow = Prisma.ConversationGetPayload<{ include: ReturnType<typeof conversationInclude> }>;
+type ConversationRow = Prisma.ConversationGetPayload<{ include: typeof conversationInclude }>;
 
 function toMessageRecord(row: MessageRow): MessageRecord {
   return {
@@ -65,7 +61,6 @@ interface Counters {
 function toConversationRecord(row: ConversationRow, counters: Counters): ConversationRecord {
   return {
     id: row.id,
-    workspaceId: row.workspaceId,
     kind: row.kind as ConversationKind,
     title: row.title,
     description: row.description,
@@ -75,7 +70,8 @@ function toConversationRecord(row: ConversationRow, counters: Counters): Convers
     updatedAt: row.updatedAt,
     participants: row.participants.map((p) => ({
       user: toUserRecord(p.user),
-      role: (p.user.memberships[0]?.role as WorkspaceRole | undefined) ?? 'member',
+      // Como en WhatsApp: quien crea el grupo lo administra.
+      role: row.kind === 'group' && p.userId === row.createdById ? 'admin' : 'member',
       wrappedKey: p.wrappedKey,
       keyIv: p.keyIv,
       wrappedById: p.wrappedById,
@@ -122,27 +118,23 @@ export class PrismaConversationsRepository implements ConversationsRepository {
     return (id) => ({ unread: u.get(id) ?? 0, mentions: m.get(id) ?? 0, openTasks: t.get(id) ?? 0 });
   }
 
-  async listForUser(userId: string, workspaceId: string): Promise<ConversationRecord[]> {
+  async listForUser(userId: string): Promise<ConversationRecord[]> {
     const rows = await this.prisma.conversation.findMany({
-      where: { workspaceId, participants: { some: { userId } } },
+      where: { participants: { some: { userId } } },
       orderBy: { updatedAt: 'desc' },
       take: 200,
-      include: conversationInclude(workspaceId),
+      include: conversationInclude,
     });
     const countersOf = await this.counters(userId, rows.map((r) => r.id));
     return rows.map((row) => toConversationRecord(row, countersOf(row.id)));
   }
 
   async findForUser(conversationId: string, userId: string): Promise<ConversationRecord | null> {
-    const base = await this.prisma.conversation.findFirst({
+    const row = await this.prisma.conversation.findFirst({
       where: { id: conversationId, participants: { some: { userId } } },
-      select: { workspaceId: true },
+      include: conversationInclude,
     });
-    if (!base) return null;
-    const row = await this.prisma.conversation.findUniqueOrThrow({
-      where: { id: conversationId },
-      include: conversationInclude(base.workspaceId),
-    });
+    if (!row) return null;
     const countersOf = await this.counters(userId, [conversationId]);
     return toConversationRecord(row, countersOf(conversationId));
   }

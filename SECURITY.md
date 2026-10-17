@@ -1,4 +1,4 @@
-# Seguridad de Parla — revisión de la Fase 4 y de la arquitectura de servicios
+# Seguridad de Parla — chats, arquitectura de servicios y Servicios (pedidos y pagos)
 
 Resumen de los controles que tiene la aplicación, cómo se verificaron y los riesgos conocidos.
 No reemplaza una auditoría externa ni la revisión legal de un abogado.
@@ -16,11 +16,13 @@ No reemplaza una auditoría externa ni la revisión legal de un abogado.
 | Contraseñas | bcrypt; mismo mensaje y mismo tiempo para cuenta inexistente o contraseña errónea | `identity/auth` | Pruebas unitarias |
 | Sesiones | JWT; en producción el secreto debe ser propio y de 32+ caracteres o la API no arranca | `config/env.validation.ts` | Arranque manual con el secreto de desarrollo |
 | Fuerza bruta | 10 intentos/min por IP **y** cuenta en inicio de sesión y registro; 600/min por IP en el resto | `http/account-throttler.guard.ts` | E2E (se observó el bloqueo al repetir la suite) |
-| Autorización | Pertenencia al espacio/chat en cada caso de uso; 404 en vez de 403 para no revelar recursos ajenos; solo administradores pagan y gestionan | casos de uso | Pruebas unitarias y E2E de permisos |
+| Autorización | Participación en el chat en cada caso de uso; 404 en vez de 403 para no revelar recursos ajenos; en grupos, solo quien lo creó agrega personas; cada persona ve solo sus pedidos | casos de uso | Pruebas unitarias y E2E de permisos |
 | Validación | DTOs con class-validator (`whitelist`), límites de tamaño (archivos 25 MB, tramas WebSocket 64 KB, SDP 100 KB) | `dto/`, gateway, tiempo real | Pruebas unitarias |
-| Pagos | Nunca se confía en el webhook: se verifica la firma y se consulta el pago en MercadoPago; idempotente; el importe debe coincidir | `platform/billing`, `infra/payments` | Pruebas con red simulada |
+| Precios de los pedidos | El navegador solo manda productos y cantidades; el gateway recotiza con la tienda al cotizar y al crear, y el core verifica que líneas, subtotal y total cuadren | `internal/orders`, `kernel/order-rules.ts` | Pruebas de Go y del core + E2E que manda precios manipulados |
+| Avisos de pago y delivery | Webhooks con firma HMAC-SHA256 por proveedor (comparación en tiempo constante), límite de tamaño; firma inválida → 401 | `internal/webhook`, traductores | Pruebas de Go con firmas falsificadas |
+| Idempotencia de pedidos | Comparar y cambiar atómico (`expectStatus`) y estados que nunca retroceden: un pago repetido no despacha dos deliveries | `orders.use-cases.ts`, orquestador | Pruebas del core y de Go |
 | Cabeceras | helmet: CSP estricta (sin scripts en línea), HSTS, `nosniff`, `frame-ancestors 'none'`, `Permissions-Policy` | `http/web-hosting.ts` | `curl` contra el modo producción + E2E completo con la CSP activa |
-| Datos personales | Términos versionados, exportación, eliminación con anonimización | `identity/auth` | Pruebas unitarias + E2E |
+| Datos personales | Términos versionados (incluyen qué se comparte con la tienda, el delivery y la billetera), exportación, eliminación con anonimización y borrado del historial de pedidos | `identity/auth` | Pruebas unitarias + E2E |
 | Notificaciones push | VAPID; los avisos no llevan contenido (solo «Laura te mencionó») | `infra/push` | Pruebas unitarias |
 
 ## Riesgos conocidos y mitigación prevista
@@ -33,7 +35,7 @@ No reemplaza una auditoría externa ni la revisión legal de un abogado.
 3. **Sin rotación de clave de grupo** al sacar a alguien: puede seguir leyendo mensajes nuevos si
    obtiene el texto cifrado. Pendiente: rotar y re-envolver la clave al salir un miembro.
 4. **Metadatos visibles para el servidor**: quién habla con quién, cuándo, a quién se menciona,
-   responsables y fechas de tareas, duración de llamadas. Necesarios para el servicio; declarados en la
+   responsables y fechas de tareas, duración de llamadas, y los pedidos (productos, montos, dirección). Necesarios para el servicio; declarados en la
    política de privacidad.
 5. **Llamadas sin TURN**: en redes restrictivas pueden no conectar; si se agrega TURN, el relé ve
    tráfico cifrado (no el contenido).
@@ -44,3 +46,10 @@ No reemplaza una auditoría externa ni la revisión legal de un abogado.
 8. **Token entre servicios único**: si se filtra, permite hablar con las rutas internas desde dentro de
    la red. Mitigación: esas rutas no se publican (solo el gateway tiene puerto); pendiente: mTLS o
    tokens por servicio con rotación.
+9. **Directorio abierto**: como en WhatsApp, cualquier cuenta puede buscar a otra por nombre, usuario o
+   teléfono y escribirle. Pendiente: bloquear y reportar contactos, y limitar búsquedas por teléfono.
+10. **Proveedores simulados**: la billetera y el delivery son simuladores locales. Al conectar
+    proveedores reales hay que usar sus secretos de firma, consultar el estado del pago en su API antes
+    de despachar y revisar sus términos de datos personales.
+11. **Pedido a medias**: si guardar el pedido falla después de reservar en la tienda y crear el cobro,
+    no se deshace automáticamente (en producción: saga con compensaciones o cola con reintentos).

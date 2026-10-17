@@ -21,14 +21,14 @@ export function NewChatModal({ mode, onClose }: NewChatModalProps) {
       open={mode !== null}
       onClose={onClose}
       title={isGroup ? 'Nuevo grupo' : 'Nuevo chat'}
-      description={isGroup ? 'Crea un canal con personas de este espacio.' : 'Escribe en privado a alguien de tu equipo.'}
+      description={isGroup ? 'Crea un grupo con personas de Parla.' : 'Escribe en privado a cualquier persona de Parla.'}
       footer={
         isGroup ? (
           <>
             <Button variant="ghost" onClick={onClose}>
               Cancelar
             </Button>
-            <Button onClick={chat.submitGroup} loading={chat.busy} disabled={!chat.canCreateGroups} icon={<Users className="size-4" />}>
+            <Button onClick={chat.submitGroup} loading={chat.busy} icon={<Users className="size-4" />}>
               Crear grupo{chat.selected.length > 0 ? ` (${chat.selected.length + 1})` : ''}
             </Button>
           </>
@@ -47,12 +47,6 @@ export function NewChatModal({ mode, onClose }: NewChatModalProps) {
           </button>
         ))}
       </div>
-
-      {isGroup && !chat.canCreateGroups && !chat.loading && (
-        <p className="mb-4 rounded-[var(--radius-card)] bg-cyan-50 p-3 text-sm text-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-100">
-          En este espacio solo los administradores pueden crear grupos.
-        </p>
-      )}
 
       {isGroup && (
         <div className="mb-4 flex flex-col gap-3">
@@ -81,22 +75,22 @@ export function NewChatModal({ mode, onClose }: NewChatModalProps) {
           type="search"
           value={chat.search}
           onChange={(e) => chat.onSearchChange(e.target.value)}
-          placeholder="Buscar por nombre o usuario"
+          placeholder="Buscar por nombre, usuario o teléfono"
           aria-label="Buscar personas"
           className="h-10 w-full rounded-[var(--radius-card)] bg-surface-3 pl-9 text-sm text-ink outline-none focus:ring-2 focus:ring-teal-500/30"
         />
       </label>
 
-      {chat.error && (
+      {(chat.error ?? chat.directoryError) && (
         <div className="mb-2">
-          <FieldError message={chat.error} />
+          <FieldError message={(chat.error ?? chat.directoryError)!} />
         </div>
       )}
 
       {chat.loading ? (
         <ListSkeleton rows={4} />
       ) : chat.people.length === 0 ? (
-        <p className="py-8 text-center text-sm text-ink-soft">No encontramos a nadie con ese nombre en este espacio.</p>
+        <p className="py-8 text-center text-sm text-ink-soft">No encontramos a nadie con ese nombre en Parla.</p>
       ) : (
         <ul className="-mx-2">
           {chat.people.map((person) => {

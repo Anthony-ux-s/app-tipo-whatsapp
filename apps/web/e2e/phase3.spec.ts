@@ -81,7 +81,7 @@ test.describe('Fase 3: menciones, hilos, tareas y notificaciones', () => {
     await expect(lauraCard).toHaveAttribute('data-done', 'false');
 
     // Andrés la encuentra en "Mis tareas" (título descifrado en su navegador) y la completa
-    await andres.page.goto(andres.page.url().replace(/\/app\/w\/([^/]+).*/, '/app/w/$1/tareas'));
+    await andres.page.goto('/app/tareas');
     const mine = andres.page.getByTestId('my-tasks').getByTestId('task-card').filter({ hasText: text });
     await expect(mine).toContainText('Mañana');
     await mine.getByRole('checkbox').click();
@@ -124,7 +124,7 @@ test.describe('Fase 3: menciones, hilos, tareas y notificaciones', () => {
     expect(off.status()).toBe(204);
 
     // La pantalla de ajustes ofrece activar las notificaciones en este dispositivo
-    await laura.page.goto(laura.page.url().replace(/\/app\/w\/([^/]+).*/, '/app/w/$1/ajustes/notificaciones'));
+    await laura.page.goto('/app/ajustes/notificaciones');
     await expect(laura.page.getByRole('switch', { name: /Notificaciones push en este dispositivo/ })).toBeVisible();
     await laura.context.close();
   });

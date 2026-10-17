@@ -29,7 +29,7 @@ export function localNotificationFor(
   return {
     title: conversation.kind === 'group' ? conversation.title : sender,
     body: `${lead}${message.kind === 'task' ? `📋 ${content}` : content}`,
-    url: `/app/w/${conversation.workspaceId}/c/${conversation.id}`,
+    url: `/app/c/${conversation.id}`,
     tag: conversation.id,
   };
 }

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// Producción en esta máquina: compila todo y arranca los tres servicios. El gateway (Go) es la
-// única puerta pública: sirve la web (PWA, a través del core), la API en /api y el tiempo real en /ws.
+// Producción en esta máquina: compila todo y arranca los servicios. El gateway (Go) es la única
+// puerta pública: sirve la web (PWA, a través del core), la API en /api, el tiempo real en /ws y los
+// avisos de pago y delivery en /hooks. La tienda, el delivery y los pagos son simuladores locales
+// (services/providers) hasta conectar proveedores reales.
 //   npm run start:prod            → http://localhost:4100
 //   PORT=8080 npm run start:prod
 // Para PostgreSQL usa Docker (ver Dockerfile y docker-compose.yml) o define DATABASE_URL y ejecuta
@@ -17,12 +19,14 @@ import {
   isWindows,
   mix,
   npm,
+  ports,
   realtimeDir,
   root,
   run,
+  sharedEnv,
+  spawnProviders,
   step,
   superviseChildren,
-  toolPath,
 } from './lib/services.mjs';
 
 const apiDir = join(root, 'apps', 'api');
@@ -53,18 +57,17 @@ step('Preparando la base de datos');
 run(npm, ['run', 'db:setup', '-w', '@parla/api']);
 buildServices({ mixEnv: 'prod' });
 
-const port = process.env.PORT ?? '4100';
-const corePort = process.env.PARLA_CORE_PORT ?? '4101';
-const realtimePort = process.env.PARLA_REALTIME_PORT ?? '4102';
+const port = process.env.PORT ?? String(ports.gateway);
 const origin = process.env.PUBLIC_WEB_URL ?? `http://localhost:${port}`;
 const env = {
   ...process.env,
-  PATH: toolPath,
+  ...sharedEnv(),
   NODE_ENV: 'production',
   JWT_SECRET: secret('jwt-secret', process.env.JWT_SECRET, 32),
   INTERNAL_TOKEN: secret('internal-token', process.env.INTERNAL_TOKEN, 24),
-  CORE_URL: `http://localhost:${corePort}`,
-  REALTIME_URL: `http://localhost:${realtimePort}`,
+  PAGAYA_WEBHOOK_SECRET: secret('pagaya-webhook-secret', process.env.PAGAYA_WEBHOOK_SECRET, 24),
+  MOTOYA_WEBHOOK_SECRET: secret('motoya-webhook-secret', process.env.MOTOYA_WEBHOOK_SECRET, 24),
+  GATEWAY_PUBLIC_URL: process.env.GATEWAY_PUBLIC_URL ?? `http://localhost:${port}`,
   WEB_ORIGIN: process.env.WEB_ORIGIN ?? origin,
   PUBLIC_WEB_URL: origin,
 };
@@ -74,17 +77,18 @@ superviseChildren([
   spawn(process.execPath, ['dist/main.js'], {
     cwd: apiDir,
     stdio: 'inherit',
-    env: { ...env, PORT: corePort, WEB_DIST: '../web/dist' },
+    env: { ...env, PORT: String(ports.core), WEB_DIST: '../web/dist' },
   }),
   spawn(mix, ['run', '--no-halt'], {
     cwd: realtimeDir,
     stdio: 'inherit',
     shell: isWindows,
-    env: { ...env, MIX_ENV: 'prod', REALTIME_PORT: realtimePort },
+    env: { ...env, MIX_ENV: 'prod', REALTIME_PORT: String(ports.realtime) },
   }),
+  spawnProviders(env),
   spawn(gatewayBin, [], {
     cwd: gatewayDir,
     stdio: 'inherit',
-    env: { ...env, GATEWAY_PORT: port, REALTIME_LINK_URL: `ws://localhost:${realtimePort}/link` },
+    env: { ...env, GATEWAY_PORT: port, REALTIME_LINK_URL: `ws://localhost:${ports.realtime}/link` },
   }),
 ]);

@@ -66,6 +66,6 @@ test.describe('Flujo principal: conversar en tiempo real con cifrado de extremo 
 
   test('se puede entrar con el número de teléfono', async ({ page }) => {
     await login(page, '+57 300 123 4567');
-    await expect(page.getByText('Sofía Ramírez · Colaborador')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Tu perfil' })).toHaveAttribute('title', 'Sofía Ramírez');
   });
 });

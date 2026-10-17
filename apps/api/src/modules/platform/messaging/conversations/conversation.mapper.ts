@@ -55,7 +55,6 @@ export function toConversationSummary(
 
   return {
     id: conversation.id,
-    workspaceId: conversation.workspaceId,
     kind: conversation.kind,
     title: other?.displayName ?? conversation.title,
     description: other?.about ?? conversation.description,

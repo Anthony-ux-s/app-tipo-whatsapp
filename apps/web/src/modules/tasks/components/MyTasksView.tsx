@@ -4,7 +4,7 @@ import { TaskCard } from '@shared/ui/TaskCard';
 import { TeamIllustration } from '@shared/ui/illustrations';
 import { useMyTasks } from '../hooks/use-my-tasks.hook';
 
-/** Todas mis tareas del espacio, de todos los chats. */
+/** Todas mis tareas, de todos los chats. */
 export function MyTasksView() {
   const mine = useMyTasks();
   return (
@@ -16,7 +16,7 @@ export function MyTasksView() {
           </span>
           <div>
             <h1 className="text-xl font-extrabold md:text-2xl">Mis tareas</h1>
-            <p className="text-sm text-teal-100">Lo que te asignaron y lo que pediste, en todos los chats del espacio.</p>
+            <p className="text-sm text-teal-100">Lo que te asignaron y lo que pediste, en todos tus chats.</p>
           </div>
         </header>
 

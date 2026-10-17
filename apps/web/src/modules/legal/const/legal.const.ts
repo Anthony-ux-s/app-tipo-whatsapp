@@ -7,12 +7,12 @@ export const TERMS: LegalDocument = {
   slug: 'terminos',
   title: 'Términos y condiciones',
   intro:
-    'Estos términos regulan el uso de Parla, un servicio de mensajería para equipos de trabajo. Al crear una cuenta aceptas estas condiciones.',
+    'Estos términos regulan el uso de Parla, una app de mensajería con servicios integrados (compras con delivery y pago con QR). Al crear una cuenta aceptas estas condiciones.',
   sections: [
     {
       heading: '1. El servicio',
       paragraphs: [
-        'Parla permite a equipos crear espacios de trabajo, conversar en chats individuales y grupales, compartir archivos, hacer llamadas de voz y video, y organizar tareas.',
+        'Parla permite conversar con cualquier persona registrada en chats individuales y grupales, compartir archivos, hacer llamadas de voz y video, organizar tareas y usar servicios de terceros (por ahora, un mercado con delivery) sin salir de la app.',
         'Los mensajes, archivos y títulos de tareas se cifran de extremo a extremo en tu dispositivo. Las llamadas viajan cifradas directamente entre los participantes.',
       ],
     },
@@ -27,16 +27,15 @@ export const TERMS: LegalDocument = {
       heading: '3. Uso aceptable',
       paragraphs: [
         'No puedes usar Parla para actividades ilegales, para enviar spam, acosar a otras personas, distribuir malware ni para vulnerar derechos de terceros.',
-        'Los administradores de cada espacio pueden retirar a miembros del espacio. Podemos suspender cuentas que incumplan estos términos.',
+        'Quien crea un grupo lo administra y puede agregar personas. Podemos suspender cuentas que incumplan estos términos.',
       ],
     },
     {
-      heading: '4. Planes, pagos y cancelación',
+      heading: '4. Servicios, pagos y cancelación',
       paragraphs: [
-        'El plan Gratis no tiene costo. Los planes Equipo y Empresa se pagan por espacio de trabajo y por mes, de forma anticipada, a través de MercadoPago.',
-        'No hay cobros automáticos: cada pago cubre un mes. Si no renuevas, al vencer el periodo el espacio vuelve al plan Gratis sin perder chats ni archivos; solo se aplican de nuevo sus límites (por ejemplo, no se podrán sumar miembros por encima de 10).',
-        'Puedes dejar de pagar en cualquier momento; eso equivale a cancelar. Conforme al derecho de retracto (Ley 1480 de 2011, art. 47), puedes pedir el reembolso de un pago dentro de los 5 días hábiles siguientes, escribiendo a soporte@parla.app.',
-        'Los precios incluyen los impuestos aplicables y pueden cambiar con al menos 30 días de aviso; un cambio nunca afecta un mes ya pagado.',
+        'Chatear y llamar en Parla no tiene costo. Los servicios (como el Mercado) los prestan comercios y empresas de delivery independientes; Parla te conecta con ellos, te muestra sus precios y suma el total antes de que pagues.',
+        'No hay cobros automáticos: cada pedido se paga una sola vez, con el código QR que generamos para ese pedido. Si el cobro vence sin pagarse, no se cobra nada y el pedido se anula.',
+        'El total que pagas es el que muestra Parla al confirmar: los precios de la tienda más la tarifa del delivery. Para reclamos sobre un producto o una entrega, escribe a soporte@parla.app y lo gestionamos con el comercio; aplican los derechos de la ley de protección al consumidor de tu país.',
       ],
     },
     {
@@ -68,29 +67,29 @@ export const PRIVACY: LegalDocument = {
       heading: '2. Qué datos tratamos',
       paragraphs: [
         'Datos de cuenta: nombre, usuario o teléfono, contraseña (solo guardamos un hash), foto o color de perfil, información que escribas en tu perfil.',
-        'Datos técnicos: espacios a los que perteneces, con quién conversas, fechas de los mensajes, estado de entrega, a quién mencionas y datos de las tareas (responsable, fecha, estado). Estos metadatos son necesarios para que el servicio funcione.',
+        'Datos técnicos: con quién conversas, fechas de los mensajes, estado de entrega, a quién mencionas y datos de las tareas (responsable, fecha, estado). Estos metadatos son necesarios para que el servicio funcione.',
         'Lo que NO podemos leer: el contenido de tus mensajes, archivos, notas de voz, títulos de tareas y llamadas. Se cifran en tu dispositivo y solo los participantes tienen las claves.',
-        'Pagos: los datos de tu tarjeta los procesa MercadoPago; nosotros solo guardamos el importe, el plan y el estado del pago.',
+        'Servicios: al hacer un pedido compartimos con la tienda los productos, con la empresa de delivery tu dirección y referencia, y con la billetera el monto a cobrar. Guardamos el pedido (productos, montos, dirección y estado) para tu historial; los datos de tu cuenta bancaria o billetera los maneja ella, nunca Parla.',
       ],
     },
     {
       heading: '3. Para qué los usamos',
       paragraphs: [
-        'Prestar el servicio (entregar mensajes, notificaciones y llamadas), gestionar planes y pagos, proteger la seguridad de las cuentas y cumplir obligaciones legales. No vendemos tus datos ni los usamos para publicidad.',
+        'Prestar el servicio (entregar mensajes, notificaciones y llamadas), gestionar tus pedidos y sus pagos, proteger la seguridad de las cuentas y cumplir obligaciones legales. No vendemos tus datos ni los usamos para publicidad.',
       ],
     },
     {
       heading: '4. Tus derechos',
       paragraphs: [
         'Puedes conocer, actualizar, rectificar y suprimir tus datos, revocar la autorización y presentar quejas ante la Superintendencia de Industria y Comercio.',
-        'Desde Ajustes → Tus datos puedes descargar una copia de tus datos y eliminar tu cuenta. Al eliminarla borramos tu nombre, usuario, teléfono, contraseña y tus claves de respaldo, y sales de todos tus espacios.',
+        'Desde Ajustes → Tus datos puedes descargar una copia de tus datos y eliminar tu cuenta. Al eliminarla borramos tu nombre, usuario, teléfono, contraseña y tus claves de respaldo, y sales de todos tus chats; tu historial de pedidos se borra.',
       ],
     },
     {
       heading: '5. Conservación y seguridad',
       paragraphs: [
         'Conservamos los datos mientras tu cuenta esté activa. Los mensajes cifrados enviados a otras personas siguen en sus conversaciones, sin tu nombre, si eliminas tu cuenta.',
-        'Aplicamos cifrado en tránsito (HTTPS) y de extremo a extremo, control de acceso por espacio, límites de intentos de inicio de sesión y cabeceras de seguridad.',
+        'Aplicamos cifrado en tránsito (HTTPS) y de extremo a extremo, control de acceso por chat, límites de intentos de inicio de sesión y cabeceras de seguridad.',
       ],
     },
     {

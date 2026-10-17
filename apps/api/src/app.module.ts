@@ -5,17 +5,15 @@ import { AccountThrottlerGuard } from './http/account-throttler.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './http/jwt-auth.guard';
 import { InfraModule } from './infra/infra.module';
-import { AdminBillingModule } from './modules/admin/billing/admin-billing.module';
-import { WorkspaceAdminModule } from './modules/admin/workspace-admin/workspace-admin.module';
-import { BillingModule } from './modules/platform/billing/billing.module';
 import { CallsModule } from './modules/members/calls/calls.module';
 import { ChatsModule } from './modules/members/chats/chats.module';
-import { InvitesModule } from './modules/members/invites/invites.module';
+import { OrdersModule } from './modules/members/orders/orders.module';
+import { PeopleModule } from './modules/members/people/people.module';
 import { PushModule } from './modules/members/push/push.module';
 import { TasksModule } from './modules/members/tasks/tasks.module';
-import { WorkspacesModule } from './modules/members/workspaces/workspaces.module';
 import { AuthModule } from './modules/platform/identity/auth/auth.module';
 import { RealtimeBridgeModule } from './modules/platform/messaging/realtime-bridge/realtime-bridge.module';
+import { ServicesBridgeModule } from './modules/platform/services/services-bridge.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -23,15 +21,13 @@ import { HealthController } from './health.controller';
     InfraModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 600 }]),
     AuthModule,
-    WorkspacesModule,
-    InvitesModule,
+    PeopleModule,
     ChatsModule,
     TasksModule,
     PushModule,
-    WorkspaceAdminModule,
-    AdminBillingModule,
-    BillingModule,
+    OrdersModule,
     RealtimeBridgeModule,
+    ServicesBridgeModule,
     CallsModule,
   ],
   controllers: [HealthController],

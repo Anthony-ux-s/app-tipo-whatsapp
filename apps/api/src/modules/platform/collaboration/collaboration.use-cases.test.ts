@@ -7,7 +7,6 @@ import {
   InMemoryConversationsRepository,
   InMemoryPushSubscriptions,
   InMemoryTasksRepository,
-  InMemoryWorkspacesRepository,
   makeUser,
   RecordingPushSender,
   RecordingRealtime,
@@ -31,7 +30,6 @@ describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
 
   let repo: InMemoryConversationsRepository;
   let tasksRepo: InMemoryTasksRepository;
-  let workspaces: InMemoryWorkspacesRepository;
   let realtime: RecordingRealtime;
   let presence: PresenceRegistry;
   let subs: InMemoryPushSubscriptions;
@@ -48,10 +46,6 @@ describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
     repo.addConversation('otro', [laura, externo]);
     tasksRepo = new InMemoryTasksRepository();
     repo.taskLookup = (id) => tasksRepo.tasks.find((t) => t.id === id) ?? null;
-    workspaces = new InMemoryWorkspacesRepository();
-    workspaces.add(laura, 'w1', 'admin');
-    workspaces.add(andres, 'w1', 'member');
-    workspaces.add(sofia, 'w1', 'member');
     realtime = new RecordingRealtime();
     presence = new PresenceRegistry();
     subs = new InMemoryPushSubscriptions();
@@ -64,8 +58,8 @@ describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
     send = new SendMessageUseCase(repo, realtime, get, dispatcher);
     thread = new GetThreadUseCase(repo, get);
     createTask = new CreateTaskUseCase(tasksRepo, repo, realtime, get, send, dispatcher);
-    updateTask = new UpdateTaskUseCase(tasksRepo, workspaces, realtime, get, dispatcher);
-    myTasks = new ListMyTasksUseCase(tasksRepo, workspaces);
+    updateTask = new UpdateTaskUseCase(tasksRepo, realtime, get, dispatcher);
+    myTasks = new ListMyTasksUseCase(tasksRepo);
   });
 
   describe('hilos de respuesta', () => {
@@ -120,7 +114,7 @@ describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
       expect(sender.sent[0].payload).toEqual({
         title: 'Equipo',
         body: 'Laura Méndez te mencionó',
-        url: '/app/w/w1/c/c1',
+        url: '/app/c/c1',
         tag: 'c1',
       });
     });
@@ -136,7 +130,7 @@ describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
     });
 
     it('en chats individuales el título es quien escribe, y las suscripciones caducadas se borran', async () => {
-      const ctx = { conversationId: 'd', workspaceId: 'w', conversationKind: 'direct' as const, conversationTitle: 'x', senderName: 'Andrés' };
+      const ctx = { conversationId: 'd', conversationKind: 'direct' as const, conversationTitle: 'x', senderName: 'Andrés' };
       expect(messagePush(ctx, 'audio', false)).toMatchObject({ title: 'Andrés', body: '🎤 Nota de voz' });
 
       sender.gone.add(`https://push.example/${andres.id}`);
@@ -188,7 +182,7 @@ describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
       expect(reopened).toMatchObject({ status: 'open', completedAt: null, completedById: null });
     });
 
-    it('otra persona del chat no puede cambiarla, pero un administrador sí', async () => {
+    it('otra persona del chat no puede cambiarla, pero quien administra el grupo sí', async () => {
       const task = await createTask.execute(andres.id, 'c1', newTask({ assigneeId: andres.id }));
       await expect(updateTask.execute(sofia.id, 'c1', task.id, { status: 'done' })).rejects.toThrow(ForbiddenError);
       await expect(updateTask.execute(laura.id, 'c1', task.id, { assigneeId: sofia.id })).resolves.toMatchObject({ assigneeId: sofia.id });
@@ -199,10 +193,10 @@ describe('Fase 3: hilos, menciones, tareas y notificaciones push', () => {
       await createTask.execute(andres.id, 'c1', newTask({ assigneeId: sofia.id }));
       await updateTask.execute(andres.id, 'c1', a.id, { status: 'done' });
 
-      expect(await myTasks.execute(andres.id, 'w1', 'assigned')).toHaveLength(0);
-      expect(await myTasks.execute(andres.id, 'w1', 'created')).toHaveLength(1);
-      expect((await myTasks.execute(andres.id, 'w1', 'done')).map((t) => t.id)).toEqual([a.id]);
-      await expect(myTasks.execute(externo.id, 'w1', 'assigned')).rejects.toThrow(NotFoundError);
+      expect(await myTasks.execute(andres.id, 'assigned')).toHaveLength(0);
+      expect(await myTasks.execute(andres.id, 'created')).toHaveLength(1);
+      expect((await myTasks.execute(andres.id, 'done')).map((t) => t.id)).toEqual([a.id]);
+      expect(await myTasks.execute(externo.id, 'assigned')).toEqual([]);
     });
 
     it('fechas límite válidas', () => {

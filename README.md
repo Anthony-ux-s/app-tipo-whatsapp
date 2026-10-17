@@ -1,11 +1,11 @@
-# Parla — mensajería para equipos
+# Parla — chats y servicios
 
-Chat tipo WhatsApp para equipos de trabajo: espacios de trabajo separados de la vida personal,
-chats individuales y grupales en tiempo real, fotos, videos, notas de voz y **llamadas de voz y
-video**, todo **cifrado de extremo a extremo**. Incluye las cuatro fases del plan de
-`INVESTIGACION.md`: mensajería, multimedia, espacios de trabajo con tareas, hilos, menciones y
-notificaciones push, y **planes de pago, aspectos legales y despliegue a producción**. Se instala en
-el celular como PWA.
+App tipo WhatsApp con servicios dentro, al estilo de WeChat. Puedes chatear con cualquier persona
+registrada, en chats individuales y grupales en tiempo real, con fotos, videos, notas de voz y
+**llamadas de voz y video**, todo **cifrado de extremo a extremo**. Desde **Servicios** haces el
+mercado: buscas «un kilo de azúcar, arroz», pagas con un **QR tipo Yape** y un **delivery** te lo
+lleva. Parla suma los productos y el delivery y te muestra el pedido en vivo hasta que llega. Se
+instala en el celular como PWA.
 
 ![Logo](apps/web/public/icons/icon-192.png)
 
@@ -14,25 +14,28 @@ el celular como PWA.
 Requisitos: **Node.js 20.19+**, **Go 1.23+** y **Elixir 1.17+ con Erlang/OTP 27+** (probado con Node 24,
 Go 1.27 y Elixir 1.20 / OTP 29). En Windows: `winget install GoLang.Go Erlang.ErlangOTP Elixir.Elixir`.
 Si Go o Elixir no quedaron en el PATH de la terminal, el script los busca en su carpeta de instalación.
-No hace falta instalar ninguna base de datos.
+No hace falta instalar ninguna base de datos ni contratar ningún servicio: la tienda, el delivery y la
+billetera son simuladores locales.
 
 ```bash
 npm start
 ```
 
 Ese único comando instala las dependencias (la primera vez), crea `apps/api/.env`, prepara la
-base de datos SQLite embebida, carga los datos de ejemplo, compila el gateway (Go) y el tiempo real
-(Elixir), y levanta cuatro procesos:
+base de datos SQLite embebida, carga los datos de ejemplo, compila el gateway y los simuladores (Go) y
+el tiempo real (Elixir), y levanta cinco procesos:
 
 | Servicio | URL | Quién lo ve |
 | --- | --- | --- |
 | Web (PWA) | http://localhost:3100 | el navegador |
-| **Gateway** (Go) | http://localhost:4100 — `/api`, `/ws`, salud en `/gateway/health` | la única puerta del backend |
+| **Gateway** (Go) | http://localhost:4100 — `/api`, `/ws`, `/hooks`, salud en `/gateway/health` | la única puerta del backend |
 | Core (NestJS) | http://localhost:4101/api | solo el gateway y el tiempo real |
 | Tiempo real (Elixir) | http://localhost:4102 | solo el gateway y el core |
+| APIs externas simuladas | http://localhost:4103 — MercaYa (tienda), MotoYa (delivery), PagaYa (billetera) | el gateway, y la página de pago que abre el QR |
 
-Los puertos se pueden cambiar con `PARLA_WEB_PORT`, `PARLA_GATEWAY_PORT`, `PARLA_CORE_PORT` y
-`PARLA_REALTIME_PORT`.
+Los puertos se pueden cambiar con `PARLA_WEB_PORT`, `PARLA_GATEWAY_PORT`, `PARLA_CORE_PORT`,
+`PARLA_REALTIME_PORT` y `PARLA_PROVIDERS_PORT`. `MOTOYA_STEP_MS` (4000 por defecto) controla cuánto
+tarda el delivery simulado en cada paso.
 
 Para instalarla en el celular, abre la web desde el navegador del teléfono y elige «Agregar a la
 pantalla de inicio». La cámara, el micrófono y las notificaciones push exigen HTTPS fuera de
@@ -43,9 +46,9 @@ Otros comandos:
 | Comando | Para qué |
 | --- | --- |
 | `npm run dev` | Igual que `start` pero con el core en modo *watch* (sin recargar datos). |
-| `npm run start:prod` | **Producción**: compila todo y el gateway sirve web, API y tiempo real en http://localhost:4100. |
+| `npm run start:prod` | **Producción**: compila todo y el gateway sirve web, API, tiempo real y avisos en http://localhost:4100. |
 | `npm test` | Pruebas unitarias: cifrado, casos de uso del core y utilidades de la web. |
-| `go test ./...` en `services/gateway` · `mix test` en `services/realtime` | Pruebas del gateway y del tiempo real. |
+| `go test ./...` en `services/gateway` y `services/providers` · `mix test` en `services/realtime` | Pruebas del gateway, los simuladores y el tiempo real. |
 | `npm run test:e2e` | Recorrido de punta a punta con Playwright. La primera vez: `npx playwright install chromium`. |
 | `npm run db:reset` | Borra la base de desarrollo y los archivos, y vuelve a cargar los datos de ejemplo. |
 | `npm run typecheck` / `npm run build` | Verificación de tipos y compilación de producción. |
@@ -54,110 +57,112 @@ Otros comandos:
 
 Contraseña para todos: **`Parla2026!`**
 
-| Entrar con | Persona | Tipo de usuario |
+| Entrar con | Persona | Qué tiene |
 | --- | --- | --- |
-| `laura` | Laura Méndez | **Administradora** de *Café Andino* (plan Equipo, con historial de pagos) · colaboradora en *Proyecto Faro* |
-| `camila` | Camila Torres | **Administradora** de *Proyecto Faro* (plan Gratis) · colaboradora en *Café Andino* |
-| `andres` | Andrés Rojas | **Colaborador** de *Café Andino* |
-| `+57 300 123 4567` | Sofía Ramírez | **Colaboradora**, entra con su **teléfono** |
-| `diego`, `mateo`, `valentina` | Resto del equipo | Colaboradores |
+| `laura` | Laura Méndez | La más activa: grupos, chats, tareas asignadas |
+| `andres` | Andrés Rojas | Para chatear o llamar a Laura |
+| `camila` | Camila Torres | Creó (y administra) el grupo «Diseño tienda en línea» |
+| `+57 300 123 4567` | Sofía Ramírez | Entra con su **teléfono** |
+| `diego`, `mateo`, `valentina` | Resto de contactos | |
 
-Enlaces de invitación de ejemplo: `/invitacion/andino2026` y `/invitacion/faro2026xy`.
-Para probar una llamada, entra con `laura` en una ventana y con `andres` en otra (o en una ventana
-privada) y pulsa el botón de video o de teléfono en su chat.
+- **Llamada**: entra con `laura` en una ventana y con `andres` en otra (o en una ventana privada) y
+  pulsa el botón de video o de teléfono en su chat.
+- **Compra**: *Servicios → Mercado*, busca «un kilo de azúcar, arroz», agrega, escribe la dirección y
+  pulsa *Pagar con QR*. Escanea el QR con el celular (en la misma red) o pulsa *Pagar desde este
+  celular*: se abre la billetera simulada; al pagar, el pedido pasa solo a «Buscando motorizado», «En
+  camino» y «Entregado».
 
 ## Qué tiene esta versión
+
+**Un solo espacio, como WhatsApp**
+- Te registras y ya puedes escribirle a **cualquier persona de Parla**: el directorio busca por nombre,
+  usuario o teléfono. Sin espacios de trabajo, invitaciones ni roles de equipo.
+- Los grupos los administra quien los crea, que es quien puede agregar personas.
+- Navegación: **Chats · Servicios · Tareas · Ajustes**. En el escritorio va en una barra lateral; en
+  el celular, abajo.
+
+**Servicios (super-app)**
+- **Mercado** (tienda MercaYa): escribes la lista como la dices («un kilo de azúcar, arroz y leche») y
+  Parla busca cada cosa. Tarjetas con precio, carrito con cantidades y dirección de entrega.
+- **Total transparente**: el gateway pide los precios a la tienda y la tarifa al delivery, y suma
+  *Productos + Delivery = Total* antes de pagar. Nunca usa los precios que mande el navegador.
+- **Pago con QR tipo Yape** (billetera PagaYa): QR en pantalla, cuenta regresiva del cobro y botón para
+  pagar desde el mismo celular. El aviso de pago llega firmado al gateway.
+- **Delivery** (MotoYa): al confirmarse el pago, el gateway pide la moto. El pedido avanza en vivo
+  (*Pago → Motorizado → En camino → Entregado*) con nombre del motorizado y tiempo estimado, y te llega
+  un push si no tienes Parla abierta.
+- **Mis pedidos**: historial con el estado de cada uno.
+- **Salud**: aparece como «Próximamente». La arquitectura ya permite sumarlo con su propio traductor.
 
 **Autenticación y perfil**
 - Registro con **teléfono o nombre de usuario** y contraseña; inicio de sesión con cualquiera de los dos.
 - Aceptación de términos y política de privacidad (Ley 1581 / LGPD) con versión y fecha registradas.
-- Perfil (nombre, info., color de avatar), preferencias (tema claro/oscuro/sistema, enviar con Enter, sonido).
+- **Ajustes** ordenados al estilo WhatsApp: tarjeta del perfil y secciones (Privacidad, Tus datos,
+  Apariencia, Chats, Notificaciones), cada una en su propia pantalla.
 
 **Chat individual y grupal**
-- Mensajes en **tiempo real** (Elixir, por WebSocket a través del gateway en Go), con estados **enviado ✓ → entregado ✓✓ → leído ✓✓ (cian)**;
-  en grupos manda el destinatario más atrasado.
+- Mensajes en **tiempo real** (Elixir, por WebSocket a través del gateway en Go), con estados
+  **enviado ✓ → entregado ✓✓ → leído ✓✓ (cian)**. En grupos se muestra el estado del destinatario más atrasado.
 - Fotos y videos con comentario, **notas de voz** grabadas en el navegador, visor de imágenes.
 - «Escribiendo…», presencia, no leídos, búsqueda y filtros, historial ilimitado.
 - Grupos: crear, agregar personas, salir; avisos de sistema. Envío optimista con reintento.
 
 **Llamadas de voz y video**
-- Botones de **videollamada** y **llamada de voz** en la cabecera de cada chat (individual o grupal).
-- Llamada entrante con timbre, contestar o rechazar; pantalla de llamada con video de cada persona,
-  vista propia, temporizador, **silenciar**, **apagar la cámara** y colgar.
-- **WebRTC P2P cifrado (DTLS-SRTP)**: el audio y el video van directo entre los participantes; el
-  servidor solo coordina la llamada. Grupos en malla: hasta 4 personas en el plan Gratis y 8 en los de pago.
+- Botones de **videollamada** y **llamada de voz** en cada chat (individual o grupal, hasta 8 personas).
+- Llamada entrante con timbre, contestar o rechazar.
+- Pantalla de llamada con el video de cada persona, vista propia, temporizador, **silenciar**,
+  **apagar la cámara** y colgar.
+- **WebRTC P2P cifrado (DTLS-SRTP)**: el servidor solo coordina la llamada (un proceso de Elixir por
+  llamada).
 - Al terminar queda el registro en el chat («🎥 Videollamada · 3:05», «📞 Llamada de voz perdida»).
-  Si nadie contesta en 45 s se da por perdida. A quien está desconectado le llega un push.
 
 **Colaboración**
-- **Tareas asignables** desde el panel de tareas o convirtiendo un mensaje, con responsable y fecha;
-  tarjeta en el chat que se completa con una casilla; vista **Mis tareas**.
-- **Hilos de respuesta** en panel lateral, respuestas citadas, **menciones con @**.
-- **Notificaciones**: avisos del sistema con la app en segundo plano y **Web Push** con la app cerrada
-  (sin contenido, por el cifrado E2E). Se activan en *Ajustes → Notificaciones*.
-
-**Planes y pagos (Fase 4)**
-- Planes **Gratis** (hasta 10 miembros), **Equipo** ($49.900 COP/mes, hasta 50) y **Empresa**
-  ($149.900 COP/mes, ilimitados), por espacio de trabajo. El límite de miembros se aplica al unirse
-  con un enlace de invitación.
-- Página **Plan** del espacio (desde *Equipo → Plan*): plan vigente, vencimiento, catálogo, pago y
-  **historial de pagos**. Solo los administradores pagan; los colaboradores ven el plan.
-- **Sin cobros automáticos**: cada pago cubre un mes; pagar el mismo plan antes de vencer suma un mes
-  al final. Al vencer, el espacio vuelve al plan Gratis sin perder nada.
-- Pasarela detrás del puerto `PaymentGateway`:
-  - **Sandbox** (por defecto): pantalla de pago simulado dentro de Parla; no cobra nada.
-  - **MercadoPago Checkout Pro**: con `PAYMENT_PROVIDER=mercadopago` y `MERCADOPAGO_ACCESS_TOKEN`.
-    El webhook verifica la firma (`MERCADOPAGO_WEBHOOK_SECRET`) y **consulta el pago real** en la API de
-    MercadoPago antes de activar nada; si el importe no coincide, no se activa el plan.
+- **Tareas asignables** en los chats, con responsable y fecha, y vista **Mis tareas**.
+- **Hilos**, respuestas citadas y **menciones con @**.
+- **Notificaciones** del sistema y **Web Push** con la app cerrada (sin contenido, por el cifrado E2E).
 
 **Legal y datos personales**
-- Páginas públicas de **Términos y condiciones** (incluye política de cancelación y retracto) y
-  **Política de privacidad** (Ley 1581/2012, Decreto 1377/2013, LGPD), enlazadas desde el registro.
-- **Descargar mis datos** (JSON) y **eliminar la cuenta** con contraseña: la cuenta se anonimiza (sin
-  nombre, usuario, teléfono ni claves), sale de sus espacios y no puede volver a entrar. No permite dejar
-  un espacio sin administrador.
-- Revisión de seguridad documentada en **[SECURITY.md](SECURITY.md)**.
-
-**Espacios de trabajo, roles e interfaz**
-- Administrador: invita por enlace, cambia roles, quita miembros, configura el espacio y paga el plan.
-- Colaborador: se une con el enlace, conversa, llama y gestiona sus tareas.
-- Sidebar, navegación inferior en el celular, PWA instalable, tema oscuro, estados vacíos, de carga y de
-  error, transiciones suaves; logo e ilustraciones propios en SVG.
+- **Términos y condiciones** (servicios de terceros, sin cobros automáticos, reclamos) y **Política de
+  privacidad** (qué datos se comparten con la tienda, el delivery y la billetera).
+- **Descargar mis datos** (incluye cuántos pedidos hiciste) y **eliminar la cuenta**: se anonimiza,
+  sale de sus chats y se borra su historial de pedidos.
+- Revisión de seguridad en **[SECURITY.md](SECURITY.md)**.
 
 ## Cómo está hecho
 
 ```
- navegador ── HTTPS /api ──►┌──────────────┐── HTTP (REST) ──────────► core NestJS (4101)
-            ── WSS  /ws  ──►│ gateway  Go  │                              ▲  │ POST /internal/publish
-                            │ (4100)       │                  /api/internal │  ▼
-                            │ traductores  │── WebSocket /link ──────► tiempo real Elixir (4102)
-                            └──────────────┘   (un solo enlace multiplexado)
+                              ┌──────────────────┐── HTTP (REST) ─────────────► core NestJS (4101)
+ navegador ── HTTPS /api ────►│   gateway  Go    │                                 ▲  │ /internal/publish
+            ── WSS  /ws  ────►│     (4100)       │── WebSocket /link ─────────► tiempo real Elixir (4102)
+                              │  traductores +   │── traductor mercaya ───────► MercaYa  (tienda)    ┐
+ billetera / delivery ─/hooks►│  orquestador     │── traductor motoya  ───────► MotoYa   (delivery)  ├ 4103
+   (avisos firmados)          └──────────────────┘── traductor pagaya  ───────► PagaYa   (billetera) ┘
 ```
 
-- **Gateway (Go)**: única puerta pública. Valida el JWT, limita peticiones, y cada app tiene su
-  **traductor** (`internal/translators/<app>`): convierte lo que manda el navegador en un *payload*
-  limpio (solo campos conocidos, tipos y tamaños validados; el usuario sale del token, nunca del
-  mensaje) antes de enviarlo al backend de esa app.
-- **Tiempo real (Elixir/OTP)**: conexiones, presencia, «escribiendo…» y **un proceso por llamada**
-  (timbre, contestar, señalización WebRTC, colgar, perdida a los 45 s).
-- **Core (NestJS)**: la lógica de negocio y la base de datos. Publica eventos al tiempo real, y este
-  le consulta permisos y le avisa la presencia por rutas internas con un token entre servicios.
-- Protocolo completo: [docs/architecture/realtime-protocol.md](docs/architecture/realtime-protocol.md).
+- **Gateway (Go)**: única puerta pública. Valida el JWT y limita peticiones.
+  - **Traductores** (`internal/translators/<app>`): uno por cada sistema con el que habla (chat,
+    tienda, delivery, billetera). Cada uno convierte el formato de ese sistema en *payloads* limpios:
+    solo campos conocidos, tipos y tamaños validados, firmas verificadas, y el usuario sale del token.
+  - **Orquestador de pedidos** (`internal/orders`): recotiza, reserva, cobra, despacha y sigue cada pedido.
+- **Tiempo real (Elixir/OTP)**: conexiones, presencia, «escribiendo…» y un proceso por llamada.
+- **Core (NestJS)**: la lógica de negocio y la base de datos (usuarios, chats, tareas, pedidos).
+  Publica cada cambio al tiempo real (p. ej. `order:updated`).
+- Protocolos: [tiempo real](docs/architecture/realtime-protocol.md) · [servicios](docs/architecture/services-protocol.md).
 
 Monorepo con npm workspaces:
 
 ```
 services/
-  gateway/   Go — API gateway / orquestador: proxy REST, WebSocket, traductores por app
-  realtime/  Elixir — tiempo real y llamadas (OTP: Registry, un GenServer por llamada)
+  gateway/    Go — API gateway / orquestador: REST, WebSocket, traductores, pedidos, webhooks
+  realtime/   Elixir — tiempo real y llamadas (OTP: Registry, un GenServer por llamada)
+  providers/  Go — simuladores de las APIs externas: MercaYa, MotoYa y PagaYa
 apps/
   api/   NestJS + Prisma (core) — Screaming Architecture + Ports & Adapters
-         src/modules/{admin,members,platform}
-         src/infra/{prisma,identity,storage,realtime,push,payments}
+         src/modules/{members,platform}  ·  src/infra/{prisma,identity,storage,realtime,push}
   web/   React + Vite + Tailwind — módulos con components/ hooks/ const/ types/ utils/
-         src/modules/{auth,chats,calls,tasks,billing,legal,workspaces,settings,shell}
+         src/modules/{auth,chats,calls,tasks,services,settings,legal,shell}
 packages/
-  types/   @parla/types — contratos y enums compartidos (fuente única)
+  types/   @parla/types — contratos compartidos (fuente única), incluidos los de Servicios
   crypto/  @parla/crypto — cifrado de extremo a extremo
 ```
 
@@ -168,61 +173,67 @@ Las decisiones de tecnología, una por una y con su porqué, están en **[DECISI
 **Opción A — Docker + PostgreSQL** (servidor propio, VPS, Render, Fly, Railway):
 
 ```bash
-cp .env.production.example .env.production   # completa PUBLIC_URL, POSTGRES_PASSWORD, JWT_SECRET…
+cp .env.production.example .env.production   # completa PUBLIC_URL, POSTGRES_PASSWORD, secretos…
 docker compose --env-file .env.production up -d --build
 ```
 
-Levanta cuatro contenedores: `gateway` (único puerto publicado, 8080), `core`, `realtime` y `db`. El
-core compila el esquema PostgreSQL (`schema.postgres.prisma`) y sincroniza la base al arrancar. Pon delante un proxy con HTTPS (Caddy, Nginx, Traefik o el del
-proveedor). Para llamadas en redes corporativas muy cerradas, configura un servidor TURN (`TURN_URL`).
+Levanta `gateway` (8080), `providers` (8081, la página de pago que abre el QR), `core`, `realtime` y
+`db`. Los avisos de pago y delivery viajan por la red interna. El core compila el esquema PostgreSQL y
+sincroniza la base al arrancar. Pon delante un proxy con HTTPS (Caddy, Nginx, Traefik o el del proveedor).
 
 **Opción B — sin Docker**: `npm run start:prod`. Usa la base de `DATABASE_URL` (SQLite por defecto),
-genera el secreto de sesiones y el token entre servicios en `apps/api/.secrets/` si no defines
-`JWT_SECRET` / `INTERNAL_TOKEN`, y el gateway sirve todo en el puerto `PORT` (4100).
+genera los secretos (sesiones, token entre servicios y firmas de los avisos) en `apps/api/.secrets/`
+si no los defines, y el gateway sirve todo en el puerto `PORT` (4100).
 
-En producción los tres servicios se niegan a arrancar con los secretos de desarrollo (`JWT_SECRET`
-de 32+ caracteres, `INTERNAL_TOKEN` de 24+). El core además envía cabeceras de seguridad con helmet (CSP estricta, HSTS, `nosniff`,
-`frame-ancestors 'none'`, `Permissions-Policy` de cámara y micrófono); confía en el proxy para la IP
-real (límite de intentos) y sirve los assets con caché inmutable y el `index.html`/`sw.js` sin caché.
+En producción ningún servicio arranca con secretos de desarrollo:
+- `JWT_SECRET` debe tener 32+ caracteres;
+- `INTERNAL_TOKEN`, `PAGAYA_WEBHOOK_SECRET` y `MOTOYA_WEBHOOK_SECRET`, 24+.
+
+El core además envía cabeceras de seguridad con helmet (CSP estricta, HSTS, `nosniff`,
+`frame-ancestors 'none'`).
 
 Variables completas en `apps/api/.env.example` y `.env.production.example`.
 
 ## Pruebas
 
-- **Unitarias (Vitest, 102)**: cifrado E2E (7); core (69): estados de entrega, permisos, inicio de
-  sesión, hilos, menciones, tareas, push, **planes y pagos** (vigencia, límite de miembros, renovación
-  acumulada, pago aprobado/rechazado/repetido, importe que no coincide, webhook), **MercadoPago con red
-  simulada** (preferencia, firma del webhook válida y falsificada), **puente con el tiempo real**
-  (presencia, contexto solo para participantes, registro y push de llamadas) y **datos personales** (términos, exportar, eliminar
-  anonimizando, administrador único); web (26).
-- **Gateway (Go, 14)**: JWT (firma, vencimiento, algoritmo), límite de peticiones, traductor del chat
-  (rechaza eventos desconocidos, IDs inválidos y SDP enormes; descarta campos extra), flujo completo
-  navegador ↔ gateway ↔ tiempo real con un Elixir simulado, caída del enlace, rutas internas ocultas.
-- **Tiempo real (Elixir, 17)**: llamadas (timbre, contestar, contestada en otro dispositivo, rechazo,
-  perdida, ocupado, grupo con límite del plan, señalización solo entre participantes, caída de una
-  conexión, registro en el chat) y el enlace con el gateway (token, usuario tomado del enlace).
-- **Punta a punta (Playwright, 17 recorridos, navegador real)**: chat cifrado en tiempo real, fotos y
-  notas de voz, registro e invitación, celular, Fase 3 (menciones, hilos, tareas, push) y Fase 4:
-  **videollamada real por WebRTC** entre dos navegadores con cámara y micrófono simulados (ambos ven
-  el video del otro, silenciar, apagar cámara, colgar y registro en el chat), llamada rechazada,
-  **mejora de plan con pago de prueba**, pago rechazado, colaborador sin permiso de pago, páginas
-  legales, y descarga de datos + eliminación de cuenta.
-  La suite completa pasa con la arquitectura nueva (web → gateway → core + Elixir) en modo
-  desarrollo y en **modo producción** (todo por un solo puerto, CSP activa).
+- **Unitarias (Vitest, 86)**:
+  - cifrado E2E (7);
+  - core (52): estados de entrega, permisos, inicio de sesión, hilos, menciones, tareas (administra el
+    grupo quien lo creó), push, puente con el tiempo real, datos personales, y **pedidos**: montos que
+    cuadran, transiciones que nunca retroceden, aviso de pago repetido sin efecto, cada quien ve solo
+    sus pedidos, push en cada etapa;
+  - web (27): incluye entender «un kilo de azúcar, arroz» como dos búsquedas.
+- **Gateway (Go, 36)**:
+  - JWT, límite de peticiones y traductor del chat;
+  - traductores de tienda, delivery y billetera: respuestas inválidas, firmas válidas y falsificadas;
+  - orquestador: suma correcta que ignora precios del navegador, pago → despacho del delivery, aviso
+    repetido sin efecto, cobro vencido;
+  - rutas sin sesión → 401.
+- **Simuladores (Go, 11)**: búsqueda, stock, cobros con vencimiento, pago idempotente y avisos firmados.
+- **Tiempo real (Elixir, 17)**: llamadas y el enlace con el gateway.
+- **Punta a punta (Playwright, 16 recorridos, navegador real, con los cinco procesos)**:
+  - chat cifrado, fotos y notas de voz;
+  - videollamada real por WebRTC y llamada rechazada;
+  - menciones, hilos, tareas y push;
+  - una persona nueva encuentra a Laura en el directorio y conversan;
+  - **compra completa**: busca, carrito, total, QR, pago en PagaYa y delivery hasta «Entregado», en vivo;
+  - el gateway rechaza precios manipulados;
+  - legal, exportar y eliminar la cuenta;
+  - vista de celular.
 
 ## Qué falta
 
-- **Fase 2 de la arquitectura**: pasar la web a **Next.js** (las vistas); el gateway ya la sirve igual.
-- **Fase 3 de la arquitectura**: los backends de las otras apps, cada una con su traductor en el gateway.
-- **Probado en esta PC sin Docker**: los `Dockerfile` (core, gateway, tiempo real) y el
-  `docker-compose.yml` no se pudieron construir aquí; el modo producción sí se probó sin Docker.
-- **MercadoPago real**: el adaptador está probado con la red simulada; falta probarlo con
-  credenciales de prueba de una cuenta de MercadoPago y un webhook público.
-- **Llamadas**: sin servidor TURN propio, algunas redes muy restrictivas no conectan; compartir
-  pantalla, llamadas grupales grandes (SFU) y verificación de huellas DTLS fuera de banda.
+- **Proveedores reales**: la tienda, el delivery y la billetera son simuladores. Para salir al aire
+  hay que firmar con proveedores reales (p. ej. un supermercado con API, Rappi/PedidosYa/flota propia,
+  Yape Empresas/Niubiz/Culqi) y escribir su traductor en el gateway. El resto no cambia.
+- **Salud**: el servicio aparece como «Próximamente».
+- **Pedido fallido a medias**: si guardar en el core falla después de reservar en la tienda y crear el
+  cobro, no se deshace (en producción: una saga con compensaciones o una cola).
+- **Fase 2 de la arquitectura**: pasar la web a **Next.js**.
+- **Probado en esta PC sin Docker**: los `Dockerfile` y el `docker-compose.yml` no se pudieron
+  construir aquí; el modo producción sí se probó sin Docker.
+- **Llamadas**: TURN propio para redes muy restrictivas, compartir pantalla, SFU para grupos grandes.
 - **Seguridad**: SMS/OTP para el teléfono, rotación de la clave del grupo cuando alguien sale, clave
   privada no extraíble en IndexedDB, recuperación de cuenta, auditoría externa.
-- **Producto**: búsqueda en el historial (en el dispositivo), recordatorios de tareas, silenciar chats,
-  facturación electrónica (DIAN) para los pagos, revisión legal de los textos por un abogado.
-- **Escala**: varios nodos de Elixir en clúster (`libcluster` + `:pg`) y varios gateways; la
-  presencia del core en memoria pasaría a la base o a Redis; archivos en S3/R2, colas.
+- **Escala**: varios nodos de Elixir en clúster y varios gateways; presencia del core en Redis;
+  archivos en S3/R2; colas para los avisos de los proveedores.

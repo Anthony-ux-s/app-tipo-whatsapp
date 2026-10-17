@@ -61,8 +61,9 @@ type Line = [string, string, number, Media?, LineOptions?];
 type SeedTask = [string, string, string | null, number | null, boolean, number];
 
 interface SeedConversation {
-  workspace: 'andino' | 'faro';
   kind: 'direct' | 'group';
+  /** Color del avatar del grupo. */
+  color?: string;
   title?: string;
   description?: string;
   members: string[];
@@ -85,7 +86,6 @@ const D = 24 * H;
 
 const CONVERSATIONS: SeedConversation[] = [
   {
-    workspace: 'andino',
     kind: 'group',
     title: 'General',
     description: 'Avisos para todo el equipo de Café Andino',
@@ -108,7 +108,6 @@ const CONVERSATIONS: SeedConversation[] = [
     tasks: [['mateo', 'Subir las facturas de proveedores de octubre', 'laura', 1, false, 2 * D + 2 * H - 5]],
   },
   {
-    workspace: 'andino',
     kind: 'group',
     title: 'Logística y despachos',
     description: 'Rutas, inventario y entregas',
@@ -132,7 +131,6 @@ const CONVERSATIONS: SeedConversation[] = [
     ],
   },
   {
-    workspace: 'andino',
     kind: 'group',
     title: 'Lanzamiento Geisha',
     description: 'Edición limitada · diciembre',
@@ -155,7 +153,6 @@ const CONVERSATIONS: SeedConversation[] = [
     ],
   },
   {
-    workspace: 'andino',
     kind: 'direct',
     members: ['laura', 'andres'],
     unread: { laura: 1 },
@@ -167,7 +164,6 @@ const CONVERSATIONS: SeedConversation[] = [
     ],
   },
   {
-    workspace: 'andino',
     kind: 'direct',
     members: ['laura', 'camila'],
     lines: [
@@ -177,7 +173,6 @@ const CONVERSATIONS: SeedConversation[] = [
     ],
   },
   {
-    workspace: 'andino',
     kind: 'direct',
     members: ['laura', 'sofia'],
     unread: { sofia: 1 },
@@ -189,7 +184,6 @@ const CONVERSATIONS: SeedConversation[] = [
     ],
   },
   {
-    workspace: 'andino',
     kind: 'direct',
     members: ['laura', 'mateo'],
     undelivered: { mateo: 1 },
@@ -201,7 +195,6 @@ const CONVERSATIONS: SeedConversation[] = [
     ],
   },
   {
-    workspace: 'andino',
     kind: 'direct',
     members: ['camila', 'valentina'],
     lines: [
@@ -210,8 +203,8 @@ const CONVERSATIONS: SeedConversation[] = [
     ],
   },
   {
-    workspace: 'faro',
     kind: 'group',
+    color: 'cyan',
     title: 'Diseño tienda en línea',
     description: 'Rediseño de la tienda · entregas semanales',
     members: ['camila', 'laura', 'diego', 'mateo'],
@@ -225,15 +218,6 @@ const CONVERSATIONS: SeedConversation[] = [
       ['camila', '@Laura Méndez, ¿puedes revisar los textos de la página de suscripción?', 30, undefined, { mentions: ['laura'] }],
     ],
     tasks: [['camila', 'Revisar los textos de la página de suscripción', 'laura', 3, false, 29]],
-  },
-  {
-    workspace: 'faro',
-    kind: 'direct',
-    members: ['camila', 'laura'],
-    lines: [
-      ['camila', 'Gracias por sumarte al proyecto, Laura 😊', 4 * D - H, undefined],
-      ['laura', '¡Feliz de ayudar! Avísame qué necesitas.', 4 * D - 2 * H, undefined],
-    ],
   },
 ];
 
@@ -283,70 +267,6 @@ async function main(): Promise<void> {
   }
   const person = (key: string) => people.get(key)!;
 
-  console.log('Creando espacios de trabajo…');
-  const andino = await prisma.workspace.create({
-    data: {
-      name: 'Café Andino',
-      description: 'Tostadores de café de especialidad · equipo de operaciones',
-      color: 'teal',
-      inviteCode: 'andino2026',
-      // Plan Equipo pagado (vence en 20 días) para mostrar la facturación con historial.
-      plan: 'team',
-      planExpiresAt: new Date(Date.now() + 20 * 24 * 3600_000),
-      creatorId: person('laura').id,
-      createdAt: new Date(Date.now() - 30 * 24 * 3600_000),
-      members: {
-        create: USERS.map((u) => ({
-          userId: person(u.key).id,
-          role: u.key === 'laura' ? 'admin' : 'member',
-          joinedAt: new Date(Date.now() - 29 * 24 * 3600_000),
-        })),
-      },
-    },
-  });
-  const faro = await prisma.workspace.create({
-    data: {
-      name: 'Proyecto Faro',
-      description: 'Rediseño de la tienda en línea',
-      color: 'cyan',
-      inviteCode: 'faro2026xy',
-      allowMemberGroups: false,
-      creatorId: person('camila').id,
-      createdAt: new Date(Date.now() - 5 * 24 * 3600_000),
-      members: {
-        create: ['camila', 'laura', 'diego', 'mateo'].map((key) => ({
-          userId: person(key).id,
-          role: key === 'camila' ? 'admin' : 'member',
-          joinedAt: new Date(Date.now() - 5 * 24 * 3600_000),
-        })),
-      },
-    },
-  });
-  const workspaceIds = { andino: andino.id, faro: faro.id };
-
-  console.log('Creando historial de pagos (modo de prueba)…');
-  for (const [daysAgo, status] of [
-    [40, 'approved'],
-    [10, 'approved'],
-    [11, 'rejected'],
-  ] as const) {
-    const createdAt = new Date(Date.now() - daysAgo * 24 * 3600_000);
-    await prisma.payment.create({
-      data: {
-        workspaceId: andino.id,
-        createdById: person('laura').id,
-        plan: 'team',
-        amount: 49_900,
-        currency: 'COP',
-        status,
-        provider: 'sandbox',
-        providerRef: `sandbox-seed-${daysAgo}`,
-        createdAt,
-        paidAt: status === 'approved' ? new Date(createdAt.getTime() + 60_000) : null,
-      },
-    });
-  }
-
   console.log('Cifrando conversaciones y mensajes…');
   for (const conv of CONVERSATIONS) {
     const creator = person(conv.lines[0][0]);
@@ -362,12 +282,11 @@ async function main(): Promise<void> {
     const lastAt = new Date(Date.now() - conv.lines[conv.lines.length - 1][2] * 60_000);
     const conversation = await prisma.conversation.create({
       data: {
-        workspaceId: workspaceIds[conv.workspace],
         kind: conv.kind,
         title: conv.title ?? '',
         description: conv.description ?? '',
-        avatarColor: conv.kind === 'group' ? (conv.workspace === 'faro' ? 'cyan' : 'teal-dark') : 'teal',
-        directKey: conv.kind === 'direct' ? [workspaceIds[conv.workspace], ...ids].join(':') : null,
+        avatarColor: conv.kind === 'group' ? (conv.color ?? 'teal-dark') : 'teal',
+        directKey: conv.kind === 'direct' ? ids.join(':') : null,
         createdById: creator.id,
         createdAt: firstAt,
         updatedAt: lastAt,
@@ -454,7 +373,6 @@ async function main(): Promise<void> {
       const task = await prisma.task.create({
         data: {
           conversationId: conversation.id,
-          workspaceId: workspaceIds[conv.workspace],
           titleCiphertext: sealed.ciphertext,
           titleIv: sealed.iv,
           assigneeId: assignee ? person(assignee).id : null,
@@ -492,10 +410,10 @@ async function main(): Promise<void> {
 
   console.log('\nDatos de ejemplo listos. Usuarios de prueba (contraseña para todos: %s):', DEMO_PASSWORD);
   console.table([
-    { usuario: 'laura', rol: 'Administradora de Café Andino · colaboradora en Proyecto Faro' },
-    { usuario: 'camila', rol: 'Administradora de Proyecto Faro · colaboradora en Café Andino' },
-    { usuario: 'andres', rol: 'Colaborador de Café Andino' },
-    { usuario: '+57 300 123 4567', rol: 'Sofía · colaboradora (inicio de sesión por teléfono)' },
+    { usuario: 'laura', quién: 'Laura Méndez · la más activa: grupos, chats, tareas' },
+    { usuario: 'camila', quién: 'Camila Torres · creó el grupo «Diseño tienda en línea»' },
+    { usuario: 'andres', quién: 'Andrés Rojas' },
+    { usuario: '+57 300 123 4567', quién: 'Sofía Ramírez (entra con su teléfono)' },
   ]);
 }
 

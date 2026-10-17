@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useCallStore } from '@shared/stores/call.store';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
-import { useWorkspaceStore } from '@shared/stores/workspace.store';
+import { useOrdersStore } from '@shared/stores/orders.store';
+import { usePeopleStore } from '@shared/stores/people.store';
 import { tokenStorage } from '@shared/utils/http';
 import { connectSocket, disconnectSocket } from '@shared/utils/socket';
 import { showLocalNotification } from '@shared/utils/push';
@@ -10,6 +11,13 @@ import { playMessageSound } from '@shared/utils/sound';
 import { localNotificationFor } from '../utils/notification.utils';
 
 const isFocused = () => document.visibilityState === 'visible' && document.hasFocus();
+
+/** Lo que es de la sesión anterior no se mezcla con la nueva. */
+function resetSessionStores() {
+  useChatStore.getState().reset();
+  usePeopleStore.getState().reset();
+  useOrdersStore.getState().reset();
+}
 
 /** El cierre se difiere un instante: si el armazón se vuelve a montar (StrictMode), se reutiliza el socket. */
 let pendingTeardown: number | null = null;
@@ -23,8 +31,7 @@ export function useRealtime(userId: string | undefined) {
     pendingTeardown = null;
 
     if (useChatStore.getState().myId !== userId) {
-      useChatStore.getState().reset();
-      useWorkspaceStore.getState().reset();
+      resetSessionStores();
     }
     useChatStore.getState().setIdentity(userId);
     const socket = connectSocket(token);
@@ -33,8 +40,8 @@ export function useRealtime(userId: string | undefined) {
     const onConnect = () => {
       useChatStore.getState().setConnection('online');
       // Al reconectar se recupera lo que llegó mientras no había conexión.
-      const { workspaceId, activeId } = useChatStore.getState();
-      if (workspaceId) void useChatStore.getState().loadConversations(workspaceId).catch(() => undefined);
+      const { activeId } = useChatStore.getState();
+      void useChatStore.getState().loadConversations().catch(() => undefined);
       if (activeId) void useChatStore.getState().loadMessages(activeId).catch(() => undefined);
     };
     const onDisconnect = () => useChatStore.getState().setConnection('offline');
@@ -70,16 +77,10 @@ export function useRealtime(userId: string | undefined) {
     socket.on('typing', (payload) => useChatStore.getState().applyTyping(payload));
     socket.on('presence', (payload) => {
       useChatStore.getState().applyPresence(payload);
-      useWorkspaceStore.getState().applyPresence(payload);
+      usePeopleStore.getState().applyPresence(payload);
     });
-    socket.on('workspace:changed', ({ workspaceId }) => {
-      const workspaces = useWorkspaceStore.getState();
-      void workspaces.loadWorkspaces().catch(() => undefined);
-      if (workspaces.details[workspaceId]) void workspaces.loadDetail(workspaceId).catch(() => undefined);
-      if (useChatStore.getState().workspaceId === workspaceId) {
-        void useChatStore.getState().loadConversations(workspaceId).catch(() => undefined);
-      }
-    });
+    // Servicios: cada cambio de un pedido (pagado, en camino, entregado) llega al instante.
+    socket.on('order:updated', (order) => useOrdersStore.getState().upsert(order));
 
     // Al volver a la pestaña, lo que está abierto queda leído.
     const onFocus = () => {
@@ -95,8 +96,7 @@ export function useRealtime(userId: string | undefined) {
         pendingTeardown = null;
         if (useCallStore.getState().phase !== 'idle') useCallStore.getState().hangUp();
         disconnectSocket();
-        useChatStore.getState().reset();
-        useWorkspaceStore.getState().reset();
+        resetSessionStores();
       }, 50);
     };
   }, [userId]);

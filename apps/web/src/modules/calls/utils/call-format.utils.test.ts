@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoney } from '@shared/utils/money';
 import { callStatusLabel, gridClass } from './call-format.utils';
 
 describe('pantalla de llamada', () => {
@@ -17,12 +16,5 @@ describe('pantalla de llamada', () => {
     expect(gridClass(1)).toBe('grid-cols-1');
     expect(gridClass(3)).toContain('sm:grid-cols-2');
     expect(gridClass(6)).toContain('lg:grid-cols-3');
-  });
-});
-
-describe('precios', () => {
-  it('formatea pesos colombianos sin decimales', () => {
-    expect(formatMoney(49_900).replace(/\s/g, ' ')).toMatch(/^\$ ?49\.900$/);
-    expect(formatMoney(149_900)).toContain('149.900');
   });
 });

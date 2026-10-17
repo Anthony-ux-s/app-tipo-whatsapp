@@ -11,7 +11,6 @@ import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../../infra
 import { GetConversationUseCase } from '../../../messaging/conversations/use-cases/get-conversation.use-case';
 import { pushContextFor } from '../../../messaging/conversations/use-cases/send-message.use-case';
 import { NotificationDispatcher } from '../../../messaging/push/use-cases/notification-dispatcher';
-import { WORKSPACES_REPOSITORY, type WorkspacesRepository } from '../../../workspaces/workspaces.repository';
 import { toTask } from '../task.mapper';
 import type { TaskChanges } from '../tasks.repository';
 import { TASKS_REPOSITORY, type TasksRepository } from '../tasks.repository';
@@ -21,7 +20,6 @@ import { TASKS_REPOSITORY, type TasksRepository } from '../tasks.repository';
 export class UpdateTaskUseCase {
   constructor(
     @Inject(TASKS_REPOSITORY) private readonly tasks: TasksRepository,
-    @Inject(WORKSPACES_REPOSITORY) private readonly workspaces: WorkspacesRepository,
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
     private readonly getConversation: GetConversationUseCase,
     private readonly notifications: NotificationDispatcher,
@@ -31,7 +29,8 @@ export class UpdateTaskUseCase {
     const conversation = await this.getConversation.require(conversationId, userId);
     const task = await this.tasks.findById(taskId);
     if (!task || task.conversationId !== conversationId) throw new NotFoundError('Tarea no encontrada');
-    assertCanEditTask(task, userId, await this.workspaces.roleOf(conversation.workspaceId, userId));
+    const myRole = conversation.participants.find((p) => p.user.id === userId)?.role ?? null;
+    assertCanEditTask(task, userId, myRole);
 
     const participantIds = conversation.participants.map((p) => p.user.id);
     const changes: TaskChanges = {};

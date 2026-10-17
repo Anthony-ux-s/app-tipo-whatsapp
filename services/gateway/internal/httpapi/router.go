@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/parla/gateway/internal/auth"
+	"github.com/parla/gateway/internal/orders"
 	"github.com/parla/gateway/internal/ratelimit"
 )
 
@@ -28,11 +30,17 @@ type Options struct {
 	LinkUp     func() bool
 	Limiter    *ratelimit.Limiter
 	TrustProxy bool
+	// JWTSecret valida la sesión en las rutas que atiende el propio gateway (servicios).
+	JWTSecret string
+	// Services, si existe, atiende /api/services/* y los avisos /hooks/* de los proveedores.
+	Services *orders.HTTP
 }
 
 // New devuelve el handler del gateway.
 //   - /ws               → tiempo real (Elixir), pasando por el traductor del chat
 //   - /api/internal/*   → 404: esas rutas son solo entre servicios
+//   - /api/services/*   → orquestador de servicios (tienda, delivery, pagos), con sesión
+//   - /hooks/*          → avisos firmados de los proveedores externos
 //   - /api/*            → core (NestJS), con límite de peticiones por IP
 //   - resto             → core (en producción sirve la web)
 func New(opts Options) http.Handler {
@@ -64,16 +72,43 @@ func New(opts Options) http.Handler {
 	mux.HandleFunc("/socket.io/", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusGone, map[string]any{"statusCode": 410, "error": "gone", "message": "El tiempo real ahora está en /ws. Recarga la página."})
 	})
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		if !opts.Limiter.Allow(clientIP(r, opts.TrustProxy)) {
-			w.Header().Set("Retry-After", "60")
-			writeJSON(w, http.StatusTooManyRequests, map[string]any{"statusCode": 429, "error": "too_many_requests", "message": "Demasiadas solicitudes. Espera un momento."})
-			return
+	limited := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if !opts.Limiter.Allow(clientIP(r, opts.TrustProxy)) {
+				w.Header().Set("Retry-After", "60")
+				writeJSON(w, http.StatusTooManyRequests, map[string]any{"statusCode": 429, "error": "too_many_requests", "message": "Demasiadas solicitudes. Espera un momento."})
+				return
+			}
+			next(w, r)
 		}
-		proxy.ServeHTTP(w, r)
-	})
+	}
+	if svc := opts.Services; svc != nil {
+		authed := func(next orders.UserHandler) http.HandlerFunc {
+			return limited(withUser(opts.JWTSecret, next))
+		}
+		mux.HandleFunc("GET /api/services", authed(svc.Catalog))
+		mux.HandleFunc("GET /api/services/mercado/products", authed(svc.Products))
+		mux.HandleFunc("POST /api/services/mercado/quote", authed(svc.Quote))
+		mux.HandleFunc("POST /api/services/mercado/orders", authed(svc.Create))
+		mux.HandleFunc("POST /hooks/pagaya", svc.PagayaHook)
+		mux.HandleFunc("POST /hooks/motoya", svc.MotoyaHook)
+	}
+	mux.HandleFunc("/api/", limited(proxy.ServeHTTP))
 	mux.Handle("/", proxy)
 	return logRequests(mux)
+}
+
+// withUser exige un JWT válido (Authorization: Bearer) y pasa el id de la persona al handler.
+func withUser(secret string, next orders.UserHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		claims, err := auth.Verify(strings.TrimSpace(token), secret, time.Now())
+		if !found || err != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]any{"statusCode": 401, "error": "unauthorized", "message": "Inicia sesión para continuar"})
+			return
+		}
+		next(w, r, claims.UserID)
+	}
 }
 
 func clientIP(r *http.Request, trustProxy bool) string {

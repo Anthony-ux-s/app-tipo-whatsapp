@@ -1,7 +1,9 @@
-// Piezas comunes para arrancar Parla: puertos, herramientas (Go, Elixir) y los cuatro procesos.
+// Piezas comunes para arrancar Parla: puertos, herramientas (Go, Elixir) y los cinco procesos.
 //
-//   navegador ──► web (3100) ──► gateway Go (4100) ──┬─► core NestJS (4101)   REST
-//                                                     └─► realtime Elixir (4102)  WebSocket
+//   navegador ──► web (3100) ──► gateway Go (4100) ──┬─► core NestJS (4101)        REST
+//                                                     ├─► realtime Elixir (4102)    WebSocket
+//                                                     └─► tienda, delivery y pagos  APIs externas
+//                                                         (simuladas en services/providers, 4103)
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { delimiter, dirname, join } from 'node:path';
@@ -16,10 +18,13 @@ export const ports = {
   gateway: Number(process.env.PARLA_GATEWAY_PORT ?? 4100),
   core: Number(process.env.PARLA_CORE_PORT ?? 4101),
   realtime: Number(process.env.PARLA_REALTIME_PORT ?? 4102),
+  providers: Number(process.env.PARLA_PROVIDERS_PORT ?? 4103),
 };
 
 const DEV_JWT_SECRET = 'parla-dev-secret-cambiar-en-produccion';
 const DEV_INTERNAL_TOKEN = 'parla-dev-internal-token';
+const DEV_PAGAYA_SECRET = 'pagaya-dev-secret';
+const DEV_MOTOYA_SECRET = 'motoya-dev-secret';
 
 export const step = (title) => console.log(`\n\x1b[36m▸ ${title}\x1b[0m`);
 
@@ -57,13 +62,17 @@ export function run(command, args, { cwd = root, env = {} } = {}) {
 export const gatewayDir = join(root, 'services', 'gateway');
 export const realtimeDir = join(root, 'services', 'realtime');
 export const gatewayBin = join(gatewayDir, 'bin', isWindows ? 'gateway.exe' : 'gateway');
+export const providersDir = join(root, 'services', 'providers');
+export const providersBin = join(providersDir, 'bin', isWindows ? 'providers.exe' : 'providers');
 export const mix = isWindows ? 'mix.bat' : 'mix';
 
-/** Compila el gateway (Go) y prepara el servicio de tiempo real (Elixir). */
+/** Compila el gateway y los simuladores de APIs externas (Go) y prepara el tiempo real (Elixir). */
 export function buildServices({ mixEnv = 'dev' } = {}) {
   const env = { MIX_ENV: mixEnv };
   step('Compilando el gateway (Go)');
   run('go', ['build', '-o', gatewayBin, './cmd/gateway'], { cwd: gatewayDir });
+  step('Compilando los simuladores de tienda, delivery y pagos (Go)');
+  run('go', ['build', '-o', providersBin, './cmd/providers'], { cwd: providersDir });
   step('Preparando el tiempo real (Elixir)');
   if (!hasHex()) run(mix, ['local.hex', '--force'], { cwd: realtimeDir, env });
   run(mix, ['deps.get'], { cwd: realtimeDir, env });
@@ -75,19 +84,38 @@ function hasHex() {
   return result.status === 0;
 }
 
-/** Variables compartidas: los cuatro procesos deben coincidir en secretos y direcciones. */
-function sharedEnv() {
+/** Variables compartidas: los procesos deben coincidir en secretos y direcciones. */
+export function sharedEnv() {
   return {
     PATH: toolPath,
     JWT_SECRET: process.env.JWT_SECRET ?? DEV_JWT_SECRET,
     INTERNAL_TOKEN: process.env.INTERNAL_TOKEN ?? DEV_INTERNAL_TOKEN,
+    PAGAYA_WEBHOOK_SECRET: process.env.PAGAYA_WEBHOOK_SECRET ?? DEV_PAGAYA_SECRET,
+    MOTOYA_WEBHOOK_SECRET: process.env.MOTOYA_WEBHOOK_SECRET ?? DEV_MOTOYA_SECRET,
     CORE_URL: `http://localhost:${ports.core}`,
     REALTIME_URL: `http://localhost:${ports.realtime}`,
+    PROVIDERS_URL: `http://localhost:${ports.providers}`,
+    // Las APIs externas avisan pagos y entregas al gateway (webhooks firmados).
+    GATEWAY_PUBLIC_URL: `http://localhost:${ports.gateway}`,
   };
 }
 
+/** Simuladores de tienda (MercaYa), delivery (MotoYa) y pagos con QR (PagaYa). */
+export function spawnProviders(env, extra = {}) {
+  return spawn(providersBin, [], {
+    cwd: providersDir,
+    stdio: 'inherit',
+    env: {
+      ...env,
+      PROVIDERS_PORT: String(ports.providers),
+      PROVIDERS_PUBLIC_URL: process.env.PROVIDERS_PUBLIC_URL ?? `http://localhost:${ports.providers}`,
+      ...extra,
+    },
+  });
+}
+
 /**
- * Lanza los cuatro procesos. `core` indica cómo arrancar NestJS ('start' compilado o 'dev' con recarga).
+ * Lanza los cinco procesos. `core` indica cómo arrancar NestJS ('start' compilado o 'dev' con recarga).
  */
 export function startServices({ core = 'start' } = {}) {
   const env = { ...process.env, ...sharedEnv() };
@@ -114,6 +142,7 @@ export function startServices({ core = 'start' } = {}) {
         WEB_ORIGIN: `http://localhost:${ports.web}`,
       },
     }),
+    spawnProviders(env),
     spawn(npm, ['run', 'dev', '-w', '@parla/web'], {
       cwd: root,
       stdio: 'inherit',

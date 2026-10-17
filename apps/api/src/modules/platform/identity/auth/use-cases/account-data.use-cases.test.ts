@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ConflictError, UnauthorizedError, ValidationError } from '../../../../../kernel/domain-error';
+import { UnauthorizedError, ValidationError } from '../../../../../kernel/domain-error';
 import { TERMS_VERSION } from '../../../../../kernel/legal';
 import {
   fakeHasher,
   fakeTokens,
   InMemoryAuthRepository,
-  InMemoryWorkspacesRepository,
   makeUser,
   RecordingRealtime,
 } from '../../../../../testing/in-memory.fakes';
@@ -14,22 +13,15 @@ import { RegisterUserUseCase } from './register-user.use-case';
 
 const keys = { publicKey: '{"kty":"EC"}', keyBackup: { ciphertext: 'c', iv: 'i', salt: 's', iterations: 1000 } };
 
-const workspace = (id: string, name: string) => ({
-  id, name, description: '', color: 'teal', inviteCode: `${id}code`, allowMemberGroups: true,
-  creatorId: 'x', createdAt: new Date(), memberCount: 0, plan: 'free' as const, planExpiresAt: null,
-});
-
 describe('aspectos legales de la cuenta', () => {
   let users: InMemoryAuthRepository;
-  let workspaces: InMemoryWorkspacesRepository;
   let realtime: RecordingRealtime;
   let remove: DeleteAccountUseCase;
 
   beforeEach(() => {
     users = new InMemoryAuthRepository();
-    workspaces = new InMemoryWorkspacesRepository();
     realtime = new RecordingRealtime();
-    remove = new DeleteAccountUseCase(users, workspaces, fakeHasher, realtime);
+    remove = new DeleteAccountUseCase(users, fakeHasher, realtime);
   });
 
   it('el registro exige aceptar los términos y guarda versión y fecha', async () => {
@@ -46,30 +38,17 @@ describe('aspectos legales de la cuenta', () => {
     await expect(remove.execute(ana.id, 'mala')).rejects.toThrow(UnauthorizedError);
   });
 
-  it('no deja un espacio con más gente sin administrador', async () => {
-    const ana = makeUser();
-    users.users.push(ana);
-    workspaces.workspaces.push(workspace('w1', 'Café Andino'));
-    workspaces.add(ana, 'w1', 'admin');
-    workspaces.add(makeUser(), 'w1', 'member');
-    await expect(remove.execute(ana.id, 'Parla2026!')).rejects.toThrow(ConflictError);
-    await expect(remove.execute(ana.id, 'Parla2026!')).rejects.toThrow('Nombra a otro administrador en «Café Andino»');
-  });
-
-  it('anonimiza la cuenta, borra los espacios donde estaba sola y avisa a los demás', async () => {
+  it('anonimiza la cuenta y sus contactos dejan de verla en línea', async () => {
     const ana = makeUser({ username: 'ana', phone: '+573001112233', displayName: 'Ana Ruiz' });
     const beto = makeUser();
-    users.users.push(ana);
-    workspaces.workspaces.push(workspace('solo', 'Mi espacio'), workspace('w2', 'Equipo'));
-    workspaces.add(ana, 'solo', 'admin');
-    workspaces.add(ana, 'w2', 'member');
-    workspaces.add(beto, 'w2', 'admin');
+    users.users.push(ana, beto);
+    users.contacts.set(ana.id, [beto.id]);
 
     await remove.execute(ana.id, 'Parla2026!');
     expect(users.users[0]).toMatchObject({ username: null, phone: null, displayName: 'Cuenta eliminada' });
     expect(users.users[0].deletedAt).toBeInstanceOf(Date);
-    expect(workspaces.workspaces.map((w) => w.id)).toEqual(['w2']);
-    expect(realtime.events('workspace:changed')[0]).toMatchObject({ userIds: [beto.id], payload: { workspaceId: 'w2' } });
+    expect(realtime.events('presence')[0]).toMatchObject({ userIds: [beto.id], payload: { userId: ana.id, presence: 'offline' } });
+    expect(await users.searchDirectory(beto.id, '', 10)).toEqual([]);
     await expect(new ExportAccountUseCase(users).execute(ana.id)).rejects.toThrow(UnauthorizedError);
   });
 

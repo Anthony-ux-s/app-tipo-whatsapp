@@ -44,8 +44,8 @@ export class PrismaTasksRepository implements TasksRepository {
     return sortTasks(rows.map(toTaskRecord));
   }
 
-  async listForUser(workspaceId: string, userId: string, scope: TaskScope): Promise<TaskRecord[]> {
-    const visible: Prisma.TaskWhereInput = { workspaceId, conversation: { participants: { some: { userId } } } };
+  async listForUser(userId: string, scope: TaskScope): Promise<TaskRecord[]> {
+    const visible: Prisma.TaskWhereInput = { conversation: { participants: { some: { userId } } } };
     const where: Prisma.TaskWhereInput =
       scope === 'assigned'
         ? { ...visible, assigneeId: userId, status: 'open' }

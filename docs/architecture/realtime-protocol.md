@@ -61,7 +61,7 @@ Entrega el evento a todas las conexiones de esas personas. Responde `202`.
 | Método y ruta | Cuerpo / respuesta | Para qué |
 | --- | --- | --- |
 | `POST /api/internal/presence` | `{userId, presence, at}` | En línea / desconectado (el core avisa a los contactos y marca lo pendiente como entregado) |
-| `GET /api/internal/conversations/:id/context?userId=` | `{conversationId, workspaceId, kind, title, participants:[{id,name}], maxCallParticipants}` o 404 | Autorizar "escribiendo" y llamadas |
+| `GET /api/internal/conversations/:id/context?userId=` | `{conversationId, kind, title, participants:[{id,name}], maxCallParticipants}` o 404 | Autorizar "escribiendo" y llamadas |
 | `POST /api/internal/calls/log` | `{conversationId, actorId, text, audience}` | Aviso en el chat al terminar una llamada |
 | `POST /api/internal/calls/notify` | `{conversationId, callerId, callId, kind, recipients}` | Push de llamada entrante a quien está desconectado |
 

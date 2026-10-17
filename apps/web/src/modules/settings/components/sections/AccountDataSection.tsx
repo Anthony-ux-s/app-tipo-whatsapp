@@ -14,7 +14,7 @@ export function AccountDataSection() {
       <SettingsGroup title="Copia de tus datos">
         <SettingsBlock>
           <p className="text-sm text-ink-soft">
-            Un archivo JSON con tu perfil, tus preferencias, los espacios y chats en los que participas y un resumen de tu actividad.
+            Un archivo JSON con tu perfil, tus preferencias, los chats en los que participas y un resumen de tu actividad (mensajes, tareas y pedidos).
           </p>
           <Button className="mt-4" variant="secondary" size="sm" icon={<Download className="size-4" />} loading={data.exporting} onClick={data.exportData}>
             Descargar mis datos
@@ -32,7 +32,7 @@ export function AccountDataSection() {
         }
       >
         <SettingsBlock>
-          <p className="text-sm text-ink-soft">Borra tu nombre, usuario, teléfono, contraseña y claves, y te saca de todos tus espacios. No se puede deshacer.</p>
+          <p className="text-sm text-ink-soft">Borra tu nombre, usuario, teléfono, contraseña y claves, y te saca de tus chats. No se puede deshacer.</p>
           <Button className="mt-4" variant="danger" size="sm" icon={<Trash2 className="size-4" />} onClick={data.openDelete}>
             Eliminar mi cuenta
           </Button>
@@ -57,9 +57,9 @@ export function AccountDataSection() {
         <form onSubmit={data.confirmDelete} className="flex flex-col gap-4">
           <ul className="list-disc space-y-1 pl-5 text-sm text-ink-soft">
             <li>Se borran tu nombre, usuario, teléfono, contraseña y tus claves de cifrado.</li>
-            <li>Sales de todos tus espacios; los espacios donde estabas solo se eliminan.</li>
+            <li>Sales de todos tus chats y grupos.</li>
             <li>Tus mensajes enviados siguen en los chats de los demás, como «Cuenta eliminada».</li>
-            <li>Si eres el único administrador de un espacio con más personas, primero nombra a otro.</li>
+            <li>Tu historial de pedidos se borra junto con la cuenta.</li>
           </ul>
           <Field
             label="Tu contraseña"

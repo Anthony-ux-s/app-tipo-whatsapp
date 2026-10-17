@@ -1,7 +1,7 @@
 /** Enums de la base de datos, como uniones de literales (coinciden 1:1 con el esquema Prisma). */
 
-export type WorkspaceRole = 'admin' | 'member';
-export const WORKSPACE_ROLES: readonly WorkspaceRole[] = ['admin', 'member'];
+/** Rol dentro de un grupo: quien lo creó lo administra (como en WhatsApp). */
+export type ParticipantRole = 'admin' | 'member';
 
 export type ConversationKind = 'direct' | 'group';
 

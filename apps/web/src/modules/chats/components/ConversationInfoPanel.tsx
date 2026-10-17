@@ -80,8 +80,16 @@ export function ConversationInfoPanel({ conversation, open, onClose }: Conversat
 
             {info.adding && (
               <div className="mx-4 mb-3 animate-rise rounded-xl border border-line p-2">
+                <input
+                  type="search"
+                  value={info.candidateQuery}
+                  onChange={(e) => info.onCandidateQueryChange(e.target.value)}
+                  placeholder="Buscar en Parla"
+                  aria-label="Buscar personas para agregar"
+                  className="mb-1 h-9 w-full rounded-lg bg-surface-3 px-3 text-sm text-ink outline-none focus:ring-2 focus:ring-teal-500/30"
+                />
                 {info.candidates.length === 0 ? (
-                  <p className="p-3 text-center text-sm text-ink-soft">Todas las personas del espacio ya están en el grupo.</p>
+                  <p className="p-3 text-center text-sm text-ink-soft">{info.candidatesLoading ? 'Buscando…' : 'No hay más personas con ese nombre.'}</p>
                 ) : (
                   <ul className="max-h-56 overflow-y-auto">
                     {info.candidates.map((c) => {

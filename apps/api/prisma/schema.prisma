@@ -33,70 +33,35 @@ model User {
   /// Cuenta eliminada: se anonimiza (sin nombre, usuario ni teléfono) y no puede volver a entrar.
   deletedAt       DateTime?
 
-  memberships  WorkspaceMember[]
   participants ConversationParticipant[]
   wrappedKeys  ConversationParticipant[] @relation("WrappedBy")
   messages     Message[]
   receipts     MessageReceipt[]
   mentions     MessageMention[]
   pushSubscriptions PushSubscription[]
-}
-
-model Workspace {
-  id                String   @id @default(cuid())
-  name              String
-  description       String   @default("")
-  color             String
-  inviteCode        String   @unique
-  allowMemberGroups Boolean  @default(true)
-  /// PlanId: free | team | business. Vale hasta planExpiresAt; después rige el plan gratuito.
-  plan              String    @default("free")
-  planExpiresAt     DateTime?
-  payments          Payment[]
-  creatorId         String
-  createdAt         DateTime @default(now())
-
-  members       WorkspaceMember[]
-  conversations Conversation[]
-}
-
-model WorkspaceMember {
-  id          String    @id @default(cuid())
-  workspaceId String
-  userId      String
-  /// WorkspaceRole: admin | member
-  role        String
-  joinedAt    DateTime  @default(now())
-
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([workspaceId, userId])
-  @@index([userId])
+  orders       Order[]
 }
 
 model Conversation {
   id          String   @id @default(cuid())
-  workspaceId String
   /// ConversationKind: direct | group
   kind        String
   title       String   @default("")
   description String   @default("")
   avatarColor String
-  /// Evita chats individuales duplicados: "<workspace>:<usuarioA>:<usuarioB>" ordenado.
+  /// Evita chats individuales duplicados: "<usuarioA>:<usuarioB>" ordenado.
   directKey   String?  @unique
   createdById String
   createdAt   DateTime @default(now())
   /// Última actividad: ordena la lista de chats.
   updatedAt   DateTime @default(now())
 
-  workspace    Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   participants ConversationParticipant[]
   messages     Message[]
   files        StoredFile[]
   tasks        Task[]
 
-  @@index([workspaceId, updatedAt])
+  @@index([updatedAt])
 }
 
 model ConversationParticipant {
@@ -166,7 +131,6 @@ model MessageMention {
 model Task {
   id              String    @id @default(cuid())
   conversationId  String
-  workspaceId     String
   titleCiphertext String
   titleIv         String
   assigneeId      String?
@@ -184,8 +148,8 @@ model Task {
   message      Message?
 
   @@index([conversationId, status])
-  @@index([workspaceId, assigneeId, status])
-  @@index([workspaceId, createdById])
+  @@index([assigneeId, status])
+  @@index([createdById])
 }
 
 /// Suscripción Web Push de un navegador.
@@ -228,27 +192,34 @@ model StoredFile {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
-/// Pago de un plan (un mes prepagado). Sirve de historial y de comprobante.
-model Payment {
-  id          String    @id @default(cuid())
-  workspaceId String
-  /// Quién inició el pago (administrador del espacio).
-  createdById String
-  /// PlanId pagado: team | business
-  plan        String
-  /// Importe en la unidad de la moneda (COP sin decimales).
-  amount      Int
-  currency    String
-  /// PaymentStatus: pending | approved | rejected
-  status      String    @default("pending")
-  /// PaymentProvider: sandbox | mercadopago
-  provider    String
-  providerRef String?
-  checkoutUrl String?
-  createdAt   DateTime  @default(now())
-  paidAt      DateTime?
+/// Pedido hecho desde Servicios (tienda + delivery + pago con QR). Lo arma el gateway (Go) con
+/// precios de la tienda y la tarifa del delivery; el core lo guarda y avisa cada cambio al cliente.
+model Order {
+  /// Id generado por el gateway ("ord_…").
+  id               String   @id
+  userId           String
+  /// ServiceId: mercado | salud
+  service          String
+  /// OrderStatus: pending_payment | paid | searching_driver | on_the_way | delivered | payment_expired | cancelled
+  status           String
+  /// JSON OrderLine[]
+  lines            String
+  subtotalCents    Int
+  deliveryFeeCents Int
+  totalCents       Int
+  currency         String
+  /// JSON DeliveryAddress
+  address          String
+  /// JSON OrderPayment (QR, URL de pago, vencimiento, fecha de pago)
+  payment          String
+  /// Cotización del delivery que se despacha al confirmarse el pago.
+  deliveryQuoteId  String
+  /// JSON OrderDelivery (motorizado, vehículo, tiempo estimado); null hasta despacharlo.
+  delivery         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([workspaceId, createdAt])
+  @@index([userId, createdAt])
 }

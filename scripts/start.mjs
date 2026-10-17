@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Un solo comando: instala, prepara la base de datos, carga los datos de ejemplo y arranca
-// gateway (Go) + tiempo real (Elixir) + core (NestJS) + web.
+// gateway (Go) + tiempo real (Elixir) + core (NestJS) + simuladores de tienda, delivery y pagos + web.
 //   npm start          todo compilado
 //   npm run dev        el core con recarga automática
 import { copyFileSync, existsSync } from 'node:fs';
@@ -35,16 +35,17 @@ if (!devMode) {
 
 buildServices();
 
-step(`Arrancando: web ${ports.web} · gateway ${ports.gateway} · core ${ports.core} · tiempo real ${ports.realtime}`);
+step(`Arrancando: web ${ports.web} · gateway ${ports.gateway} · core ${ports.core} · tiempo real ${ports.realtime} · APIs externas ${ports.providers}`);
 startServices({ core: devMode ? 'dev' : 'start' });
 
 console.log(`
 \x1b[32m✔ Parla está listo\x1b[0m
   Abre http://localhost:${ports.web} en el navegador (o en tu celular, en la misma red, para instalarla).
   Usuarios de prueba (contraseña: Parla2026!):
-    laura              administradora de Café Andino
-    camila             administradora de Proyecto Faro
-    andres             colaborador
-    +57 300 123 4567   Sofía, colaboradora (entra por teléfono)
+    laura              la más activa: grupos, tareas y pedidos
+    andres             para chatear o llamar a Laura
+    camila             creó el grupo «Diseño tienda en línea»
+    +57 300 123 4567   Sofía (entra con su teléfono)
+  Servicios → Mercado: busca «un kilo de azúcar, arroz», paga con el QR y sigue el delivery.
   Ctrl + C para detener.
 `);

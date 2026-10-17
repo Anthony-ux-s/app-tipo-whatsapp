@@ -107,7 +107,7 @@ describe('mensajería', () => {
 
 describe('reglas de conversación', () => {
   it('el chat individual entre dos personas tiene una sola clave estable', () => {
-    expect(directKeyFor('w', 'b', 'a')).toBe(directKeyFor('w', 'a', 'b'));
+    expect(directKeyFor('b', 'a')).toBe(directKeyFor('a', 'b'));
   });
 
   it('exige una clave envuelta por participante, envuelta por quien actúa', () => {

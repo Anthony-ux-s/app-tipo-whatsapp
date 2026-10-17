@@ -1,5 +1,5 @@
 /** Adaptadores en memoria para probar los casos de uso sin Nest, sin base de datos y sin red. */
-import type { ServerToClientEvents, WorkspaceRole } from '@parla/types';
+import type { OrderStatus, ServerToClientEvents } from '@parla/types';
 import type { PasswordHasher } from '../infra/identity/password-hasher.port';
 import type { TokenService } from '../infra/identity/token-service.port';
 import type { RealtimePublisher } from '../infra/realtime/realtime-publisher.port';
@@ -12,14 +12,12 @@ import type {
   NewMessage,
   ReceiptChange,
 } from '../modules/platform/messaging/conversations/conversations.repository';
-import type { MembershipRecord, WorkspaceChanges, WorkspaceRecord, WorkspacesRepository } from '../modules/platform/workspaces/workspaces.repository';
 import type { TaskRecord } from '../modules/platform/collaboration/tasks/task.record';
 import type { NewTask, TaskChanges, TasksRepository } from '../modules/platform/collaboration/tasks/tasks.repository';
 import type { PushResult, PushSender, PushTarget } from '../infra/push/push-sender.port';
 import type { PushSubscriptionsRepository, StoredSubscription } from '../modules/platform/messaging/push/push-subscriptions.repository';
 import type { PushPayload, TaskScope } from '@parla/types';
-import type { NewPayment, PaymentRow, PaymentsRepository } from '../modules/platform/billing/payments.repository';
-import type { CheckoutInput, PaymentGateway, ProviderPayment } from '../infra/payments/payment-gateway.port';
+import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
 
 let seq = 0;
 const nextId = (prefix: string) => `${prefix}${++seq}`;
@@ -56,6 +54,21 @@ export class InMemoryAuthRepository implements AuthRepository {
   async findByUsername(username: string) {
     return this.users.find((u) => u.username === username) ?? null;
   }
+  async findActiveByIds(ids: string[]) {
+    return this.users.filter((u) => ids.includes(u.id) && !u.deletedAt);
+  }
+  async searchDirectory(excludeId: string, query: string, limit: number) {
+    const q = query.trim().toLowerCase();
+    return this.users
+      .filter((u) => u.id !== excludeId && !u.deletedAt)
+      .filter((u) => !q || u.displayName.toLowerCase().includes(q) || (u.username ?? '').includes(q.replace(/^@/, '')))
+      .slice(0, limit);
+  }
+  /** Contactos: los fija la prueba (en la base real salen de los chats compartidos). */
+  contacts = new Map<string, string[]>();
+  async contactIds(userId: string) {
+    return this.contacts.get(userId) ?? [];
+  }
   async create(input: NewUser) {
     const user = makeUser({ ...input });
     this.users.push(user);
@@ -75,7 +88,7 @@ export class InMemoryAuthRepository implements AuthRepository {
     Object.assign(user, { username: null, phone: null, displayName: 'Cuenta eliminada', about: '', passwordHash: '', deletedAt: at });
   }
   async exportData() {
-    return { workspaces: [], conversations: [], messagesSent: 0, tasksCreated: 0, tasksAssigned: 0 };
+    return { conversations: [], messagesSent: 0, tasksCreated: 0, tasksAssigned: 0, ordersPlaced: 0 };
   }
 }
 
@@ -101,67 +114,6 @@ export class RecordingRealtime implements RealtimePublisher {
   }
 }
 
-export class InMemoryWorkspacesRepository implements WorkspacesRepository {
-  workspaces: WorkspaceRecord[] = [];
-  members: { workspaceId: string; user: UserRecord; role: WorkspaceRole }[] = [];
-
-  add(user: UserRecord, workspaceId: string, role: WorkspaceRole) {
-    this.members.push({ workspaceId, user, role });
-  }
-  async listForUser(userId: string) {
-    return this.members
-      .filter((m) => m.user.id === userId)
-      .map((m) => ({
-        ...this.workspaces.find((w) => w.id === m.workspaceId)!,
-        memberCount: this.members.filter((x) => x.workspaceId === m.workspaceId).length,
-        role: m.role,
-      }));
-  }
-  async findById(id: string) {
-    const ws = this.workspaces.find((w) => w.id === id);
-    return ws ? { ...ws, memberCount: this.members.filter((m) => m.workspaceId === id).length } : null;
-  }
-  async findByInviteCode(code: string) {
-    const ws = this.workspaces.find((w) => w.inviteCode === code);
-    return ws ? { ...ws, memberCount: this.members.filter((m) => m.workspaceId === ws.id).length } : null;
-  }
-  async roleOf(workspaceId: string, userId: string) {
-    return this.members.find((m) => m.workspaceId === workspaceId && m.user.id === userId)?.role ?? null;
-  }
-  async listMembers(workspaceId: string): Promise<MembershipRecord[]> {
-    return this.members
-      .filter((m) => m.workspaceId === workspaceId)
-      .map((m) => ({ memberId: `${m.workspaceId}-${m.user.id}`, role: m.role, joinedAt: new Date(), user: m.user }));
-  }
-  async countAdmins(workspaceId: string) {
-    return this.members.filter((m) => m.workspaceId === workspaceId && m.role === 'admin').length;
-  }
-  async create(): Promise<WorkspaceRecord> {
-    throw new Error('no usado en estas pruebas');
-  }
-  async update(id: string, changes: WorkspaceChanges) {
-    const ws = this.workspaces.find((w) => w.id === id)!;
-    Object.assign(ws, Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)));
-    return (await this.findById(id))!;
-  }
-  async addMember(workspaceId: string, userId: string, role: WorkspaceRole) {
-    this.members.push({ workspaceId, user: makeUser({ id: userId }), role });
-  }
-  async changeRole(workspaceId: string, userId: string, role: WorkspaceRole) {
-    this.members.find((m) => m.workspaceId === workspaceId && m.user.id === userId)!.role = role;
-  }
-  async removeMember(workspaceId: string, userId: string) {
-    this.members = this.members.filter((m) => !(m.workspaceId === workspaceId && m.user.id === userId));
-  }
-  async delete(workspaceId: string) {
-    this.workspaces = this.workspaces.filter((w) => w.id !== workspaceId);
-    this.members = this.members.filter((m) => m.workspaceId !== workspaceId);
-  }
-  async listContactIds() {
-    return [];
-  }
-}
-
 export class InMemoryConversationsRepository implements ConversationsRepository {
   conversations: Omit<ConversationRecord, 'lastMessage' | 'unreadCount' | 'mentionCount' | 'openTaskCount'>[] = [];
   messages: MessageRecord[] = [];
@@ -172,7 +124,6 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
   addConversation(id: string, users: UserRecord[], kind: 'direct' | 'group' = 'group') {
     this.conversations.push({
       id,
-      workspaceId: 'w1',
       kind,
       title: 'Equipo',
       description: '',
@@ -180,9 +131,9 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
       createdById: users[0].id,
       createdAt: new Date(),
       updatedAt: new Date(),
-      participants: users.map((user) => ({
+      participants: users.map((user, i) => ({
         user,
-        role: 'member',
+        role: kind === 'group' && i === 0 ? 'admin' : 'member',
         wrappedKey: 'k',
         keyIv: 'i',
         wrappedById: users[0].id,
@@ -284,15 +235,14 @@ export class InMemoryTasksRepository implements TasksRepository {
   async listForConversation(conversationId: string) {
     return this.tasks.filter((t) => t.conversationId === conversationId);
   }
-  async listForUser(workspaceId: string, userId: string, scope: TaskScope) {
+  async listForUser(userId: string, scope: TaskScope) {
     return this.tasks.filter(
       (t) =>
-        t.workspaceId === workspaceId &&
-        (scope === 'assigned'
+        scope === 'assigned'
           ? t.assigneeId === userId && t.status === 'open'
           : scope === 'created'
             ? t.createdById === userId && t.status === 'open'
-            : t.status === 'done' && (t.assigneeId === userId || t.createdById === userId)),
+            : t.status === 'done' && (t.assigneeId === userId || t.createdById === userId),
     );
   }
 }
@@ -330,41 +280,24 @@ export class RecordingPushSender implements PushSender {
   }
 }
 
-export class InMemoryPaymentsRepository implements PaymentsRepository {
-  rows: PaymentRow[] = [];
-  async create(input: NewPayment) {
-    const row: PaymentRow = { ...input, id: nextId('p'), status: 'pending', providerRef: null, checkoutUrl: null, createdAt: new Date(), paidAt: null };
-    this.rows.push(row);
-    return row;
-  }
-  async attachCheckout(id: string, checkoutUrl: string, providerRef: string | null) {
-    Object.assign(this.rows.find((r) => r.id === id)!, { checkoutUrl, providerRef });
+export class InMemoryOrdersRepository implements OrdersRepository {
+  orders: OrderRecord[] = [];
+  async create(order: NewOrder) {
+    const record: OrderRecord = { ...order, delivery: null, createdAt: new Date(), updatedAt: new Date() };
+    this.orders.push(record);
+    return { ...record };
   }
   async findById(id: string) {
-    const row = this.rows.find((r) => r.id === id);
-    return row ? { ...row } : null;
+    const order = this.orders.find((o) => o.id === id);
+    return order ? { ...order } : null;
   }
-  async settle(id: string, status: 'approved' | 'rejected', providerRef: string, at: Date) {
-    const row = this.rows.find((r) => r.id === id);
-    if (!row || row.status !== 'pending') return false;
-    Object.assign(row, { status, providerRef, paidAt: status === 'approved' ? at : null });
-    return true;
+  async listForUser(userId: string, limit: number) {
+    return this.orders.filter((o) => o.userId === userId).slice(0, limit);
   }
-  async listForWorkspace(workspaceId: string) {
-    return this.rows.filter((r) => r.workspaceId === workspaceId);
-  }
-}
-
-/** Pasarela doble: registra los checkouts y devuelve el pago que la prueba le indique. */
-export class FakePaymentGateway implements PaymentGateway {
-  checkouts: CheckoutInput[] = [];
-  nextWebhook: ProviderPayment | null = null;
-  constructor(readonly provider: 'sandbox' | 'mercadopago' = 'sandbox') {}
-  async createCheckout(input: CheckoutInput) {
-    this.checkouts.push(input);
-    return { checkoutUrl: `https://pago.example/${input.paymentId}`, providerRef: `ref-${input.paymentId}` };
-  }
-  async resolveWebhook() {
-    return this.nextWebhook;
+  async updateIfStatus(id: string, expected: OrderStatus, changes: OrderChanges) {
+    const order = this.orders.find((o) => o.id === id);
+    if (!order || order.status !== expected) return null;
+    Object.assign(order, changes, { updatedAt: new Date() });
+    return { ...order };
   }
 }

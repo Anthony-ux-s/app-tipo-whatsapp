@@ -54,7 +54,6 @@ export interface ThreadPanelState {
 
 interface ChatState {
   myId: string | null;
-  workspaceId: string | null;
   conversations: Record<string, ConversationSummary>;
   listStatus: 'idle' | 'loading' | 'ready' | 'error';
   threads: Record<string, MessageThread>;
@@ -74,7 +73,7 @@ interface ChatState {
 
   setIdentity: (myId: string | null) => void;
   setConnection: (state: ConnectionState) => void;
-  loadConversations: (workspaceId: string) => Promise<void>;
+  loadConversations: () => Promise<void>;
   fetchConversation: (conversationId: string) => Promise<ConversationSummary | null>;
   upsertConversation: (conversation: ConversationSummary) => void;
   setActive: (conversationId: string | null) => void;
@@ -98,8 +97,8 @@ interface ChatState {
   sendMedia: (conversationId: string, media: OutgoingMedia) => Promise<void>;
   retry: (clientId: string) => Promise<void>;
   emitTyping: (conversationId: string, isTyping: boolean) => void;
-  startDirect: (workspaceId: string, me: PublicUser, other: PublicUser) => Promise<ConversationSummary>;
-  createGroup: (workspaceId: string, me: PublicUser, title: string, members: PublicUser[]) => Promise<ConversationSummary>;
+  startDirect: (me: PublicUser, other: PublicUser) => Promise<ConversationSummary>;
+  createGroup: (me: PublicUser, title: string, members: PublicUser[]) => Promise<ConversationSummary>;
   addParticipants: (conversationId: string, me: PublicUser, users: PublicUser[]) => Promise<void>;
   leave: (conversationId: string) => Promise<void>;
   reset: () => void;
@@ -109,7 +108,6 @@ const emptyThread = (): MessageThread => ({ items: [], nextCursor: null, status:
 
 const initialState = {
   myId: null,
-  workspaceId: null,
   conversations: {},
   listStatus: 'idle' as const,
   threads: {},
@@ -304,16 +302,10 @@ export const useChatStore = create<ChatState>((set, get) => {
     setIdentity: (myId) => set({ myId }),
     setConnection: (connection) => set({ connection }),
 
-    loadConversations: async (workspaceId) => {
-      const switching = get().workspaceId !== workspaceId;
-      set({
-        workspaceId,
-        listStatus: switching || get().listStatus !== 'ready' ? 'loading' : 'ready',
-        ...(switching ? { conversations: {}, activeId: null } : {}),
-      });
+    loadConversations: async () => {
+      if (get().listStatus !== 'ready') set({ listStatus: 'loading' });
       try {
-        const list = await http.get<ConversationSummary[]>(`/chats?workspaceId=${encodeURIComponent(workspaceId)}`);
-        if (get().workspaceId !== workspaceId) return;
+        const list = await http.get<ConversationSummary[]>('/chats');
         set({ conversations: Object.fromEntries(list.map((c) => [c.id, c])), listStatus: 'ready' });
         const known = Object.values(get().tasks);
         await Promise.all(
@@ -326,7 +318,7 @@ export const useChatStore = create<ChatState>((set, get) => {
           ),
         );
       } catch (error) {
-        if (get().workspaceId === workspaceId) set({ listStatus: 'error' });
+        if (get().listStatus !== 'ready') set({ listStatus: 'error' });
         throw error;
       }
     },
@@ -342,7 +334,6 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
 
     upsertConversation: (conversation) => {
-      if (conversation.workspaceId !== get().workspaceId) return;
       set({ conversations: { ...get().conversations, [conversation.id]: conversation } });
       if (conversation.lastMessage) void decryptAll(conversation, [conversation.lastMessage]);
     },
@@ -394,7 +385,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       let conversation = get().conversations[message.conversationId];
       if (!conversation) {
         const fetched = await get().fetchConversation(message.conversationId);
-        if (!fetched || fetched.workspaceId !== get().workspaceId) return 'background';
+        if (!fetched) return 'background';
         conversation = fetched;
       }
       await decryptAll(conversation, [message]);
@@ -645,21 +636,20 @@ export const useChatStore = create<ChatState>((set, get) => {
       getSocket()?.emit('typing', { conversationId, isTyping });
     },
 
-    startDirect: async (workspaceId, me, other) => {
+    startDirect: async (me, other) => {
       const existing = Object.values(get().conversations).find(
         (c) => c.kind === 'direct' && c.participants.some((p) => p.user.id === other.id),
       );
       if (existing) return existing;
       const keys = await createWrappedKeys(me, [other]);
-      const conversation = await http.post<ConversationSummary>('/chats/direct', { workspaceId, userId: other.id, keys });
+      const conversation = await http.post<ConversationSummary>('/chats/direct', { userId: other.id, keys });
       get().upsertConversation(conversation);
       return conversation;
     },
 
-    createGroup: async (workspaceId, me, title, members) => {
+    createGroup: async (me, title, members) => {
       const keys = await createWrappedKeys(me, members);
       const conversation = await http.post<ConversationSummary>('/chats/groups', {
-        workspaceId,
         title,
         memberIds: members.map((m) => m.id),
         keys,

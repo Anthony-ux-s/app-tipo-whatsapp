@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { WorkspacesEngineModule } from '../../workspaces/workspaces-engine.module';
+import { AuthModule } from '../../identity/auth/auth.module';
 import { PushEngineModule } from '../push/push-engine.module';
 import { GetThreadUseCase } from './use-cases/get-thread.use-case';
 import { ConversationEvents } from './conversation-events';
@@ -33,7 +33,7 @@ const USE_CASES = [
 
 /** El MOTOR de mensajería: lo comparten todas las puertas (rutas HTTP y socket). */
 @Module({
-  imports: [WorkspacesEngineModule, PushEngineModule],
+  imports: [AuthModule, PushEngineModule],
   providers: [
     { provide: CONVERSATIONS_REPOSITORY, useClass: PrismaConversationsRepository },
     ConversationEvents,

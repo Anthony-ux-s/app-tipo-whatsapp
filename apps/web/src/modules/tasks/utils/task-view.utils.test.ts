@@ -8,7 +8,6 @@ import { canEditTask, sortTaskViews, toTaskView } from './task-view.utils';
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
   id,
   conversationId: 'c1',
-  workspaceId: 'w1',
   title: { ciphertext: 'x', iv: 'y' },
   assigneeId: 'a',
   createdById: 'me',
@@ -60,7 +59,7 @@ describe('vista de tareas', () => {
 
 describe('aviso local con la app en segundo plano', () => {
   const conversation = {
-    id: 'c1', workspaceId: 'w1', kind: 'group' as const, title: 'Logística', description: '', avatarColor: 'teal',
+    id: 'c1', kind: 'group' as const, title: 'Logística', description: '', avatarColor: 'teal',
     participants, myKey: null, lastMessage: null, unreadCount: 0, mentionCount: 0, openTaskCount: 0,
     createdById: 'me', createdAt: '', updatedAt: '',
   };
@@ -71,7 +70,7 @@ describe('aviso local con la app en segundo plano', () => {
 
   it('usa el texto ya descifrado y avisa si me mencionaron', () => {
     const notice = localNotificationFor(message({ mentions: ['me'] }), conversation, { k1: { ok: true, text: '¿Revisas esto?' } }, 'me');
-    expect(notice).toEqual({ title: 'Logística', body: 'Andrés Rojas te mencionó: ¿Revisas esto?', url: '/app/w/w1/c/c1', tag: 'c1' });
+    expect(notice).toEqual({ title: 'Logística', body: 'Andrés Rojas te mencionó: ¿Revisas esto?', url: '/app/c/c1', tag: 'c1' });
   });
 
   it('describe archivos y tareas cuando no hay texto', () => {

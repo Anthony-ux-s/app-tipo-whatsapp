@@ -3,17 +3,16 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
-import { useWorkspaceStore } from '@shared/stores/workspace.store';
 import { todayIso } from '@shared/utils/date';
 import { errorMessage } from '@shared/utils/http';
 import { MAX_TASK_TITLE } from '../const/tasks.const';
 import type { TaskPrefill } from '../types/tasks.types';
-import { sortTaskViews, toTaskView } from '../utils/task-view.utils';
+import { isGroupAdmin, sortTaskViews, toTaskView } from '../utils/task-view.utils';
 
 /** Panel de tareas de un chat: lista en vivo y formulario para crear (cifrando el título). */
 export function useTasksPanel(conversation: ConversationSummary, prefill: TaskPrefill | null) {
   const myId = useSessionStore((s) => s.user!.id);
-  const isAdmin = useWorkspaceStore((s) => s.details[conversation.workspaceId]?.role === 'admin');
+  const isAdmin = isGroupAdmin(conversation, myId);
   const tasks = useChatStore((s) => s.tasks);
   const texts = useChatStore((s) => s.texts);
   const status = useChatStore((s) => s.taskLists[conversation.id]);

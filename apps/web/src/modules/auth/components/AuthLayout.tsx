@@ -20,7 +20,7 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
         <Logo tone="light" className="relative" />
         <div className="relative mx-auto my-auto w-full max-w-md py-10">
           <WelcomeIllustration />
-          <h2 className="mt-8 text-3xl leading-tight font-extrabold xl:text-4xl">Tu equipo, en una sola conversación.</h2>
+          <h2 className="mt-8 text-3xl leading-tight font-extrabold xl:text-4xl">Tu gente y tus compras, en una sola app.</h2>
           <ul className="mt-6 flex flex-col gap-4">
             {AUTH_HIGHLIGHTS.map((item) => (
               <li key={item.title} className="flex gap-3">

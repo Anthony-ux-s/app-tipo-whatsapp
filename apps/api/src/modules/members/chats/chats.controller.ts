@@ -67,8 +67,8 @@ export class ChatsController {
   ) {}
 
   @Get()
-  list(@CurrentUser() user: AuthUser, @Query('workspaceId') workspaceId: string): Promise<ConversationSummary[]> {
-    return this.listConversations.execute(user.userId, workspaceId ?? '');
+  list(@CurrentUser() user: AuthUser): Promise<ConversationSummary[]> {
+    return this.listConversations.execute(user.userId);
   }
 
   @Post('direct')

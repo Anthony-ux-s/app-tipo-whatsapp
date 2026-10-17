@@ -4,35 +4,36 @@ import { useNavigate } from 'react-router';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
-import { useWorkspaceStore } from '@shared/stores/workspace.store';
 import { keyFingerprint } from '@shared/utils/fingerprint';
 import { errorMessage } from '@shared/utils/http';
 import { counterpart } from '../utils/conversation-preview.utils';
+import { usePeopleSearch } from './use-people-search.hook';
 
 /** Panel de información: miembros, huella de seguridad, agregar personas y salir del grupo. */
 export function useConversationInfo(conversation: ConversationSummary, open: boolean) {
   const navigate = useNavigate();
   const user = useSessionStore((s) => s.user)!;
-  const detail = useWorkspaceStore((s) => s.details[conversation.workspaceId]);
-  const loadDetail = useWorkspaceStore((s) => s.loadDetail);
   const { addParticipants, leave } = useChatStore.getState();
   const [adding, setAdding] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [candidateQuery, setCandidateQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [fingerprint, setFingerprint] = useState<string[] | null>(null);
 
   const other = counterpart(conversation, user.id);
   const isGroup = conversation.kind === 'group';
-  const canAdd = isGroup && (detail?.role === 'admin' || conversation.createdById === user.id);
+  // Como en WhatsApp: quien creó el grupo lo administra y agrega personas.
+  const canAdd = isGroup && conversation.createdById === user.id;
+  const directory = usePeopleSearch(candidateQuery, adding);
 
   useEffect(() => {
     if (!open) return;
     setAdding(false);
     setSelected([]);
     setConfirmLeave(false);
-    void loadDetail(conversation.workspaceId).catch(() => undefined);
-  }, [open, conversation.id, conversation.workspaceId, loadDetail]);
+    setCandidateQuery('');
+  }, [open, conversation.id]);
 
   const otherKey = other?.publicKey;
   useEffect(() => {
@@ -46,8 +47,8 @@ export function useConversationInfo(conversation: ConversationSummary, open: boo
 
   const candidates = useMemo<PublicUser[]>(() => {
     const inGroup = new Set(conversation.participants.map((p) => p.user.id));
-    return (detail?.members ?? []).map((m) => m.user).filter((u) => !inGroup.has(u.id));
-  }, [detail, conversation.participants]);
+    return directory.people.filter((u) => !inGroup.has(u.id));
+  }, [directory.people, conversation.participants]);
 
   const members = useMemo(
     () =>
@@ -66,6 +67,9 @@ export function useConversationInfo(conversation: ConversationSummary, open: boo
     canAdd,
     adding,
     candidates,
+    candidateQuery,
+    candidatesLoading: directory.loading,
+    onCandidateQueryChange: (value: string) => setCandidateQuery(value),
     selected,
     busy,
     confirmLeave,
@@ -97,7 +101,7 @@ export function useConversationInfo(conversation: ConversationSummary, open: boo
       try {
         await leave(conversation.id);
         toast(`Saliste de «${conversation.title}»`, 'info');
-        navigate(`/app/w/${conversation.workspaceId}`, { replace: true });
+        navigate('/app', { replace: true });
       } catch (err) {
         toast(errorMessage(err), 'error');
         setBusy(false);

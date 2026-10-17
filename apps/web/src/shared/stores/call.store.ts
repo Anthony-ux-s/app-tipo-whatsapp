@@ -253,7 +253,7 @@ export const useCallStore = create<CallState>((set, get) => {
 
     onIncoming: async (call, myId) => {
       if (get().phase !== 'idle' || call.startedBy === myId) return;
-      // La conversación puede ser de otro espacio: se pide al servidor para mostrar nombre y avatar.
+      // La conversación puede no estar cargada aún: se pide al servidor para mostrar nombre y avatar.
       const conversation = await http.get<ConversationSummary>(`/chats/${call.conversationId}`).catch(() => null);
       if (!conversation || get().phase !== 'idle') return;
       set({ ...idle, phase: 'incoming', call: viewOf(conversation, call.kind, call.callId, call.startedBy), people: peopleOf(conversation) });

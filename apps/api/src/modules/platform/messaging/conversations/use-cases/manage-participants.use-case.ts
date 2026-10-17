@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AddParticipantsRequest, ConversationSummary } from '@parla/types';
 import { ForbiddenError, ValidationError } from '../../../../../kernel/domain-error';
-import { WORKSPACES_REPOSITORY, type WorkspacesRepository } from '../../../workspaces/workspaces.repository';
+import { AUTH_REPOSITORY, type AuthRepository } from '../../../identity/auth/auth.repository';
 import { ConversationEvents } from '../conversation-events';
 import { CONVERSATIONS_REPOSITORY, type ConversationsRepository } from '../conversations.repository';
 import { MAX_GROUP_SIZE, assertKeysCover } from '../domain/conversation-rules';
@@ -12,7 +12,7 @@ import { SendMessageUseCase } from './send-message.use-case';
 export class AddParticipantsUseCase {
   constructor(
     @Inject(CONVERSATIONS_REPOSITORY) private readonly conversations: ConversationsRepository,
-    @Inject(WORKSPACES_REPOSITORY) private readonly workspaces: WorkspacesRepository,
+    @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
     private readonly getConversation: GetConversationUseCase,
     private readonly sendMessage: SendMessageUseCase,
     private readonly events: ConversationEvents,
@@ -22,9 +22,8 @@ export class AddParticipantsUseCase {
     const conversation = await this.getConversation.require(conversationId, userId);
     if (conversation.kind !== 'group') throw new ValidationError('Solo se pueden agregar personas a un grupo');
 
-    const role = await this.workspaces.roleOf(conversation.workspaceId, userId);
-    if (role !== 'admin' && conversation.createdById !== userId) {
-      throw new ForbiddenError('Solo quien creó el grupo o un administrador puede agregar personas');
+    if (conversation.createdById !== userId) {
+      throw new ForbiddenError('Solo quien creó el grupo puede agregar personas');
     }
 
     const current = new Set(conversation.participants.map((p) => p.user.id));
@@ -32,10 +31,8 @@ export class AddParticipantsUseCase {
     if (newIds.length === 0) throw new ValidationError('Esas personas ya están en el grupo');
     if (current.size + newIds.length > MAX_GROUP_SIZE) throw new ValidationError('El grupo supera el máximo de miembros');
 
-    const members = new Map(
-      (await this.workspaces.listMembers(conversation.workspaceId)).map((m) => [m.user.id, m.user]),
-    );
-    if (newIds.some((id) => !members.has(id))) throw new ValidationError('Solo puedes agregar miembros del espacio');
+    const members = new Map((await this.users.findActiveByIds([userId, ...newIds])).map((u) => [u.id, u]));
+    if (newIds.some((id) => !members.has(id))) throw new ValidationError('Alguna de esas personas ya no está en Parla');
     assertKeysCover(input.keys, newIds, userId);
 
     await this.conversations.addParticipants(conversationId, input.keys);

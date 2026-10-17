@@ -6,7 +6,6 @@ export function toTask(task: TaskRecord): Task {
   return {
     id: task.id,
     conversationId: task.conversationId,
-    workspaceId: task.workspaceId,
     title: { ciphertext: task.titleCiphertext, iv: task.titleIv },
     assigneeId: task.assigneeId,
     createdById: task.createdById,

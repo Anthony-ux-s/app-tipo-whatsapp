@@ -1,4 +1,4 @@
-import type { MessageKind, PushPayload, TaskStatus, WorkspaceRole } from '@parla/types';
+import type { MessageKind, PushPayload, TaskStatus, ParticipantRole } from '@parla/types';
 import { ForbiddenError, ValidationError } from './domain-error';
 
 /** Menciones válidas: participantes del chat, sin repetir y sin mencionarse a uno mismo. */
@@ -23,11 +23,11 @@ export function assertValidDueDate(dueDate: string | null | undefined): void {
   }
 }
 
-/** Quién puede cambiar una tarea: quien la creó, la persona asignada o un administrador del espacio. */
+/** Quién puede cambiar una tarea: quien la creó, la persona asignada o quien administra el grupo. */
 export function assertCanEditTask(
   task: { createdById: string; assigneeId: string | null },
   actorId: string,
-  actorRole: WorkspaceRole | null,
+  actorRole: ParticipantRole | null,
 ): void {
   if (task.createdById === actorId || task.assigneeId === actorId || actorRole === 'admin') return;
   throw new ForbiddenError('Solo quien creó la tarea, la persona asignada o un administrador pueden cambiarla');
@@ -51,13 +51,12 @@ const KIND_LABEL: Record<MessageKind, string> = {
 
 export interface PushContext {
   conversationId: string;
-  workspaceId: string;
   conversationKind: 'direct' | 'group';
   conversationTitle: string;
   senderName: string;
 }
 
-const urlFor = (ctx: PushContext) => `/app/w/${ctx.workspaceId}/c/${ctx.conversationId}`;
+const urlFor = (ctx: PushContext) => `/app/c/${ctx.conversationId}`;
 
 /**
  * Texto de la notificación push de un mensaje. Nunca incluye el contenido: va cifrado de extremo a

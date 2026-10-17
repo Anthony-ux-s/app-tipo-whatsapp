@@ -22,7 +22,7 @@ export function SettingsView() {
         <Avatar name={s.user.displayName} color={s.user.avatarColor} size="lg" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-lg font-bold text-ink">{s.user.displayName}</span>
-          <span className="block truncate text-sm text-ink-soft">{s.user.about || 'Agrega una info. para tu equipo'}</span>
+          <span className="block truncate text-sm text-ink-soft">{s.user.about || 'Agrega una info. para tus contactos'}</span>
           <span className="block truncate text-xs text-ink-faint">{s.handle}</span>
         </span>
         <ChevronRight className="size-5 shrink-0 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5" />

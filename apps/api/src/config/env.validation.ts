@@ -1,4 +1,4 @@
-import type { CallIceConfig, PaymentProvider } from '@parla/types';
+import type { CallIceConfig } from '@parla/types';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -6,10 +6,8 @@ export interface AppEnv {
   production: boolean;
   port: number;
   webOrigin: string[];
-  /** URL pública de la web (para enlaces de pago y de invitación). */
+  /** URL pública de la web (enlaces de las notificaciones). */
   publicWebUrl: string;
-  /** URL pública de la API (para el webhook de pagos); vacía en desarrollo. */
-  publicApiUrl: string | null;
   jwtSecret: string;
   jwtExpiresIn: string;
   storageDir: string;
@@ -18,8 +16,6 @@ export interface AppEnv {
   /** Claves VAPID para Web Push; si faltan, el adaptador las genera y las guarda. */
   vapid: { publicKey: string; privateKey: string } | null;
   vapidSubject: string;
-  paymentProvider: PaymentProvider;
-  mercadoPago: { accessToken: string | null; webhookSecret: string | null; useSandboxUrl: boolean };
   /** Servidores STUN/TURN para las llamadas WebRTC. */
   ice: CallIceConfig;
   /** Servicio de tiempo real (Elixir) y token compartido entre servicios internos. */
@@ -55,10 +51,6 @@ export function loadEnv(): AppEnv {
   if (!Number.isInteger(port) || port <= 0) throw new Error('PORT debe ser un número de puerto válido');
 
   const webOrigin = (env.WEB_ORIGIN ?? 'http://localhost:3100').split(',').map((o) => o.trim());
-  const paymentProvider: PaymentProvider = env.PAYMENT_PROVIDER === 'mercadopago' ? 'mercadopago' : 'sandbox';
-  if (paymentProvider === 'mercadopago' && !env.MERCADOPAGO_ACCESS_TOKEN) {
-    throw new Error('PAYMENT_PROVIDER=mercadopago necesita MERCADOPAGO_ACCESS_TOKEN');
-  }
 
   const webDistPath = env.WEB_DIST ? resolve(process.cwd(), env.WEB_DIST) : null;
   const stun = (env.STUN_URLS ?? 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302')
@@ -75,7 +67,6 @@ export function loadEnv(): AppEnv {
     port,
     webOrigin,
     publicWebUrl: (env.PUBLIC_WEB_URL ?? webOrigin[0]).replace(/\/$/, ''),
-    publicApiUrl: env.PUBLIC_API_URL ? env.PUBLIC_API_URL.replace(/\/$/, '') : null,
     jwtSecret: env.JWT_SECRET!,
     jwtExpiresIn: env.JWT_EXPIRES_IN ?? '7d',
     storageDir: resolve(process.cwd(), env.STORAGE_DIR ?? './storage'),
@@ -85,12 +76,6 @@ export function loadEnv(): AppEnv {
         ? { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY }
         : null,
     vapidSubject: env.VAPID_SUBJECT ?? 'mailto:soporte@parla.app',
-    paymentProvider,
-    mercadoPago: {
-      accessToken: env.MERCADOPAGO_ACCESS_TOKEN ?? null,
-      webhookSecret: env.MERCADOPAGO_WEBHOOK_SECRET ?? null,
-      useSandboxUrl: env.MERCADOPAGO_SANDBOX === 'true',
-    },
     ice: { iceServers },
     realtimeUrl: (env.REALTIME_URL ?? 'http://localhost:4102').replace(/\/$/, ''),
     internalToken,
