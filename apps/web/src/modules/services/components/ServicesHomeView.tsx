@@ -15,41 +15,42 @@ export function ServicesHomeView() {
 
       {s.error && <ErrorState message={s.error} onRetry={s.retry} />}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {(s.services ?? []).map((service) => {
-          const visual = SERVICE_VISUALS[service.id];
-          const Icon = visual.icon;
-          const card = (
-            <div
-              className={`relative flex h-full min-h-40 flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br p-5 text-white shadow-float transition-transform duration-200 ${visual.gradient} ${service.available ? 'hover:-translate-y-0.5' : 'opacity-75'}`}
-            >
-              <span className="flex size-12 items-center justify-center rounded-2xl bg-white/15">
-                <Icon className="size-6" />
+      <section className="rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Servicios disponibles">
+        <div className="grid grid-cols-4 gap-x-2 gap-y-4 sm:grid-cols-6">
+          {(s.services ?? []).map((service) => {
+            const visual = SERVICE_VISUALS[service.id];
+            const Icon = visual.icon;
+            const tile = (
+              <span className="group flex flex-col items-center gap-1.5 text-center" title={service.description}>
+                <span
+                  className={`relative flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-float transition-transform duration-200 ${visual.gradient} ${service.available ? 'group-hover:-translate-y-0.5' : 'opacity-50 grayscale-[40%]'}`}
+                >
+                  <Icon className="size-5" />
+                </span>
+                <span className={`text-xs font-semibold ${service.available ? 'text-ink' : 'text-ink-faint'}`}>{service.name}</span>
+                {!service.available && (
+                  <span className="-mt-1 rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] font-bold text-ink-soft">Próximamente</span>
+                )}
               </span>
-              <div className="mt-6">
-                <p className="flex items-center gap-2 text-lg font-extrabold">
-                  {service.name}
-                  {!service.available && <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold">Próximamente</span>}
-                </p>
-                <p className="text-sm text-white/85">{service.description}</p>
-                {service.available && <p className="mt-2 text-xs text-white/70">{service.provider}</p>}
+            );
+            return visual.to && service.available ? (
+              <Link key={service.id} to={visual.to} aria-label={service.name} data-testid={`service-${service.id}`} className="rounded-xl py-1">
+                {tile}
+              </Link>
+            ) : (
+              <div key={service.id} aria-disabled="true" className="py-1">
+                {tile}
               </div>
-            </div>
-          );
-          return visual.to && service.available ? (
-            <Link key={service.id} to={visual.to} aria-label={service.name} data-testid={`service-${service.id}`}>
-              {card}
-            </Link>
-          ) : (
-            <div key={service.id} aria-disabled="true">
-              {card}
-            </div>
-          );
-        })}
-        {!s.services &&
-          !s.error &&
-          [0, 1].map((i) => <div key={i} className="min-h-40 animate-pulse rounded-2xl bg-surface-3" />)}
-      </div>
+            );
+          })}
+          {!s.services &&
+            !s.error &&
+            [0, 1].map((i) => <div key={i} className="mx-auto size-12 animate-pulse rounded-2xl bg-surface-3" />)}
+        </div>
+        <p className="mt-4 border-t border-line pt-3 text-xs text-ink-soft">
+          <span className="font-semibold text-ink">Mercado:</span> tienda MercaYa · delivery MotoYa · pago con QR PagaYa
+        </p>
+      </section>
 
       <Link
         to="/app/pedidos"
