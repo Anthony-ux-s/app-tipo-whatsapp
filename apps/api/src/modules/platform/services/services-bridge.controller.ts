@@ -3,6 +3,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 import type {
   Currency,
   DeliveryAddress,
+  GeoPoint,
   InternalCreateOrder,
   InternalOrder,
   InternalUpdateOrder,
@@ -20,6 +21,8 @@ import {
   IsIn,
   IsInt,
   IsISO8601,
+  IsLatitude,
+  IsLongitude,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -45,9 +48,15 @@ class OrderLineDto implements OrderLine {
   @IsInt() @Min(0) @Max(MAX_CENTS) totalCents: number;
 }
 
+class GeoPointDto implements GeoPoint {
+  @IsLatitude() lat: number;
+  @IsLongitude() lng: number;
+}
+
 class AddressDto implements DeliveryAddress {
   @IsString() @IsNotEmpty() @MaxLength(200) line: string;
   @IsString() @MaxLength(200) reference: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoPointDto) location?: GeoPointDto | null;
 }
 
 class PaymentDto implements OrderPayment {

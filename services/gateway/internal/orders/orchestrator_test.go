@@ -675,3 +675,21 @@ func TestElCuerpoDistingueOfertaAusenteNullYNumero(t *testing.T) {
 		t.Fatalf("sin cambios: %d", code)
 	}
 }
+
+func TestLaUbicacionDelMapaLlegaAlCoreYSeValida(t *testing.T) {
+	w := newWorld()
+	ctx := context.Background()
+	req := cart
+	req.Address.Location = &services.GeoPoint{Lat: -12.12, Lng: -77.03}
+	if _, err := w.orch.Create(ctx, "u", req); err != nil {
+		t.Fatal(err)
+	}
+	if loc := w.core.orders["ord_1"].Address.Location; loc == nil || loc.Lat != -12.12 {
+		t.Fatalf("el punto del mapa debía guardarse: %+v", w.core.orders["ord_1"].Address)
+	}
+	bad := cart
+	bad.Address.Location = &services.GeoPoint{Lat: 120, Lng: 0}
+	if _, err := w.orch.Quote(ctx, bad); status(err) != http.StatusBadRequest {
+		t.Fatalf("un punto fuera del mapa debía rechazarse, obtuve %v", err)
+	}
+}

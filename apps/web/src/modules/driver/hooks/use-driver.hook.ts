@@ -15,6 +15,7 @@ export function useDriverOrders() {
   const loadOrders = useDriverStore((s) => s.loadOrders);
   const [tab, setTab] = useState<DriverTab>('disponibles');
   const [error, setError] = useState<string | null>(null);
+  const [togglingOnline, setTogglingOnline] = useState(false);
 
   const reload = () => {
     setError(null);
@@ -39,6 +40,18 @@ export function useDriverOrders() {
     reload,
     open: (id: string) => navigate(`/app/rapidito/pedidos/${id}`),
     back: () => navigate('/app/pedidos'),
+    togglingOnline,
+    toggleOnline: async (online: boolean) => {
+      setTogglingOnline(true);
+      try {
+        await useDriverStore.getState().setOnline(online);
+        toast(online ? 'Conectado: te llegarán pedidos.' : 'Desconectado.', 'success');
+      } catch (err) {
+        toast(errorMessage(err), 'error');
+      } finally {
+        setTogglingOnline(false);
+      }
+    },
   };
 }
 

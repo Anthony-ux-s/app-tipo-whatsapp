@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import type { Currency, OrderStatus, OrderTimelineEntry, ServiceId } from '@parla/types';
-import type { Business as BusinessRow, Order as OrderRow } from '@prisma/client';
+import type { Business as BusinessRow, Order as OrderRow, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from './orders.repository';
 
-type OrderWithBusiness = OrderRow & { business: BusinessRow | null };
+type OrderWithBusiness = OrderRow & {
+  business: BusinessRow | null;
+  driver: { lastLat: number | null; lastLng: number | null; lastLocationAt: Date | null } | null;
+};
 
-const WITH_BUSINESS = { business: true } as const;
+/** El negocio y la última ubicación del repartidor (para el mapa). */
+const WITH_BUSINESS = { business: true, driver: { select: { lastLat: true, lastLng: true, lastLocationAt: true } } } as const;
 
 /** Pedidos que el negocio ve: todo menos los que aún esperan el pago o se vencieron sin pagar. */
 const VISIBLE_TO_BUSINESS: OrderStatus[] = [
@@ -19,7 +23,13 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
     userId: row.userId,
     service: row.service as ServiceId,
     business: row.business
-      ? { id: row.business.id, name: row.business.name, ownerId: row.business.ownerId, address: row.business.address }
+      ? {
+          id: row.business.id,
+          name: row.business.name,
+          ownerId: row.business.ownerId,
+          address: row.business.address,
+          location: row.business.lat !== null && row.business.lng !== null ? { lat: row.business.lat, lng: row.business.lng } : null,
+        }
       : null,
     status: row.status as OrderStatus,
     lines: JSON.parse(row.lines),
@@ -33,6 +43,10 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
     etaMinutes: row.etaMinutes,
     delivery: row.delivery ? JSON.parse(row.delivery) : null,
     driverId: row.driverId,
+    driverLocation:
+      row.driver && row.driver.lastLat !== null && row.driver.lastLng !== null && row.driver.lastLocationAt
+        ? { lat: row.driver.lastLat, lng: row.driver.lastLng, at: row.driver.lastLocationAt }
+        : null,
     deliveryCode: row.deliveryCode,
     deliveryCodeAttempts: row.deliveryCodeAttempts,
     timeline: JSON.parse(row.timeline),
@@ -97,6 +111,21 @@ export class PrismaOrdersRepository implements OrdersRepository {
 
   countActiveForDriver(driverId: string): Promise<number> {
     return this.prisma.order.count({ where: { driverId, status: { in: ['driver_assigned', 'on_the_way'] } } });
+  }
+
+  async listActiveForDriver(driverId: string): Promise<OrderRecord[]> {
+    const rows = await this.prisma.order.findMany({ where: { driverId, status: { in: ['driver_assigned', 'on_the_way'] } }, include: WITH_BUSINESS });
+    return rows.map(toOrderRecord);
+  }
+
+  async driverEarnings(driverId: string, since: { today: Date; week: Date }) {
+    const sum = async (from?: Date): Promise<[number, number]> => {
+      const where: Prisma.OrderWhereInput = { driverId, status: 'delivered', ...(from ? { updatedAt: { gte: from } } : {}) };
+      const r = await this.prisma.order.aggregate({ where, _sum: { deliveryFeeCents: true }, _count: true });
+      return [r._sum.deliveryFeeCents ?? 0, r._count];
+    };
+    const [today, week, total] = await Promise.all([sum(since.today), sum(since.week), sum()]);
+    return { today, week, total };
   }
 
   async updateIfStatus(id: string, expected: OrderStatus, changes: OrderChanges): Promise<OrderRecord | null> {

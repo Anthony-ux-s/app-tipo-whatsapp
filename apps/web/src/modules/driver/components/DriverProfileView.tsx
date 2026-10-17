@@ -1,0 +1,76 @@
+import { LogOut, Save } from 'lucide-react';
+import { Navigate } from 'react-router';
+import { Button } from '@shared/ui/Button';
+import { Modal } from '@shared/ui/Modal';
+import { Toggle } from '@shared/ui/Toggle';
+import { formatSoles } from '@shared/utils/money';
+import { PageHeader, ServicePage } from '../../services/components/ServicesUi';
+import { useDriverProfile } from '../hooks/use-driver-profile.hook';
+import { VehiclePicker } from './VehiclePicker';
+
+/** Perfil del repartidor de Rapidito: ganancias, conectado, vehículo y dejar de repartir. */
+export function DriverProfileView() {
+  const p = useDriverProfile();
+  if (p.driver === null) return <Navigate to="/app/rapidito/registro" replace />;
+  if (!p.driver) return null;
+  const e = p.earnings;
+  return (
+    <ServicePage>
+      <PageHeader title="Mi perfil de repartidor" subtitle="Rapidito" onBack={p.back} />
+
+      <section className="grid grid-cols-3 gap-2" aria-label="Ganancias" data-testid="driver-earnings">
+        {[
+          ['Hoy', e?.todayCents, e?.todayDeliveries],
+          ['7 días', e?.weekCents, e?.weekDeliveries],
+          ['Total', e?.totalCents, e?.totalDeliveries],
+        ].map(([label, cents, count]) => (
+          <div key={label as string} className="rounded-2xl bg-surface p-3 text-center shadow-float">
+            <p className="text-xs font-semibold text-ink-soft">{label}</p>
+            <p className="text-lg font-extrabold text-ink">{cents === undefined ? '—' : formatSoles(cents as number)}</p>
+            <p className="text-xs text-ink-faint">{count === undefined ? '' : `${count} ${count === 1 ? 'entrega' : 'entregas'}`}</p>
+          </div>
+        ))}
+      </section>
+
+      <section className="rounded-2xl bg-surface p-4 shadow-float md:p-5">
+        <Toggle
+          checked={p.driver.online}
+          onChange={p.toggleOnline}
+          disabled={p.busy === 'online'}
+          label="Conectado"
+          description="Conectado te llegan los pedidos listos para recoger. Desconéctate al terminar tu jornada."
+        />
+      </section>
+
+      <form onSubmit={p.save} className="flex flex-col gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Vehículo">
+        <h2 className="font-bold text-ink">Tu vehículo</h2>
+        <VehiclePicker vehicle={p.vehicle} plate={p.plate} needsPlate={p.needsPlate} onVehicle={p.selectVehicle} onPlate={p.onPlate} />
+        {p.error && <p role="alert" className="text-sm font-semibold text-rose-700 dark:text-rose-400">{p.error}</p>}
+        {p.changed && (
+          <Button type="submit" icon={<Save className="size-4" />} loading={p.busy === 'save'} className="self-start" data-testid="save-vehicle">
+            Guardar vehículo
+          </Button>
+        )}
+      </form>
+
+      <Button variant="ghost" className="self-center" icon={<LogOut className="size-4" />} onClick={p.askLeave} data-testid="leave-driver">
+        Dejar de repartir
+      </Button>
+
+      <Modal
+        open={p.confirmLeave}
+        onClose={p.closeLeave}
+        size="sm"
+        title="¿Dejar de repartir?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={p.closeLeave}>Volver</Button>
+            <Button variant="danger" icon={<LogOut className="size-4" />} onClick={p.leave} loading={p.busy === 'leave'} data-testid="confirm-leave">Dejar de repartir</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-soft">Ya no te llegarán pedidos. Tus entregas quedan en el historial y puedes volver a registrarte cuando quieras.</p>
+      </Modal>
+    </ServicePage>
+  );
+}

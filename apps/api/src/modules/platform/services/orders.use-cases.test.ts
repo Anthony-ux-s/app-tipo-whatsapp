@@ -24,6 +24,14 @@ import {
 } from './use-cases/business-orders.use-cases';
 import { AcceptDeliveryUseCase, DeliverOrderUseCase, ListDriverOrdersUseCase, ReleaseDeliveryUseCase } from './use-cases/driver-orders.use-cases';
 import {
+  GetDriverEarningsUseCase,
+  LeaveDriverUseCase,
+  RegisterDriverUseCase,
+  ReportDriverLocationUseCase,
+  SetDriverOnlineUseCase,
+  UpdateDriverProfileUseCase,
+} from './use-cases/driver-profile.use-cases';
+import {
   CreateOrderUseCase,
   GetMyOrderUseCase,
   ListMyOrdersUseCase,
@@ -91,8 +99,11 @@ describe('pedidos de Servicios (core)', () => {
     businesses = new InMemoryBusinessesRepository();
     businesses.businesses.push({ id: 'biz_1', name: 'Bodega MercaYa', service: 'mercado', ownerId: rosa.id, address: 'Av. Benavides 1180', acceptingOrders: true, opensAt: '08:00', closesAt: '22:00' });
     drivers = new InMemoryDriversRepository();
-    drivers.drivers.push({ userId: carlos.id, vehicle: 'Moto', plate: 'B7K-482' }, { userId: lucia.id, vehicle: 'Moto', plate: 'D5T-663' });
-    orders = new InMemoryOrdersRepository(businesses);
+    drivers.drivers.push(
+      { userId: carlos.id, vehicle: 'Moto', plate: 'B7K-482', online: true, active: true, location: null },
+      { userId: lucia.id, vehicle: 'Moto', plate: 'D5T-663', online: true, active: true, location: null },
+    );
+    orders = new InMemoryOrdersRepository(businesses, drivers);
     realtime = new RecordingRealtime();
     const subs = new InMemoryPushSubscriptions();
     for (const [u, name] of [[ana, 'ana'], [rosa, 'rosa'], [carlos, 'carlos']] as const) {
@@ -310,6 +321,61 @@ describe('pedidos de Servicios (core)', () => {
     const renewed = await renew.execute(ana.id, ID);
     expect(renewed.deliveryCodeLocked).toBe(false);
     expect((await deliver.execute(carlos.id, ID, renewed.deliveryCode!)).status).toBe('delivered');
+  });
+
+  describe('repartidores', () => {
+    it('cualquiera se registra, edita su vehículo, se conecta y deja de repartir (y puede volver)', async () => {
+      const register = new RegisterDriverUseCase(drivers);
+      await expect(register.execute(beto.id, { vehicle: 'Moto', plate: 'x' })).rejects.toThrow('placa');
+      await expect(register.execute(beto.id, { vehicle: 'Patineta' as never })).rejects.toThrow('Elige un vehículo');
+      expect(await register.execute(beto.id, { vehicle: 'Moto', plate: ' abc 123 ' })).toEqual({ vehicle: 'Moto', plate: 'ABC123', online: false });
+      await expect(register.execute(beto.id, { vehicle: 'Bicicleta' })).rejects.toThrow('Ya eres repartidor');
+      expect(await new UpdateDriverProfileUseCase(drivers).execute(beto.id, { vehicle: 'Bicicleta', plate: 'ABC123' })).toEqual({ vehicle: 'Bicicleta', plate: '', online: false });
+      // Desconectado no recibe ofertas ni puede tomar pedidos
+      await readyForDrivers();
+      expect(await drivers.listUserIds()).not.toContain(beto.id);
+      await expect(take.execute(beto.id, ID)).rejects.toThrow('Conéctate');
+      await new SetDriverOnlineUseCase(drivers).execute(beto.id, true);
+      expect(await drivers.listUserIds()).toContain(beto.id);
+      await take.execute(beto.id, ID);
+      // Con una entrega en curso no puede irse; al terminarla, sí
+      const leave = new LeaveDriverUseCase(drivers, orders);
+      await expect(leave.execute(beto.id)).rejects.toThrow('entrega en curso');
+      await decide.execute(rosa.id, ID, 'handoff');
+      await deliver.execute(beto.id, ID, await codeOf());
+      await leave.execute(beto.id);
+      await expect(take.execute(beto.id, ID)).rejects.toThrow(ForbiddenError);
+      expect(await register.execute(beto.id, { vehicle: 'A pie' })).toMatchObject({ vehicle: 'A pie', online: false });
+    });
+
+    it('sus ganancias suman las tarifas de lo entregado', async () => {
+      await readyForDrivers();
+      await take.execute(carlos.id, ID);
+      await decide.execute(rosa.id, ID, 'handoff');
+      await deliver.execute(carlos.id, ID, await codeOf());
+      expect(await new GetDriverEarningsUseCase(drivers, orders).execute(carlos.id)).toEqual({
+        todayCents: 650, todayDeliveries: 1, weekCents: 650, weekDeliveries: 1, totalCents: 650, totalDeliveries: 1,
+      });
+    });
+
+    it('su ubicación solo llega a la clienta y la tienda del pedido que lleva', async () => {
+      const report = new ReportDriverLocationUseCase(drivers, orders, realtime);
+      const here = { lat: -12.12, lng: -77.03 };
+      expect(await report.execute(carlos.id, here)).toEqual({ shared: 0 }); // sin entrega en curso, nada
+      await readyForDrivers();
+      await take.execute(carlos.id, ID);
+      const t0 = new Date();
+      expect(await report.execute(carlos.id, here, t0)).toEqual({ shared: 1 });
+      const sent = realtime.events('delivery:location');
+      expect(sent).toHaveLength(1);
+      expect(sent[0].userIds.sort()).toEqual([ana.id, rosa.id].sort());
+      expect(sent[0].payload).toMatchObject({ orderId: ID, lat: -12.12, lng: -77.03 });
+      // Muy seguido se ignora; el pedido trae la última ubicación para el mapa
+      expect(await report.execute(carlos.id, { lat: -12.13, lng: -77.03 }, new Date(t0.getTime() + 1_000))).toEqual({ shared: 0 });
+      expect((await new GetMyOrderUseCase(orders).execute(ana.id, ID)).driverLocation).toMatchObject({ lat: -12.12, lng: -77.03 });
+      await expect(report.execute(carlos.id, { lat: 200, lng: 0 })).rejects.toThrow(ValidationError);
+      await expect(report.execute(beto.id, here)).rejects.toThrow(ForbiddenError);
+    });
   });
 
   it('el chat del pedido es bidireccional entre cliente, tienda y repartidor, y nadie más', async () => {

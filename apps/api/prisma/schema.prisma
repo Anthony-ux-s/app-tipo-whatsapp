@@ -236,8 +236,10 @@ model Business {
   /// ServiceId que atiende: mercado | salud (uno por servicio).
   service         String   @unique
   ownerId         String   @unique
-  /// Dirección donde el repartidor recoge los pedidos.
+  /// Dirección donde el repartidor recoge los pedidos, y su punto en el mapa.
   address         String
+  lat             Float?
+  lng             Float?
   /// El dueño puede pausar los pedidos aunque esté en horario («Recibir pedidos»).
   acceptingOrders Boolean  @default(true)
   /// Horario de atención (hora de Lima, «HH:MM»); si cierra antes de abrir, cruza la medianoche.
@@ -252,11 +254,19 @@ model Business {
 /// Repartidor de Rapidito: una cuenta de Parla con su vehículo. Toma los pedidos listos, los recoge
 /// en la tienda y los entrega con el código del cliente.
 model Driver {
-  userId    String   @id
+  userId         String    @id
   /// Tipo de vehículo («Moto», «Bicicleta»…).
-  vehicle   String
-  plate     String
-  createdAt DateTime @default(now())
+  vehicle        String
+  plate          String
+  /// Conectado: recibe ofertas y puede tomar pedidos.
+  online         Boolean   @default(false)
+  /// Dejó de repartir: no recibe nada, pero sus entregas quedan en el historial.
+  active         Boolean   @default(true)
+  /// Última ubicación que mandó su celular (solo mientras reparte).
+  lastLat        Float?
+  lastLng        Float?
+  lastLocationAt DateTime?
+  createdAt      DateTime  @default(now())
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders Order[]

@@ -1,6 +1,7 @@
-import { Bike, MapPin, Minus, Plus, QrCode, ShoppingBasket, Trash2 } from 'lucide-react';
+import { Bike, LocateFixed, MapPin, Minus, Plus, QrCode, ShoppingBasket, Trash2 } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { Field, FieldError } from '@shared/ui/Field';
+import { LazyDeliveryMap } from '@shared/ui/LazyDeliveryMap';
 import { EmptyState } from '@shared/ui/States';
 import { EmptyChatsIllustration } from '@shared/ui/illustrations';
 import { formatSoles } from '@shared/utils/money';
@@ -62,6 +63,17 @@ export function CheckoutView() {
         </h2>
         <Field label="Dirección" placeholder="ej. Av. Larco 123, Miraflores" value={c.address.line} maxLength={200} onChange={(e) => c.onAddressChange(e.target.value)} />
         <Field label="Referencia" placeholder="ej. Puerta verde, 3er piso" value={c.address.reference} maxLength={200} onChange={(e) => c.onReferenceChange(e.target.value)} />
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-ink-soft">
+              {c.address.location ? 'Punto de entrega marcado. Arrástralo o toca otro lugar para corregirlo.' : 'Toca el mapa para marcar dónde te entregamos (opcional, ayuda al repartidor).'}
+            </p>
+            <Button variant="ghost" size="sm" icon={<LocateFixed className="size-4" />} onClick={c.useMyLocation} loading={c.locating} data-testid="use-my-location">
+              Usar mi ubicación
+            </Button>
+          </div>
+          <LazyDeliveryMap destination={c.address.location} onPick={c.onPickLocation} label="Mapa para marcar el punto de entrega" />
+        </div>
       </section>
 
       <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Resumen" data-testid="quote">

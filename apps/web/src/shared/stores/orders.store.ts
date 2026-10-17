@@ -1,4 +1,4 @@
-import type { Order } from '@parla/types';
+import type { DriverLocation, Order } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
 
@@ -13,6 +13,8 @@ interface OrdersState {
   cancel: (id: string) => Promise<void>;
   /** Código de entrega nuevo cuando el anterior se bloqueó. */
   renewCode: (id: string) => Promise<void>;
+  /** El repartidor se movió (evento delivery:location). */
+  applyLocation: (location: DriverLocation) => void;
   reset: () => void;
 }
 
@@ -51,6 +53,11 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
   },
 
   renewCode: async (id) => get().upsert(await http.post<Order>(`/orders/${encodeURIComponent(id)}/new-code`)),
+
+  applyLocation: (location) => {
+    const order = get().orders[location.orderId];
+    if (order) set({ orders: { ...get().orders, [order.id]: { ...order, driverLocation: location } } });
+  },
 
   reset: () => set({ orders: {}, status: 'idle' }),
 }));

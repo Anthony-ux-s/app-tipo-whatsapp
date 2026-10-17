@@ -1,4 +1,6 @@
-import { Bike, ChevronRight, MapPin, Store } from 'lucide-react';
+import { Bike, ChevronRight, MapPin, Store, UserRound } from 'lucide-react';
+import { Link } from 'react-router';
+import { Toggle } from '@shared/ui/Toggle';
 import type { DriverOrder } from '@parla/types';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
 import { EmptyChatsIllustration } from '@shared/ui/illustrations';
@@ -14,9 +16,26 @@ export function DriverOrdersView() {
     <ServicePage>
       <PageHeader
         title="Rapidito"
-        subtitle={r.driver ? `Repartidor · ${r.driver.vehicle} ${r.driver.plate}` : 'Repartidor'}
+        subtitle={r.driver ? `Repartidor · ${r.driver.vehicle}${r.driver.plate ? ` ${r.driver.plate}` : ''}` : 'Repartidor'}
         onBack={r.back}
+        action={
+          <Link to="/app/rapidito/perfil" aria-label="Mi perfil de repartidor" title="Mi perfil de repartidor" data-testid="driver-profile-link" className="inline-flex size-10 items-center justify-center rounded-full text-ink-soft transition-colors duration-200 hover:bg-surface-3 hover:text-ink">
+            <UserRound className="size-5" />
+          </Link>
+        }
       />
+
+      {r.driver && (
+        <section className={`rounded-2xl p-3 shadow-float md:px-4 ${r.driver.online ? 'bg-surface' : 'bg-amber-50 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900'}`}>
+          <Toggle
+            checked={r.driver.online}
+            onChange={r.toggleOnline}
+            disabled={r.togglingOnline}
+            label={r.driver.online ? 'Conectado' : 'Desconectado'}
+            description={r.driver.online ? 'Te llegan los pedidos listos para recoger.' : 'Conéctate para ver y tomar pedidos.'}
+          />
+        </section>
+      )}
 
       {r.active && (
         <button

@@ -1,4 +1,6 @@
-import { Ban, Bike, KeyRound, MapPin, MessageCircle, PackageCheck, ShieldCheck, Store, Undo2 } from 'lucide-react';
+import { Ban, Bike, KeyRound, MapPin, MessageCircle, Navigation, PackageCheck, ShieldCheck, Store, Undo2 } from 'lucide-react';
+import { useDriverStore } from '@shared/stores/driver.store';
+import { LazyDeliveryMap } from '@shared/ui/LazyDeliveryMap';
 import { Button } from '@shared/ui/Button';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatTime } from '@shared/utils/date';
@@ -15,6 +17,8 @@ export function DriverOrderDetailView() {
   const d = useDriverOrderDetail();
   const order = d.order;
   const chat = useOrderChat(order?.id);
+  const sharing = useDriverStore((s) => s.sharing);
+  const myLocation = useDriverStore((s) => s.myLocation);
 
   if (!order) {
     return (
@@ -26,6 +30,7 @@ export function DriverOrderDetailView() {
   }
 
   const delivered = order.timeline.find((t) => t.status === 'delivered');
+  const onRoute = order.mine && (order.status === 'driver_assigned' || order.status === 'on_the_way');
   return (
     <ServicePage>
       <PageHeader
@@ -34,6 +39,18 @@ export function DriverOrderDetailView() {
         onBack={d.back}
         action={order.mine ? <OrderStatusBadge status={order.status} /> : undefined}
       />
+
+      {(onRoute || order.status === 'searching_driver') && (
+        <section className="flex flex-col gap-2" aria-label="Mapa de la entrega">
+          <LazyDeliveryMap
+            store={order.business.location}
+            destination={order.address.location ?? null}
+            driver={onRoute ? myLocation : null}
+            label="Mapa con la tienda, el destino y tu ubicación"
+          />
+          {onRoute && <SharingNote sharing={sharing} />}
+        </section>
+      )}
 
       <section className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Ruta">
         <div className="flex items-start gap-3">
@@ -136,5 +153,20 @@ export function DriverOrderDetailView() {
 
       {order.mine && <OrderTimeline entries={order.timeline} />}
     </ServicePage>
+  );
+}
+
+/** Si el cliente y la tienda te están viendo en el mapa. */
+function SharingNote({ sharing }: { sharing: 'off' | 'sharing' | 'denied' | 'unavailable' }) {
+  const text = {
+    sharing: 'Compartiendo tu ubicación con el cliente y la tienda mientras dura la entrega.',
+    off: 'Activando tu ubicación…',
+    denied: 'Permite la ubicación en tu navegador para que el cliente te siga en el mapa.',
+    unavailable: 'No pudimos leer tu ubicación. Revisa el GPS de tu celular.',
+  }[sharing];
+  return (
+    <p className={`flex items-center gap-1.5 px-1 text-xs font-semibold ${sharing === 'sharing' ? 'text-brand dark:text-teal-300' : 'text-amber-700 dark:text-amber-300'}`} data-testid="sharing-note" data-sharing={sharing}>
+      <Navigation className="size-3.5" /> {text}
+    </p>
   );
 }

@@ -120,6 +120,14 @@ pones tu nombre, un usuario opcional y la contraseña.
     y el gateway no cotiza ni cobra. En **Catálogo y precios** cambia el precio, pone o quita la
     **oferta** (precio normal tachado) y el **stock** (o lo marca agotado de un toque); se guarda en el
     sistema de la tienda y se ve al instante en Mercado y Ofertas.
+  - **Registro de repartidores**: cualquiera entra a *Delivery → Trabaja con Rapidito*, elige su
+    vehículo (moto, bicicleta, auto o a pie) y su placa. En su perfil se **conecta o desconecta** (solo
+    a los conectados les llegan pedidos), cambia el vehículo, ve sus **ganancias** (hoy, 7 días y total)
+    y puede **dejar de repartir** (su historial queda y puede volver).
+  - **Mapa en vivo** (OpenStreetMap): el cliente marca en el carrito dónde le entregan; mientras dura
+    la entrega, el celular del repartidor comparte su ubicación (solo con el cliente y la tienda de ese
+    pedido) y ambos lo ven moverse, con la distancia que falta, la hora estimada y un aviso si se
+    queda sin señal.
   - **Repartidor** (*Delivery → Rapidito · Repartidor*): ve los pedidos listos con la tienda, el destino
     y lo que gana; el primero que lo toma se lo queda (una entrega a la vez). Recoge en la tienda y
     entrega **solo con el código del cliente**: con 5 códigos equivocados se bloquea, para que no se
@@ -302,10 +310,11 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 - **Probado en esta PC sin Docker**: los `Dockerfile` y el `docker-compose.yml` no se pudieron
   construir aquí; el modo producción sí se probó sin Docker.
 - **Llamadas**: TURN propio para redes muy restrictivas, compartir pantalla, SFU para grupos grandes.
-- **Delivery**: mapa y ubicación en vivo del repartidor; reasignación automática si nadie toma el
-  pedido o el repartidor no avanza; calificaciones y propinas; resumen de ganancias del repartidor.
-- **Negocios**: hay un solo negocio por servicio y no hay registro de negocios ni de repartidores;
-  el dueño todavía no puede crear productos nuevos ni subir fotos (solo edita los que tiene la tienda).
+- **Delivery**: ruta por calles (hoy el mapa traza líneas rectas y la hora estimada usa la distancia
+  con un factor de calles); reasignación automática si nadie toma el pedido o el repartidor no avanza;
+  calificaciones y propinas; liquidación de las ganancias al repartidor.
+- **Negocios**: se registran y administran en el sistema de producción de cada negocio; Parla solo
+  los consulta y procesa sus pedidos.
 - **Ofertas de restaurantes y salud**: son una vitrina de ejemplo; todavía no se pueden pedir.
 - **Seguridad**: rotación de la clave del grupo cuando alguien sale, clave privada no extraíble en
   IndexedDB, auditoría externa.

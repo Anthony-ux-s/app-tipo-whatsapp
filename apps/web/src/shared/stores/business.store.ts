@@ -1,4 +1,4 @@
-import type { BusinessInfo, BusinessOrder, BusinessStatus, Order, Product, UpdateBusinessRequest, UpdateCatalogProductRequest } from '@parla/types';
+import type { BusinessInfo, BusinessOrder, BusinessStatus, DriverLocation, Order, Product, UpdateBusinessRequest, UpdateCatalogProductRequest } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
 
@@ -33,6 +33,8 @@ interface BusinessState {
   ready: (id: string) => Promise<void>;
   /** La tienda le entregó el pedido al repartidor. */
   handoff: (id: string) => Promise<void>;
+  /** El repartidor se movió (evento delivery:location). */
+  applyLocation: (location: DriverLocation) => void;
   reset: () => void;
 }
 
@@ -110,6 +112,11 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
 
   ready: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/ready`)),
   handoff: async (id) => get().upsert(await http.post<BusinessOrder>(`${path(id)}/handoff`)),
+
+  applyLocation: (location) => {
+    const order = get().orders[location.orderId];
+    if (order) set({ orders: { ...get().orders, [order.id]: { ...order, driverLocation: location } } });
+  },
 
   reset: () => set({ business: undefined, orders: {}, status: 'idle', storeStatus: null, catalog: null }),
 }));

@@ -1,4 +1,4 @@
-import type { DriverInfo, DriverOrder, DriverOrders } from '@parla/types';
+import type { DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, GeoPoint } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
 
@@ -7,7 +7,20 @@ interface DriverState {
   driver: DriverInfo | null | undefined;
   orders: Record<string, DriverOrder>;
   status: 'idle' | 'loading' | 'ready' | 'error';
+  earnings: DriverEarnings | null;
+  /** Compartir ubicación mientras reparte: apagado, compartiendo o sin permiso del navegador. */
+  sharing: 'off' | 'sharing' | 'denied' | 'unavailable';
+  /** Última ubicación propia (para el mapa del repartidor). */
+  myLocation: GeoPoint | null;
   loadDriver: () => Promise<DriverInfo | null>;
+  /** «Trabaja con Rapidito»: alta (o vuelta) como repartidor. */
+  register: (profile: DriverProfileRequest) => Promise<void>;
+  updateProfile: (profile: DriverProfileRequest) => Promise<void>;
+  setOnline: (online: boolean) => Promise<void>;
+  /** «Dejar de repartir». */
+  leave: () => Promise<void>;
+  loadEarnings: () => Promise<void>;
+  setSharing: (sharing: DriverState['sharing'], at?: GeoPoint) => void;
   loadOrders: () => Promise<void>;
   loadOrder: (id: string) => Promise<DriverOrder>;
   /** Oferta nueva o cambio en una entrega (respuesta de una acción o evento driver-order:updated). */
@@ -27,6 +40,9 @@ export const useDriverStore = create<DriverState>((set, get) => ({
   driver: undefined,
   orders: {},
   status: 'idle',
+  earnings: null,
+  sharing: 'off',
+  myLocation: null,
 
   loadDriver: async () => {
     const { driver } = await http.get<{ driver: DriverInfo | null }>('/driver');
@@ -63,11 +79,27 @@ export const useDriverStore = create<DriverState>((set, get) => ({
     set({ orders });
   },
 
+  register: async (profile) => {
+    set({ driver: await http.post<DriverInfo>('/driver', profile) });
+    await get().loadOrders();
+  },
+  updateProfile: async (profile) => set({ driver: await http.patch<DriverInfo>('/driver', profile) }),
+  setOnline: async (online) => {
+    set({ driver: await http.post<DriverInfo>('/driver/online', { online }) });
+    if (online) await get().loadOrders();
+  },
+  leave: async () => {
+    await http.delete('/driver');
+    set({ driver: null, orders: {}, status: 'idle', earnings: null });
+  },
+  loadEarnings: async () => set({ earnings: await http.get<DriverEarnings>('/driver/earnings') }),
+  setSharing: (sharing, at) => set({ sharing, ...(at ? { myLocation: at } : {}) }),
+
   accept: async (id) => get().upsert(await http.post<DriverOrder>(`${path(id)}/accept`)),
   release: async (id) => get().upsert(await http.post<DriverOrder>(`${path(id)}/release`)),
   deliver: async (id, code) => get().upsert(await http.post<DriverOrder>(`${path(id)}/deliver`, { code })),
 
-  reset: () => set({ driver: undefined, orders: {}, status: 'idle' }),
+  reset: () => set({ driver: undefined, orders: {}, status: 'idle', earnings: null, sharing: 'off', myLocation: null }),
 }));
 
 /** Ofertas para recoger (sin repartidor), de la más antigua a la más nueva. */
@@ -82,4 +114,9 @@ export function myOrders(orders: Record<string, DriverOrder>): DriverOrder[] {
   return Object.values(orders)
     .filter((o) => o.mine)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/** La entrega en curso del repartidor (tomada y sin entregar), si tiene. */
+export function activeDelivery(orders: Record<string, DriverOrder>): DriverOrder | null {
+  return Object.values(orders).find((o) => o.mine && (o.status === 'driver_assigned' || o.status === 'on_the_way')) ?? null;
 }

@@ -100,7 +100,7 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     await carlos.page.goto('/app/pedidos');
     await carlos.page.getByTestId('my-rapidito').click();
     await expect(carlos.page.getByRole('heading', { name: 'Rapidito' })).toBeVisible();
-    const offer = carlos.page.getByTestId('driver-order-item').filter({ hasText: 'Bodega MercaYa' }).filter({ hasText: 'Laura' }).first();
+    const offer = carlos.page.getByTestId('driver-order-item').filter({ hasText: 'Laura · Av. Larco 123' }).last();
     await expect(offer).toContainText(`Ganas S/ ${(deliveryCents / 100).toFixed(2)}`);
     await offer.click();
     await carlos.page.getByTestId('take-order').click();

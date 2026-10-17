@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -145,6 +146,9 @@ func validateRequest(req services.QuoteRequest) (services.QuoteRequest, error) {
 	}
 	if utf8.RuneCountInString(req.Address.Reference) > 200 {
 		return req, invalid("La referencia puede tener hasta 200 caracteres")
+	}
+	if p := req.Address.Location; p != nil && (math.IsNaN(p.Lat) || math.IsNaN(p.Lng) || math.Abs(p.Lat) > 90 || math.Abs(p.Lng) > 180) {
+		return req, invalid("La ubicación marcada en el mapa no es válida")
 	}
 	return req, nil
 }

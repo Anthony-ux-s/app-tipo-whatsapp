@@ -1,6 +1,6 @@
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import type { DriverInfo, DriverOrder, DriverOrders } from '@parla/types';
-import { IsString, Matches } from 'class-validator';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import type { DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, DriverVehicle, GeoPoint } from '@parla/types';
+import { IsBoolean, IsLatitude, IsLongitude, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../../../http/current-user.decorator';
 import {
   AcceptDeliveryUseCase,
@@ -10,14 +10,37 @@ import {
   ListDriverOrdersUseCase,
   ReleaseDeliveryUseCase,
 } from '../../platform/services/use-cases/driver-orders.use-cases';
+import {
+  GetDriverEarningsUseCase,
+  LeaveDriverUseCase,
+  RegisterDriverUseCase,
+  ReportDriverLocationUseCase,
+  SetDriverOnlineUseCase,
+  UpdateDriverProfileUseCase,
+} from '../../platform/services/use-cases/driver-profile.use-cases';
 
 class DeliverDto {
   @IsString() @Matches(/^\s*\d{4}\s*$/, { message: 'El código tiene 4 dígitos' }) code: string;
 }
 
+class DriverProfileDto implements DriverProfileRequest {
+  @IsString() @MaxLength(20) vehicle: DriverVehicle;
+  @IsOptional() @IsString() @MaxLength(12) plate?: string;
+}
+
+class OnlineDto {
+  @IsBoolean() online: boolean;
+}
+
+class LocationDto implements GeoPoint {
+  @IsLatitude() lat: number;
+  @IsLongitude() lng: number;
+}
+
 /**
- * Rapidito para repartidores: los pedidos listos para recoger, tomar uno, y entregarlo con el código
- * del cliente. La tienda confirma la recogida desde «Mi negocio».
+ * Rapidito para repartidores: registrarse, su perfil (vehículo, conectado, dejar de repartir) y
+ * ganancias; los pedidos listos para recoger, tomar uno, soltarlo y entregarlo con el código del
+ * cliente; y la ubicación en vivo mientras reparte. La tienda confirma la recogida desde «Mi negocio».
  */
 @Controller('driver')
 export class DriverController {
@@ -28,11 +51,54 @@ export class DriverController {
     private readonly accept: AcceptDeliveryUseCase,
     private readonly deliver: DeliverOrderUseCase,
     private readonly release: ReleaseDeliveryUseCase,
+    private readonly register: RegisterDriverUseCase,
+    private readonly updateProfile: UpdateDriverProfileUseCase,
+    private readonly setOnline: SetDriverOnlineUseCase,
+    private readonly leave: LeaveDriverUseCase,
+    private readonly earnings: GetDriverEarningsUseCase,
+    private readonly reportLocation: ReportDriverLocationUseCase,
   ) {}
 
   @Get()
   async mine(@CurrentUser() user: AuthUser): Promise<{ driver: DriverInfo | null }> {
     return { driver: await this.myDriver.execute(user.userId) };
+  }
+
+  /** «Trabaja con Rapidito». */
+  @HttpCode(201)
+  @Post()
+  signUp(@CurrentUser() user: AuthUser, @Body() body: DriverProfileDto): Promise<DriverInfo> {
+    return this.register.execute(user.userId, body);
+  }
+
+  @Patch()
+  update(@CurrentUser() user: AuthUser, @Body() body: DriverProfileDto): Promise<DriverInfo> {
+    return this.updateProfile.execute(user.userId, body);
+  }
+
+  @HttpCode(200)
+  @Post('online')
+  online(@CurrentUser() user: AuthUser, @Body() body: OnlineDto): Promise<DriverInfo> {
+    return this.setOnline.execute(user.userId, body.online);
+  }
+
+  /** «Dejar de repartir» (sus entregas quedan en el historial). */
+  @HttpCode(204)
+  @Delete()
+  async quit(@CurrentUser() user: AuthUser): Promise<void> {
+    await this.leave.execute(user.userId);
+  }
+
+  @Get('earnings')
+  earned(@CurrentUser() user: AuthUser): Promise<DriverEarnings> {
+    return this.earnings.execute(user.userId);
+  }
+
+  /** Ubicación del celular mientras reparte; solo la ven el cliente y la tienda del pedido. */
+  @HttpCode(200)
+  @Post('location')
+  location(@CurrentUser() user: AuthUser, @Body() body: LocationDto): Promise<{ shared: number }> {
+    return this.reportLocation.execute(user.userId, { lat: body.lat, lng: body.lng });
   }
 
   @Get('orders')

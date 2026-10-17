@@ -36,6 +36,8 @@ export function useOrders() {
     /** Si reparto para Rapidito: mi vehículo y cuántos pedidos hay para recoger. */
     driver: driver ?? null,
     driverOffers,
+    /** Aún no reparte (null = ya se sabe que no; undefined = cargando): se le invita a Rapidito. */
+    canBecomeDriver: driver === null,
     open: (id: string) => navigate(`/app/pedidos/${id}`),
     back: () => navigate('/app/servicios'),
   };

@@ -6,6 +6,7 @@ import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatTime } from '@shared/utils/date';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { AmountRow, OrderStatusBadge, OrderTimeline, PageHeader, ServicePage } from '../../services/components/ServicesUi';
+import { LiveTracking } from '../../services/components/LiveTracking';
 import { useOrderChat } from '../../services/hooks/use-order-chat.hook';
 import { BUSINESS_STATUS_HINTS } from '../const/business.const';
 import { useBusinessOrderDetail } from '../hooks/use-business.hook';
@@ -126,6 +127,8 @@ export function BusinessOrderDetailView() {
           )}
         </section>
       )}
+
+      <LiveTracking order={order} audience="business" />
 
       <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Productos">
         {order.lines.map((line) => (

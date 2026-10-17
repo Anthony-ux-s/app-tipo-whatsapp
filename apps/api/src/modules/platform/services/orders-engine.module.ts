@@ -26,6 +26,14 @@ import {
   ReleaseDeliveryUseCase,
 } from './use-cases/driver-orders.use-cases';
 import {
+  GetDriverEarningsUseCase,
+  LeaveDriverUseCase,
+  RegisterDriverUseCase,
+  ReportDriverLocationUseCase,
+  SetDriverOnlineUseCase,
+  UpdateDriverProfileUseCase,
+} from './use-cases/driver-profile.use-cases';
+import {
   CreateOrderUseCase,
   GetInternalOrderUseCase,
   GetMyOrderUseCase,
@@ -56,6 +64,12 @@ const USE_CASES = [
   DeliverOrderUseCase,
   ReleaseDeliveryUseCase,
   RenewDeliveryCodeUseCase,
+  RegisterDriverUseCase,
+  UpdateDriverProfileUseCase,
+  SetDriverOnlineUseCase,
+  LeaveDriverUseCase,
+  GetDriverEarningsUseCase,
+  ReportDriverLocationUseCase,
 ];
 
 /** El MOTOR de pedidos de Servicios: lo comparten la puerta del gateway, la del cliente, la del negocio y la del repartidor. */

@@ -13,7 +13,7 @@ const MAX_ACTIVE_DELIVERIES = 1;
 
 async function requireDriver(drivers: DriversRepository, userId: string): Promise<DriverRecord> {
   const driver = await drivers.findByUser(userId);
-  if (!driver) throw new ForbiddenError('Tu cuenta no es de repartidor de Rapidito');
+  if (!driver?.active) throw new ForbiddenError('Tu cuenta no es de repartidor de Rapidito');
   return driver;
 }
 
@@ -24,7 +24,7 @@ export class GetMyDriverUseCase {
 
   async execute(userId: string): Promise<DriverInfo | null> {
     const driver = await this.drivers.findByUser(userId);
-    return driver ? { vehicle: driver.vehicle, plate: driver.plate } : null;
+    return driver?.active ? { vehicle: driver.vehicle, plate: driver.plate, online: driver.online } : null;
   }
 }
 
@@ -91,6 +91,7 @@ export class AcceptDeliveryUseCase {
     const driver = await requireDriver(this.drivers, userId);
     let order = await findDriverOrder(this.orders, userId, id);
     if (order.driverId !== userId) {
+      if (!driver.online) throw new ConflictError('Conéctate para tomar pedidos');
       if ((await this.orders.countActiveForDriver(userId)) >= MAX_ACTIVE_DELIVERIES) {
         throw new ConflictError('Termina tu entrega en curso antes de tomar otra');
       }
@@ -99,8 +100,8 @@ export class AcceptDeliveryUseCase {
       const updated = await this.orders.updateIfStatus(id, 'searching_driver', {
         status: 'driver_assigned',
         driverId: userId,
-        delivery: { provider: 'Rapidito', driverName: name, vehicle: `${driver.vehicle} · ${driver.plate}`, etaMinutes: order.etaMinutes, updatedAt: new Date().toISOString() },
-        note: `${name} · ${driver.vehicle} ${driver.plate}`,
+        delivery: { provider: 'Rapidito', driverName: name, vehicle: driver.plate ? `${driver.vehicle} · ${driver.plate}` : driver.vehicle, etaMinutes: order.etaMinutes, updatedAt: new Date().toISOString() },
+        note: `${name} · ${driver.vehicle}${driver.plate ? ` ${driver.plate}` : ''}`,
       });
       if (!updated) throw new ConflictError('Otro repartidor tomó este pedido');
       this.events.changed(updated);

@@ -1,4 +1,4 @@
-import type { Order, OrderQuote, Product, QuoteRequest } from '@parla/types';
+import type { GeoPoint, Order, OrderQuote, Product, QuoteRequest } from '@parla/types';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { cartCount, useCartStore } from '@shared/stores/cart.store';
@@ -26,12 +26,13 @@ export function useCheckout() {
   const [quoting, setQuoting] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  const [locating, setLocating] = useState(false);
 
   const lines = Object.values(items);
   const request = useMemo<QuoteRequest>(
     () => ({
       items: Object.values(items).map((i) => ({ productId: i.product.id, quantity: i.quantity })),
-      address: { line: address.line.trim(), reference: address.reference.trim() },
+      address: { line: address.line.trim(), reference: address.reference.trim(), location: address.location ?? null },
     }),
     [items, address],
   );
@@ -72,6 +73,24 @@ export function useCheckout() {
     remove,
     onAddressChange: (line: string) => setAddress({ ...address, line }),
     onReferenceChange: (reference: string) => setAddress({ ...address, reference }),
+    /** El punto de entrega en el mapa (para que el repartidor llegue y el cliente lo siga). */
+    onPickLocation: (location: GeoPoint) => setAddress({ ...address, location }),
+    locating,
+    useMyLocation: () => {
+      if (!navigator.geolocation) return toast('Tu navegador no comparte la ubicación. Marca el punto en el mapa.', 'error');
+      setLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setAddress({ ...address, location: { lat: pos.coords.latitude, lng: pos.coords.longitude } });
+          setLocating(false);
+        },
+        () => {
+          toast('No pudimos obtener tu ubicación. Marca el punto en el mapa.', 'error');
+          setLocating(false);
+        },
+        { enableHighAccuracy: true, timeout: 10_000 },
+      );
+    },
     pay: async () => {
       if (!quote) return;
       setPlacing(true);

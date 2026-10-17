@@ -36,9 +36,17 @@ export interface CartItemRequest {
   quantity: number;
 }
 
+/** Un punto en el mapa (grados decimales, WGS84). */
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
 export interface DeliveryAddress {
   line: string;
   reference: string;
+  /** Dónde lo marcó el cliente en el mapa (opcional: sin esto el mapa no muestra el destino). */
+  location?: GeoPoint | null;
 }
 
 export interface QuoteRequest {
@@ -153,6 +161,7 @@ export interface OrderBusiness {
   ownerId: string;
   /** Dónde recoge el repartidor. */
   address: string;
+  location: GeoPoint | null;
 }
 
 export interface Order {
@@ -177,6 +186,8 @@ export interface Order {
   deliveryCode?: string;
   /** Se equivocaron 5 veces con el código: el cliente puede generar uno nuevo. */
   deliveryCodeLocked?: boolean;
+  /** Última ubicación del repartidor mientras lo lleva (cliente y tienda); null sin señal aún. */
+  driverLocation?: DriverLocation | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -193,17 +204,44 @@ export interface BusinessOrder extends Order {
   customer: OrderCustomer;
 }
 
+export type DriverVehicle = 'Moto' | 'Bicicleta' | 'Auto' | 'A pie';
+
 /** Repartidor de Rapidito (cuenta de Parla con su vehículo). */
 export interface DriverInfo {
-  vehicle: string;
+  vehicle: DriverVehicle;
+  /** Vacío para bicicleta o a pie. */
   plate: string;
+  /** Conectado: recibe ofertas y puede tomar pedidos. */
+  online: boolean;
+}
+
+/** Alta o cambio del perfil de repartidor. */
+export interface DriverProfileRequest {
+  vehicle: DriverVehicle;
+  plate?: string;
+}
+
+/** Lo que lleva ganado un repartidor (las tarifas de delivery de sus entregas). */
+export interface DriverEarnings {
+  todayCents: number;
+  todayDeliveries: number;
+  weekCents: number;
+  weekDeliveries: number;
+  totalCents: number;
+  totalDeliveries: number;
+}
+
+/** Ubicación del repartidor durante una entrega (la ven el cliente y la tienda de ese pedido). */
+export interface DriverLocation extends GeoPoint {
+  orderId: string;
+  at: string;
 }
 
 /** Pedido tal como lo ve un repartidor: qué recoge, dónde, adónde lo lleva y cuánto gana. */
 export interface DriverOrder {
   id: string;
   status: OrderStatus;
-  business: { name: string; address: string };
+  business: { name: string; address: string; location: GeoPoint | null };
   /** Adónde lo lleva. */
   address: DeliveryAddress;
   customerName: string;

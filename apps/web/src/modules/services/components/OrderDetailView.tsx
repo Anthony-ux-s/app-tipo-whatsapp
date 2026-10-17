@@ -8,6 +8,7 @@ import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { ORDER_STEPS } from '../const/services.const';
 import { useOrderChat } from '../hooks/use-order-chat.hook';
 import { useOrderDetail } from '../hooks/use-orders.hook';
+import { LiveTracking } from './LiveTracking';
 import { AmountRow, OrderStatusBadge, OrderTimeline, PageHeader, ServicePage } from './ServicesUi';
 
 /**
@@ -150,7 +151,7 @@ export function OrderDetailView() {
               Rapidito
               {order.delivery?.vehicle ? ` · ${order.delivery.vehicle}` : ''}
             </p>
-            {d.eta && (
+            {d.eta && !order.driverLocation && (
               <p className="mt-0.5 flex items-center gap-1 text-sm font-semibold text-brand dark:text-teal-300" data-testid="eta">
                 <Clock className="size-3.5" /> Llega aprox. a las {formatTime(d.eta)}
               </p>
@@ -163,6 +164,8 @@ export function OrderDetailView() {
           )}
         </section>
       )}
+
+      <LiveTracking order={order} audience="customer" />
 
       {d.canCancel && (
         <Button variant="ghost" className="self-center" icon={<X className="size-4" />} onClick={d.askCancel} data-testid="cancel-order">

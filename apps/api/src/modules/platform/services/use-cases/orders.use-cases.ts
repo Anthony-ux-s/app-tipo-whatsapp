@@ -56,6 +56,10 @@ export function toOrder(order: OrderRecord, forCustomer = false): Order {
     payment: order.payment,
     delivery: order.delivery,
     timeline: order.timeline,
+    // Mientras el repartidor lo lleva, cliente y tienda lo siguen en el mapa.
+    ...(order.status === 'driver_assigned' || order.status === 'on_the_way'
+      ? { driverLocation: order.driverLocation && { orderId: order.id, lat: order.driverLocation.lat, lng: order.driverLocation.lng, at: order.driverLocation.at.toISOString() } }
+      : {}),
     ...(forCustomer && CODE_VISIBLE.includes(order.status)
       ? { deliveryCode: order.deliveryCode, deliveryCodeLocked: order.deliveryCodeAttempts >= MAX_DELIVERY_CODE_ATTEMPTS }
       : {}),
@@ -88,7 +92,7 @@ export function toDriverOrder(order: OrderRecord, driverId: string, customers: M
   return {
     id: order.id,
     status: order.status,
-    business: { name: order.business?.name ?? 'Tienda', address: order.business?.address ?? '' },
+    business: { name: order.business?.name ?? 'Tienda', address: order.business?.address ?? '', location: order.business?.location ?? null },
     address: order.address,
     customerName: customerOf(order, customers).displayName.split(' ')[0],
     lines: order.lines,

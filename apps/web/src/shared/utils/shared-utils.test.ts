@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultCountry, toE164 } from '../const/countries.const';
 import { mediaFileName } from './download';
 import { formatDayLabel, formatDuration, formatListTimestamp } from './date';
+import { distanceKm, etaMinutes, formatDistance, isStale } from './geo';
 import { initials, matchesSearch } from './text';
 import { passwordStrength, validatePassword, validatePhone, validateUsername } from './validators';
 
@@ -69,5 +70,25 @@ describe('nombre de archivos descargados', () => {
 
   it('no deja pasar caracteres raros del tipo', () => {
     expect(mediaFileName('image/svg+xml', 'no es fecha')).toBe('Parla-IMG-archivo.svgxm');
+  });
+});
+
+describe('mapa del delivery', () => {
+  const tienda = { lat: -12.1268, lng: -77.0195 };
+  const casa = { lat: -12.1191, lng: -77.0349 };
+
+  it('distancia en km entre dos puntos de Miraflores', () => {
+    expect(distanceKm(tienda, casa)).toBeCloseTo(1.88, 1);
+    expect(distanceKm(tienda, tienda)).toBe(0);
+    expect(formatDistance(0.43)).toBe('430 m');
+    expect(formatDistance(1.88)).toBe('1.9 km');
+  });
+
+  it('hora estimada por tramos, con un mínimo, y sin señal pasados 2 minutos', () => {
+    expect(etaMinutes([tienda, casa])).toBe(10);
+    expect(etaMinutes([tienda, tienda])).toBe(2);
+    const now = Date.parse('2026-10-17T10:00:00Z');
+    expect(isStale('2026-10-17T09:59:00Z', now)).toBe(false);
+    expect(isStale('2026-10-17T09:57:00Z', now)).toBe(true);
   });
 });

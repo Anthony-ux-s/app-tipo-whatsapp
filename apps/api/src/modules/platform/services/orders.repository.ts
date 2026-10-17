@@ -1,6 +1,7 @@
 import type {
   Currency,
   DeliveryAddress,
+  GeoPoint,
   OrderBusiness,
   OrderDelivery,
   OrderLine,
@@ -31,6 +32,8 @@ export interface OrderRecord {
   delivery: OrderDelivery | null;
   /** Repartidor de Rapidito que lo tomó; null mientras nadie lo toma. */
   driverId: string | null;
+  /** Última ubicación de ese repartidor (para el mapa); null si no mandó ninguna. */
+  driverLocation: (GeoPoint & { at: Date }) | null;
   /** Código de entrega: solo lo ve el cliente. */
   deliveryCode: string;
   deliveryCodeAttempts: number;
@@ -41,7 +44,7 @@ export interface OrderRecord {
 
 export type NewOrder = Omit<
   OrderRecord,
-  'createdAt' | 'updatedAt' | 'delivery' | 'business' | 'driverId' | 'deliveryCodeAttempts' | 'timeline'
+  'createdAt' | 'updatedAt' | 'delivery' | 'business' | 'driverId' | 'driverLocation' | 'deliveryCodeAttempts' | 'timeline'
 > & { businessId: string | null };
 
 export interface OrderChanges {
@@ -68,6 +71,9 @@ export interface OrdersRepository {
   listForDriver(driverId: string, limit: number): Promise<OrderRecord[]>;
   /** Entregas en curso del repartidor (tomadas y aún no entregadas). */
   countActiveForDriver(driverId: string): Promise<number>;
+  listActiveForDriver(driverId: string): Promise<OrderRecord[]>;
+  /** [céntimos, entregas] de las entregas terminadas del repartidor: desde hoy, desde la semana y en total. */
+  driverEarnings(driverId: string, since: { today: Date; week: Date }): Promise<{ today: [number, number]; week: [number, number]; total: [number, number] }>;
   /**
    * Aplica el cambio solo si el pedido sigue en `expected` (comparar y cambiar atómico) y, si cambia
    * de estado, lo anota en la línea de tiempo. Devuelve el pedido actualizado, o null si otro cambio

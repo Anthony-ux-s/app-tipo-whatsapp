@@ -17,6 +17,7 @@ import type { PushSubscriptionsRepository, StoredSubscription } from '../modules
 import type { PushPayload } from '@parla/types';
 import type { UpdateBusinessRequest } from '@parla/types';
 import type { BusinessesRepository, BusinessRecord } from '../modules/platform/services/businesses.repository';
+import type { DriverProfileRequest, GeoPoint } from '@parla/types';
 import type { DriverRecord, DriversRepository } from '../modules/platform/services/drivers.repository';
 import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
 import type { AppEnv } from '../config/env.validation';
@@ -295,25 +296,43 @@ export class InMemoryBusinessesRepository implements BusinessesRepository {
 export class InMemoryDriversRepository implements DriversRepository {
   drivers: DriverRecord[] = [];
   async findByUser(userId: string) {
-    return this.drivers.find((d) => d.userId === userId) ?? null;
+    const d = this.drivers.find((x) => x.userId === userId);
+    return d ? structuredClone(d) : null;
   }
   async listUserIds() {
-    return this.drivers.map((d) => d.userId);
+    return this.drivers.filter((d) => d.active && d.online).map((d) => d.userId);
+  }
+  async register(userId: string, profile: Required<DriverProfileRequest>) {
+    const existing = this.drivers.find((d) => d.userId === userId);
+    if (existing) Object.assign(existing, profile, { active: true, online: false });
+    else this.drivers.push({ userId, ...profile, active: true, online: false, location: null });
+    return (await this.findByUser(userId))!;
+  }
+  async update(userId: string, changes: Partial<Pick<DriverRecord, 'vehicle' | 'plate' | 'online' | 'active'>>) {
+    Object.assign(this.drivers.find((d) => d.userId === userId)!, changes);
+    return (await this.findByUser(userId))!;
+  }
+  async saveLocation(userId: string, point: GeoPoint, at: Date) {
+    this.drivers.find((d) => d.userId === userId)!.location = { ...point, at };
   }
 }
 
 export class InMemoryOrdersRepository implements OrdersRepository {
   orders: OrderRecord[] = [];
-  constructor(private readonly businesses = new InMemoryBusinessesRepository()) {}
+  constructor(
+    private readonly businesses = new InMemoryBusinessesRepository(),
+    private readonly drivers?: InMemoryDriversRepository,
+  ) {}
   async create({ businessId, ...order }: NewOrder) {
     const found = this.businesses.businesses.find((b) => b.id === businessId);
-    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId, address: found.address } : null;
+    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId, address: found.address, location: null } : null;
     const now = new Date();
     const record: OrderRecord = {
       ...order,
       business,
       delivery: null,
       driverId: null,
+      driverLocation: null,
       deliveryCodeAttempts: 0,
       timeline: [{ status: order.status, at: now.toISOString() }],
       createdAt: now,
@@ -324,7 +343,7 @@ export class InMemoryOrdersRepository implements OrdersRepository {
   }
   async findById(id: string) {
     const order = this.orders.find((o) => o.id === id);
-    return order ? structuredClone(order) : null;
+    return order ? this.withLocation(order) : null;
   }
   async listForUser(userId: string, limit: number) {
     return this.orders.filter((o) => o.userId === userId).slice(0, limit).map((o) => structuredClone(o));
@@ -340,7 +359,24 @@ export class InMemoryOrdersRepository implements OrdersRepository {
     return this.orders.filter((o) => o.driverId === driverId).slice(0, limit).map((o) => structuredClone(o));
   }
   async countActiveForDriver(driverId: string) {
-    return this.orders.filter((o) => o.driverId === driverId && (o.status === 'driver_assigned' || o.status === 'on_the_way')).length;
+    return (await this.listActiveForDriver(driverId)).length;
+  }
+  async listActiveForDriver(driverId: string) {
+    return this.orders.filter((o) => o.driverId === driverId && (o.status === 'driver_assigned' || o.status === 'on_the_way')).map((o) => this.withLocation(o));
+  }
+  async driverEarnings(driverId: string, since: { today: Date; week: Date }) {
+    const done = this.orders.filter((o) => o.driverId === driverId && o.status === 'delivered');
+    const sum = (from?: Date): [number, number] => {
+      const list = done.filter((o) => !from || o.updatedAt >= from);
+      return [list.reduce((s, o) => s + o.deliveryFeeCents, 0), list.length];
+    };
+    return { today: sum(since.today), week: sum(since.week), total: sum() };
+  }
+  /** Como el include de Prisma: la última ubicación del repartidor viene con el pedido. */
+  private withLocation(o: OrderRecord): OrderRecord {
+    const copy = structuredClone(o);
+    copy.driverLocation = (o.driverId && this.drivers?.drivers.find((d) => d.userId === o.driverId)?.location) || null;
+    return copy;
   }
   async updateIfStatus(id: string, expected: OrderStatus, { note, ...changes }: OrderChanges) {
     const order = this.orders.find((o) => o.id === id);

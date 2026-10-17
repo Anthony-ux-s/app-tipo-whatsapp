@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router';
 import { CallOverlay } from '../../calls/components/CallOverlay';
 import { ChatListPanel } from '../../chats/components/ChatListPanel';
+import { useLocationSharing } from '../../driver/hooks/use-location-sharing.hook';
 import { useAppShell } from '../hooks/use-app-shell.hook';
 import { useMainLayout } from '../hooks/use-main-layout.hook';
 import { AppRail } from './AppRail';
@@ -14,6 +15,7 @@ import { MobileNav } from './MobileNav';
 export function AppShellView() {
   const shell = useAppShell();
   const layout = useMainLayout();
+  useLocationSharing();
   if (!shell.user) return null;
 
   return (

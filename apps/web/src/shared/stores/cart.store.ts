@@ -13,9 +13,9 @@ function savedAddress(): DeliveryAddress {
   try {
     const raw = localStorage.getItem(ADDRESS_KEY);
     const parsed = raw ? (JSON.parse(raw) as Partial<DeliveryAddress>) : {};
-    return { line: parsed.line ?? '', reference: parsed.reference ?? '' };
+    return { line: parsed.line ?? '', reference: parsed.reference ?? '', location: parsed.location ?? null };
   } catch {
-    return { line: '', reference: '' };
+    return { line: '', reference: '', location: null };
   }
 }
 

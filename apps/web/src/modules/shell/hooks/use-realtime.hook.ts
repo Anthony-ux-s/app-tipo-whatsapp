@@ -86,6 +86,10 @@ export function useRealtime(userId: string | undefined) {
     socket.on('order:updated', (order) => useOrdersStore.getState().upsert(order));
     socket.on('business-order:updated', (order) => useBusinessStore.getState().upsert(order));
     socket.on('driver-order:updated', (order) => useDriverStore.getState().upsert(order));
+    socket.on('delivery:location', (location) => {
+      useOrdersStore.getState().applyLocation(location);
+      useBusinessStore.getState().applyLocation(location);
+    });
     // Fotos, nombres y usuarios nuevos de los contactos (y los míos, si cambié desde otro dispositivo).
     socket.on('profile:updated', (profile) => {
       useChatStore.getState().applyProfile(profile);

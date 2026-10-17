@@ -43,9 +43,17 @@ type CartItem struct {
 	Quantity  int    `json:"quantity"`
 }
 
+// GeoPoint: un punto en el mapa (grados decimales).
+type GeoPoint struct {
+	Lat float64 `json:"lat"`
+	Lng float64 `json:"lng"`
+}
+
 type Address struct {
 	Line      string `json:"line"`
 	Reference string `json:"reference"`
+	// Location: dónde lo marcó el cliente en el mapa (opcional).
+	Location *GeoPoint `json:"location,omitempty"`
 }
 
 type QuoteRequest struct {

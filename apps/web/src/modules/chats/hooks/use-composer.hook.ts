@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type SyntheticEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type SyntheticEvent } from 'react';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
@@ -39,6 +39,8 @@ export function useComposer(conversationId: string, threadRootId: string | null 
   const textArea = useRef<HTMLTextAreaElement | null>(null);
   const lastPing = useRef(0);
   const stopTimer = useRef<number | null>(null);
+  /** Dónde dejar el cursor tras insertar una mención (se aplica apenas se pinta el texto nuevo). */
+  const pendingCaret = useRef<number | null>(null);
 
   const replyToId = threadRootId ?? replyDraft?.id ?? null;
 
@@ -78,6 +80,16 @@ export function useComposer(conversationId: string, threadRootId: string | null 
     }
   }, [recorderError, clearError]);
 
+  // Tras insertar una mención, el cursor va después de ella antes de que llegue otra tecla: con un
+  // requestAnimationFrame, lo que se escribía rápido justo después quedaba en el lugar equivocado.
+  useLayoutEffect(() => {
+    const el = textArea.current;
+    if (pendingCaret.current === null || !el) return;
+    el.focus();
+    el.setSelectionRange(pendingCaret.current, pendingCaret.current);
+    pendingCaret.current = null;
+  }, [text]);
+
   // Ajusta la altura del área de texto al contenido (hasta 6 líneas).
   useEffect(() => {
     const el = textArea.current;
@@ -109,13 +121,10 @@ export function useComposer(conversationId: string, threadRootId: string | null 
     const el = textArea.current;
     if (!mention || !el) return;
     const next = insertMention(text, mention, el.selectionStart ?? text.length, candidate.displayName);
+    pendingCaret.current = next.caret;
     setText(next.text);
     setMention(null);
     setMentionIndex(0);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(next.caret, next.caret);
-    });
   };
 
   const send = () => {
