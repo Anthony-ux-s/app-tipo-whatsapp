@@ -14,6 +14,8 @@ import {
   RecordingRealtime,
 } from '../../../testing/in-memory.fakes';
 import { NotificationDispatcher } from '../messaging/push/use-cases/notification-dispatcher';
+import { DEFAULT_DRIVER_PAY } from '../../../kernel/driver-earnings';
+import { DriverPayPolicy } from './driver-pay.policy';
 import { WatchDeliveriesUseCase } from './use-cases/delivery-watch.use-cases';
 import {
   DuePayoutsUseCase,
@@ -71,6 +73,8 @@ describe('pedidos de Servicios (core)', () => {
   let realtime: RecordingRealtime;
   let push: RecordingPushSender;
   let dispatcher: NotificationDispatcher;
+  /** Reparto por defecto: 95 % para el repartidor, depósito automático desde S/ 5. */
+  const payPolicy = new DriverPayPolicy({ driverPay: DEFAULT_DRIVER_PAY });
   let create: CreateOrderUseCase;
   let update: UpdateOrderUseCase;
   let decide: DecideBusinessOrderUseCase;
@@ -125,12 +129,12 @@ describe('pedidos de Servicios (core)', () => {
     }
     push = new RecordingPushSender();
     dispatcher = new NotificationDispatcher(subs, push, new PresenceRegistry());
-    events = new OrderEvents(realtime, users, drivers, dispatcher);
+    events = new OrderEvents(realtime, users, drivers, dispatcher, payPolicy);
     create = new CreateOrderUseCase(orders, users, businesses, events);
     update = new UpdateOrderUseCase(orders, events);
     decide = new DecideBusinessOrderUseCase(orders, users, events);
-    take = new AcceptDeliveryUseCase(drivers, orders, users, events);
-    deliver = new DeliverOrderUseCase(drivers, orders, users, events, ledger);
+    take = new AcceptDeliveryUseCase(drivers, orders, users, events, payPolicy);
+    deliver = new DeliverOrderUseCase(drivers, orders, users, events, ledger, payPolicy);
   });
 
   it('guarda el pedido pendiente de pago con su código de entrega, y se lo avisa solo a su dueña', async () => {
@@ -208,7 +212,7 @@ describe('pedidos de Servicios (core)', () => {
     await readyForDrivers();
     await take.execute(carlos.id, ID);
     await expect(take.execute(lucia.id, ID)).rejects.toThrow(NotFoundError);
-    expect((await new ListDriverOrdersUseCase(drivers, orders, users).execute(lucia.id)).available).toEqual([]);
+    expect((await new ListDriverOrdersUseCase(drivers, orders, users, payPolicy).execute(lucia.id)).available).toEqual([]);
     await expect(take.execute(beto.id, ID)).rejects.toThrow(ForbiddenError);
 
     await create.execute(newOrder({ id: 'ord_second123' }));
@@ -312,11 +316,11 @@ describe('pedidos de Servicios (core)', () => {
 
   it('el repartidor suelta un pedido antes de recogerlo; después de recogerlo, no', async () => {
     await readyForDrivers();
-    const release = new ReleaseDeliveryUseCase(drivers, orders, users, events);
+    const release = new ReleaseDeliveryUseCase(drivers, orders, users, events, payPolicy);
     await take.execute(carlos.id, ID);
     const dropped = await release.execute(carlos.id, ID);
     expect(dropped).toMatchObject({ status: 'searching_driver', mine: false });
-    expect((await new ListDriverOrdersUseCase(drivers, orders, users).execute(lucia.id)).available.map((o) => o.id)).toEqual([ID]);
+    expect((await new ListDriverOrdersUseCase(drivers, orders, users, payPolicy).execute(lucia.id)).available.map((o) => o.id)).toEqual([ID]);
     await take.execute(lucia.id, ID);
     await decide.execute(rosa.id, ID, 'handoff');
     await expect(release.execute(lucia.id, ID)).rejects.toThrow('Ya recogiste');
@@ -401,7 +405,7 @@ describe('pedidos de Servicios (core)', () => {
     await pay();
     await decide.execute(rosa.id, ID, 'accept');
     await decide.execute(rosa.id, ID, 'ready');
-    expect((await new ListDriverOrdersUseCase(drivers, orders, users).execute(carlos.id)).available[0]).toMatchObject({
+    expect((await new ListDriverOrdersUseCase(drivers, orders, users, payPolicy).execute(carlos.id)).available[0]).toMatchObject({
       deliveryFeeCents: 650,
       tipCents: 200,
       commissionCents: 33,
@@ -439,7 +443,7 @@ describe('pedidos de Servicios (core)', () => {
     const later = (minutes: number) => new Date(Date.now() + minutes * 60_000);
 
     it('un pedido que nadie toma se vuelve a ofrecer y se avisa a la tienda, sin repetir antes de tiempo', async () => {
-      const watch = new WatchDeliveriesUseCase(orders, drivers, events, dispatcher);
+      const watch = new WatchDeliveriesUseCase(orders, drivers, events, dispatcher, payPolicy);
       await readyForDrivers();
       expect((await watch.execute(config, later(2))).nudged).toEqual([]);
       expect((await watch.execute(config, later(6))).nudged).toEqual([ID]);
@@ -450,7 +454,7 @@ describe('pedidos de Servicios (core)', () => {
     });
 
     it('si el repartidor no lo recoge a tiempo o se queda sin señal, se reasigna solo', async () => {
-      const watch = new WatchDeliveriesUseCase(orders, drivers, events, dispatcher);
+      const watch = new WatchDeliveriesUseCase(orders, drivers, events, dispatcher, payPolicy);
       const report = new ReportDriverLocationUseCase(drivers, orders, realtime);
       await readyForDrivers();
       await take.execute(carlos.id, ID);
@@ -488,28 +492,28 @@ describe('pedidos de Servicios (core)', () => {
       await deliverOne('ord_wallet0001', 300);
       // Confirmar la entrega otra vez no la anota dos veces
       await deliver.execute(carlos.id, 'ord_wallet0001', (await orders.findById('ord_wallet0001'))!.deliveryCode);
-      const wallet = await new GetDriverWalletUseCase(drivers, ledger).execute(carlos.id);
+      const wallet = await new GetDriverWalletUseCase(drivers, ledger, payPolicy).execute(carlos.id);
       expect(wallet).toMatchObject({ balanceCents: 917, pendingPayoutCents: 0, payoutPhone: '987654321', driverSharePercent: 95 });
       expect(wallet.entries.map((e) => [e.kind, e.amountCents]).sort()).toEqual([['commission', -33], ['delivery_fee', 650], ['tip', 300]]);
     });
 
     it('el retiro reserva el saldo, no se duplica, y si PagaYa falla el dinero vuelve', async () => {
       await deliverOne('ord_wallet0002');
-      const reserve = new ReservePayoutUseCase(drivers, ledger);
+      const reserve = new ReservePayoutUseCase(drivers, ledger, payPolicy);
       const settle = new SettlePayoutUseCase(ledger, dispatcher);
       await expect(reserve.execute(lucia.id, 'manual')).rejects.toThrow('número de PagaYa');
       const first = await reserve.execute(carlos.id, 'manual');
       expect(first).toMatchObject({ amountCents: 617, destination: '987654321' });
       await expect(reserve.execute(carlos.id, 'manual')).rejects.toThrow('retiro en curso');
-      expect(await new GetDriverWalletUseCase(drivers, ledger).execute(carlos.id)).toMatchObject({ balanceCents: 0, pendingPayoutCents: 617 });
+      expect(await new GetDriverWalletUseCase(drivers, ledger, payPolicy).execute(carlos.id)).toMatchObject({ balanceCents: 0, pendingPayoutCents: 617 });
       // Falla la transferencia: vuelve al saldo y se puede reintentar
       expect((await settle.execute(first.payoutId, 'failed', null, 'PagaYa no responde')).status).toBe('failed');
-      expect((await new GetDriverWalletUseCase(drivers, ledger).execute(carlos.id)).balanceCents).toBe(617);
+      expect((await new GetDriverWalletUseCase(drivers, ledger, payPolicy).execute(carlos.id)).balanceCents).toBe(617);
       const second = await reserve.execute(carlos.id, 'manual');
       expect(await settle.execute(second.payoutId, 'paid', 'tr_1', null)).toMatchObject({ status: 'paid', transferId: 'tr_1', amountCents: 617 });
       expect((await settle.execute(second.payoutId, 'paid', 'tr_1', null)).status).toBe('paid'); // idempotente
       await expect(settle.execute(second.payoutId, 'failed', null, 'x')).rejects.toThrow(ConflictError);
-      expect((await new GetDriverWalletUseCase(drivers, ledger).execute(carlos.id)).balanceCents).toBe(0);
+      expect((await new GetDriverWalletUseCase(drivers, ledger, payPolicy).execute(carlos.id)).balanceCents).toBe(0);
       await expect(reserve.execute(carlos.id, 'manual')).rejects.toThrow('No tienes saldo');
       await flush();
       expect(push.sent.filter((x) => x.target.endpoint.endsWith('/carlos')).map((x) => x.payload.title)).toContain('Te depositamos tus ganancias');
@@ -517,18 +521,35 @@ describe('pedidos de Servicios (core)', () => {
 
     it('el depósito automático solo incluye a quien tiene S/ 5+, PagaYa y nada en curso', async () => {
       await deliverOne('ord_wallet0003');
-      const due = new DuePayoutsUseCase(ledger);
+      const due = new DuePayoutsUseCase(ledger, payPolicy);
       expect(await due.execute()).toEqual([{ userId: carlos.id }]);
       await new SetPayoutPhoneUseCase(drivers).execute(lucia.id, '912 345 678');
       expect(await due.execute()).toEqual([{ userId: carlos.id }]); // Lucía no tiene saldo
       await expect(new SetPayoutPhoneUseCase(drivers).execute(lucia.id, '123')).rejects.toThrow(ValidationError);
-      await new ReservePayoutUseCase(drivers, ledger).execute(carlos.id, 'auto');
+      await new ReservePayoutUseCase(drivers, ledger, payPolicy).execute(carlos.id, 'auto');
       expect(await due.execute()).toEqual([]);
+    });
+
+    it('con DRIVER_SHARE_PERCENT=90 y mínimo de S/ 10, la entrega y los depósitos lo respetan', async () => {
+      const custom = new DriverPayPolicy({ driverPay: { sharePercent: 90, minAutoPayoutCents: 1000, minManualPayoutCents: 700 } });
+      const deliver90 = new DeliverOrderUseCase(drivers, orders, users, events, ledger, custom);
+      await create.execute(newOrder({ id: 'ord_custom0001' }));
+      await update.execute('ord_custom0001', { expectStatus: 'pending_payment', status: 'paid' });
+      await decide.execute(rosa.id, 'ord_custom0001', 'accept');
+      await decide.execute(rosa.id, 'ord_custom0001', 'ready');
+      await take.execute(carlos.id, 'ord_custom0001');
+      await decide.execute(rosa.id, 'ord_custom0001', 'handoff');
+      const done = await deliver90.execute(carlos.id, 'ord_custom0001', (await orders.findById('ord_custom0001'))!.deliveryCode);
+      // 10 % de S/ 6.50 = S/ 0.65 para Rapidito
+      expect(done).toMatchObject({ commissionCents: 65, commissionPercent: 10, earningsCents: 585 });
+      expect(await new GetDriverWalletUseCase(drivers, ledger, custom).execute(carlos.id)).toMatchObject({ balanceCents: 585, driverSharePercent: 90, minAutoPayoutCents: 1000 });
+      expect(await new DuePayoutsUseCase(ledger, custom).execute()).toEqual([]); // S/ 5.85 < S/ 10
+      await expect(new ReservePayoutUseCase(drivers, ledger, custom).execute(carlos.id, 'manual')).rejects.toThrow('mínimo S/ 7.00');
     });
 
     it('un depósito que quedó pendiente aparece para conciliar pasados los minutos', async () => {
       await deliverOne('ord_wallet0004');
-      const { payoutId } = await new ReservePayoutUseCase(drivers, ledger).execute(carlos.id, 'manual');
+      const { payoutId } = await new ReservePayoutUseCase(drivers, ledger, payPolicy).execute(carlos.id, 'manual');
       const stuck = new StuckPayoutsUseCase(drivers, ledger);
       expect(await stuck.execute(10)).toEqual([]);
       expect(await stuck.execute(10, new Date(Date.now() + 11 * 60_000))).toEqual([{ payoutId, amountCents: 617, destination: '987654321' }]);

@@ -131,6 +131,9 @@ pones tu nombre, un usuario opcional y la contraseña.
     solo cobro a la plataforma, así que la comisión **se descuenta sola**: cada entrega anota en el
     libro de movimientos del repartidor + tarifa, − comisión y + propina (una sola vez, aunque se
     confirme dos veces). En la oferta y en la entrega ve el detalle («Para ti S/ …»).
+    El porcentaje y los mínimos se configuran con `DRIVER_SHARE_PERCENT` (95 por defecto, de 50 a
+    100), `DRIVER_MIN_AUTO_PAYOUT_SOLES` (5) y `DRIVER_MIN_MANUAL_PAYOUT_SOLES` (1); un valor inválido
+    no deja arrancar el core. Cambiarlos no toca lo que ya está anotado en los libros.
   - **Depósitos a PagaYa**: en su perfil el repartidor pone su número de PagaYa, ve su **saldo** y
     sus movimientos, y puede **retirar ahora**. Además, el gateway le **deposita automáticamente cada
     día a las 23:00** (hora de Lima) si tiene S/ 5 o más (`RAPIDITO_PAYOUT_AT`). El retiro primero

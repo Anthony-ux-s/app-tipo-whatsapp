@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import type { OrderStatus, PushPayload } from '@parla/types';
 import { APP_ENV, type AppEnv, type DeliveryWatchConfig } from '../../../../config/env.validation';
-import { splitDelivery } from '../../../../kernel/driver-earnings';
 import { driverOfferPush } from '../../../../kernel/order-rules';
 import { NotificationDispatcher } from '../../messaging/push/use-cases/notification-dispatcher';
+import { DriverPayPolicy } from '../driver-pay.policy';
 import { DRIVERS_REPOSITORY, type DriversRepository } from '../drivers.repository';
 import { ORDERS_REPOSITORY, type OrderRecord, type OrdersRepository } from '../orders.repository';
 import { OrderEvents } from './orders.use-cases';
@@ -50,6 +50,7 @@ export class WatchDeliveriesUseCase {
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     private readonly events: OrderEvents,
     private readonly notifications: NotificationDispatcher,
+    private readonly pay: DriverPayPolicy,
   ) {}
 
   async execute(config: DeliveryWatchConfig, now = new Date()): Promise<WatchResult> {
@@ -64,7 +65,7 @@ export class WatchDeliveriesUseCase {
         if (waiting < config.untakenMinutes * MINUTE || t - last < config.untakenMinutes * MINUTE) continue;
         this.nudgedAt.set(order.id, t);
         const drivers = await this.drivers.listUserIds();
-        const offer = driverOfferPush(order.id, order.business?.name ?? 'Una tienda', splitDelivery(order.deliveryFeeCents, order.tipCents).earningsCents);
+        const offer = driverOfferPush(order.id, order.business?.name ?? 'Una tienda', this.pay.split(order.deliveryFeeCents, order.tipCents).earningsCents);
         void this.notifications.notify(drivers, () => offer);
         if (order.business) {
           const push = untakenPush(order.id, Math.round(waiting / MINUTE));

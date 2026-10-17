@@ -158,7 +158,7 @@ export function DriverOrderDetailView() {
       <section className="flex flex-col gap-1.5 rounded-2xl bg-surface p-4 text-sm shadow-float md:p-5" aria-label="Lo que ganas" data-testid="driver-split">
         <h2 className="mb-1 text-sm font-bold text-ink-soft">Lo que ganas</h2>
         <p className="flex justify-between text-ink-soft"><span>Tarifa de delivery</span><span className="font-semibold text-ink">{formatSoles(order.deliveryFeeCents)}</span></p>
-        <p className="flex justify-between text-ink-soft"><span>Comisión Rapidito (5 %)</span><span className="font-semibold text-ink">− {formatSoles(order.commissionCents)}</span></p>
+        <p className="flex justify-between text-ink-soft"><span>Comisión Rapidito ({order.commissionPercent} %)</span><span className="font-semibold text-ink">− {formatSoles(order.commissionCents)}</span></p>
         {order.tipCents > 0 && <p className="flex justify-between text-ink-soft"><span>Propina (100 % para ti)</span><span className="font-semibold text-ink">+ {formatSoles(order.tipCents)}</span></p>}
         <p className="mt-1 flex justify-between border-t border-dashed border-line pt-1.5 text-base font-extrabold text-ink"><span>Para ti</span><span>{formatSoles(order.earningsCents)}</span></p>
       </section>

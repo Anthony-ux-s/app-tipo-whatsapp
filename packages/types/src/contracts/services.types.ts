@@ -321,9 +321,10 @@ export interface DriverOrder {
   /** Tarifa de delivery del pedido (lo que pagó el cliente por el envío). */
   deliveryFeeCents: number;
   tipCents: number;
-  /** Comisión de Rapidito (5 % de la tarifa). */
+  /** Comisión de Rapidito sobre la tarifa (DRIVER_SHARE_PERCENT: por defecto el 5 %). */
   commissionCents: number;
-  /** Lo que gana el repartidor: 95 % de la tarifa + la propina completa. */
+  commissionPercent: number;
+  /** Lo que gana el repartidor: su porcentaje de la tarifa (95 % por defecto) + la propina completa. */
   earningsCents: number;
   /** Lo tiene este repartidor (si no, es una oferta disponible). */
   mine: boolean;

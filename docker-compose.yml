@@ -84,6 +84,10 @@ services:
       TURN_URL: ${TURN_URL:-}
       TURN_USERNAME: ${TURN_USERNAME:-}
       TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+      # Ganancias del repartidor: % de la tarifa de delivery (Rapidito se queda con el resto) y mínimos
+      DRIVER_SHARE_PERCENT: ${DRIVER_SHARE_PERCENT:-95}
+      DRIVER_MIN_AUTO_PAYOUT_SOLES: ${DRIVER_MIN_AUTO_PAYOUT_SOLES:-5}
+      DRIVER_MIN_MANUAL_PAYOUT_SOLES: ${DRIVER_MIN_MANUAL_PAYOUT_SOLES:-1}
     volumes:
       - app-storage:/data/storage
 

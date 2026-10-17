@@ -1,16 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { DriverWallet, PayoutResult, PushPayload } from '@parla/types';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../../../kernel/domain-error';
-import {
-  AUTO_PAYOUT_AT,
-  DRIVER_SHARE_PERCENT,
-  MIN_AUTO_PAYOUT_CENTS,
-  MIN_MANUAL_PAYOUT_CENTS,
-  normalizePayoutPhone,
-} from '../../../../kernel/driver-earnings';
+import { AUTO_PAYOUT_AT, normalizePayoutPhone } from '../../../../kernel/driver-earnings';
 import { formatSoles } from '../../../../kernel/order-rules';
 import { NotificationDispatcher } from '../../messaging/push/use-cases/notification-dispatcher';
 import { DRIVER_LEDGER_REPOSITORY, type DriverLedgerRepository, type LedgerEntryRecord } from '../driver-ledger.repository';
+import { DriverPayPolicy } from '../driver-pay.policy';
 import { DRIVERS_REPOSITORY, type DriverRecord, type DriversRepository } from '../drivers.repository';
 
 const WALLET_ENTRIES = 40;
@@ -31,6 +26,7 @@ export class GetDriverWalletUseCase {
   constructor(
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     @Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger: DriverLedgerRepository,
+    private readonly pay: DriverPayPolicy,
   ) {}
 
   async execute(userId: string): Promise<DriverWallet> {
@@ -41,8 +37,8 @@ export class GetDriverWalletUseCase {
       pendingPayoutCents,
       payoutPhone: driver.payoutPhone,
       autoPayoutAt: AUTO_PAYOUT_AT,
-      minAutoPayoutCents: MIN_AUTO_PAYOUT_CENTS,
-      driverSharePercent: DRIVER_SHARE_PERCENT,
+      minAutoPayoutCents: this.pay.config.minAutoPayoutCents,
+      driverSharePercent: this.pay.sharePercent,
       entries: entries.map((e) => ({
         id: e.id,
         kind: e.kind,
@@ -77,6 +73,7 @@ export class ReservePayoutUseCase {
   constructor(
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     @Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger: DriverLedgerRepository,
+    private readonly pay: DriverPayPolicy,
   ) {}
 
   async execute(userId: string, reason: 'manual' | 'auto'): Promise<{ payoutId: string; amountCents: number; destination: string }> {
@@ -84,7 +81,7 @@ export class ReservePayoutUseCase {
     if (!driver) throw new NotFoundError('Repartidor no encontrado');
     if (!driver.active) throw new ConflictError('Tu cuenta ya no es de repartidor');
     if (!driver.payoutPhone) throw new ConflictError('Agrega tu número de PagaYa en tu perfil para recibir tus ganancias');
-    const min = reason === 'auto' ? MIN_AUTO_PAYOUT_CENTS : MIN_MANUAL_PAYOUT_CENTS;
+    const min = reason === 'auto' ? this.pay.config.minAutoPayoutCents : this.pay.config.minManualPayoutCents;
     const reserved = await this.ledger.reservePayout(userId, min, reason);
     if (reserved === 'pending') throw new ConflictError('Ya tienes un retiro en curso');
     if (reserved === 'no_balance') throw new ConflictError(`No tienes saldo para retirar (mínimo ${formatSoles(min)})`);
@@ -126,10 +123,13 @@ export class SettlePayoutUseCase {
 /** Para el depósito automático diario: repartidores con saldo suficiente y número de PagaYa. */
 @Injectable()
 export class DuePayoutsUseCase {
-  constructor(@Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger: DriverLedgerRepository) {}
+  constructor(
+    @Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger: DriverLedgerRepository,
+    private readonly pay: DriverPayPolicy,
+  ) {}
 
   async execute(): Promise<{ userId: string }[]> {
-    return (await this.ledger.duePayouts(MIN_AUTO_PAYOUT_CENTS)).map((userId) => ({ userId }));
+    return (await this.ledger.duePayouts(this.pay.config.minAutoPayoutCents)).map((userId) => ({ userId }));
   }
 }
 

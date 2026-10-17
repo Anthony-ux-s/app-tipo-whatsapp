@@ -3,6 +3,7 @@ import { AuthModule } from '../identity/auth/auth.module';
 import { PushEngineModule } from '../messaging/push/push-engine.module';
 import { BUSINESSES_REPOSITORY } from './businesses.repository';
 import { DRIVER_LEDGER_REPOSITORY } from './driver-ledger.repository';
+import { DriverPayPolicy } from './driver-pay.policy';
 import { DRIVERS_REPOSITORY } from './drivers.repository';
 import { PrismaDriverLedgerRepository } from './prisma-driver-ledger.repository';
 import { ORDERS_REPOSITORY } from './orders.repository';
@@ -99,6 +100,7 @@ const USE_CASES = [
     { provide: BUSINESSES_REPOSITORY, useClass: PrismaBusinessesRepository },
     { provide: DRIVERS_REPOSITORY, useClass: PrismaDriversRepository },
     { provide: DRIVER_LEDGER_REPOSITORY, useClass: PrismaDriverLedgerRepository },
+    DriverPayPolicy,
     OrderEvents,
     WatchDeliveriesUseCase,
     DeliveryWatchService,

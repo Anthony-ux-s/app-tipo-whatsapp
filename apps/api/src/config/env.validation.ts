@@ -1,6 +1,7 @@
 import type { CallIceConfig } from '@parla/types';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { parseDriverPay, type DriverPayConfig } from '../kernel/driver-earnings';
 
 export interface AppEnv {
   production: boolean;
@@ -25,6 +26,8 @@ export interface AppEnv {
   oneSignal: { appId: string; apiKey: string; smsFrom: string | null } | null;
   /** Vigilancia de los deliveries (pedidos sin repartidor, repartidores que no avanzan). */
   deliveryWatch: DeliveryWatchConfig;
+  /** Cuánto gana el repartidor (porcentaje de la tarifa) y mínimos para depositarle. */
+  driverPay: DriverPayConfig;
 }
 
 export interface DeliveryWatchConfig {
@@ -104,6 +107,7 @@ export function loadEnv(): AppEnv {
     realtimeUrl: (env.REALTIME_URL ?? 'http://localhost:4102').replace(/\/$/, ''),
     internalToken,
     oneSignal,
+    driverPay: parseDriverPay(env),
     deliveryWatch: {
       intervalMs: Number(env.DELIVERY_WATCH_INTERVAL_MS ?? 60_000),
       untakenMinutes: Number(env.DELIVERY_UNTAKEN_MINUTES ?? 5),

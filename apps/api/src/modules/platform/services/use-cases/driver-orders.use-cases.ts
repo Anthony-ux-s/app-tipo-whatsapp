@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { DriverInfo, DriverOrder, DriverOrders } from '@parla/types';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
-import { splitDelivery } from '../../../../kernel/driver-earnings';
 import { MAX_DELIVERY_CODE_ATTEMPTS } from '../../../../kernel/order-rules';
 import { DRIVER_LEDGER_REPOSITORY, type DriverLedgerRepository } from '../driver-ledger.repository';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
+import { DriverPayPolicy } from '../driver-pay.policy';
 import { DRIVERS_REPOSITORY, type DriverRecord, type DriversRepository } from '../drivers.repository';
 import { ORDERS_REPOSITORY, type OrderRecord, type OrdersRepository } from '../orders.repository';
 import { customersOf, OrderEvents, toDriverOrder } from './orders.use-cases';
@@ -37,6 +37,7 @@ export class ListDriverOrdersUseCase {
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
+    private readonly pay: DriverPayPolicy,
   ) {}
 
   async execute(userId: string): Promise<DriverOrders> {
@@ -47,8 +48,8 @@ export class ListDriverOrdersUseCase {
     ]);
     const customers = await customersOf(this.users, [...available, ...mine]);
     return {
-      available: available.map((o) => toDriverOrder(o, userId, customers)),
-      mine: mine.map((o) => toDriverOrder(o, userId, customers)),
+      available: available.map((o) => toDriverOrder(o, userId, customers, this.pay)),
+      mine: mine.map((o) => toDriverOrder(o, userId, customers, this.pay)),
     };
   }
 }
@@ -67,12 +68,13 @@ export class GetDriverOrderUseCase {
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
+    private readonly pay: DriverPayPolicy,
   ) {}
 
   async execute(userId: string, id: string): Promise<DriverOrder> {
     await requireDriver(this.drivers, userId);
     const order = await findDriverOrder(this.orders, userId, id);
-    return toDriverOrder(order, userId, await customersOf(this.users, [order]));
+    return toDriverOrder(order, userId, await customersOf(this.users, [order]), this.pay);
   }
 }
 
@@ -87,6 +89,7 @@ export class AcceptDeliveryUseCase {
     @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
     private readonly events: OrderEvents,
+    private readonly pay: DriverPayPolicy,
   ) {}
 
   async execute(userId: string, id: string): Promise<DriverOrder> {
@@ -109,7 +112,7 @@ export class AcceptDeliveryUseCase {
       this.events.changed(updated);
       order = updated;
     }
-    return toDriverOrder(order, userId, await customersOf(this.users, [order]));
+    return toDriverOrder(order, userId, await customersOf(this.users, [order]), this.pay);
   }
 }
 
@@ -124,13 +127,14 @@ export class ReleaseDeliveryUseCase {
     @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
     private readonly events: OrderEvents,
+    private readonly pay: DriverPayPolicy,
   ) {}
 
   async execute(userId: string, id: string): Promise<DriverOrder> {
     await requireDriver(this.drivers, userId);
     const order = await this.orders.findById(id);
     if (!order || (order.driverId !== userId && order.status !== 'searching_driver')) throw new NotFoundError('Pedido no encontrado');
-    if (order.driverId !== userId) return toDriverOrder(order, userId, await customersOf(this.users, [order]));
+    if (order.driverId !== userId) return toDriverOrder(order, userId, await customersOf(this.users, [order]), this.pay);
     if (order.status !== 'driver_assigned') throw new ConflictError('Ya recogiste este pedido: entrégalo al cliente');
     const updated = await this.orders.updateIfStatus(id, 'driver_assigned', {
       status: 'searching_driver',
@@ -140,7 +144,7 @@ export class ReleaseDeliveryUseCase {
     });
     if (!updated) throw new ConflictError('El pedido ya cambió de estado');
     this.events.changed(updated, userId);
-    return toDriverOrder(updated, userId, await customersOf(this.users, [updated]));
+    return toDriverOrder(updated, userId, await customersOf(this.users, [updated]), this.pay);
   }
 }
 
@@ -157,6 +161,7 @@ export class DeliverOrderUseCase {
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
     private readonly events: OrderEvents,
     @Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger: DriverLedgerRepository,
+    private readonly pay: DriverPayPolicy,
   ) {}
 
   async execute(userId: string, id: string, code: string): Promise<DriverOrder> {
@@ -182,10 +187,10 @@ export class DeliverOrderUseCase {
       this.events.changed(updated);
       order = updated;
     }
-    // A su saldo: tarifa, menos la comisión de Rapidito (5 %), más la propina. Se descuenta sola y,
+    // A su saldo: tarifa, menos la comisión de Rapidito (DRIVER_SHARE_PERCENT), más la propina. Se descuenta sola y,
     // si la entrega se confirma dos veces, no se anota dos veces.
-    const split = splitDelivery(order.deliveryFeeCents, order.tipCents);
+    const split = this.pay.split(order.deliveryFeeCents, order.tipCents);
     await this.ledger.recordDelivery({ driverId: userId, orderId: order.id, feeCents: order.deliveryFeeCents, commissionCents: split.commissionCents, tipCents: order.tipCents });
-    return toDriverOrder(order, userId, await customersOf(this.users, [order]));
+    return toDriverOrder(order, userId, await customersOf(this.users, [order]), this.pay);
   }
 }

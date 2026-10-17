@@ -11,7 +11,6 @@ import type {
   RateOrderRequest,
 } from '@parla/types';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
-import { splitDelivery } from '../../../../kernel/driver-earnings';
 import {
   assertOrderTotals,
   assertOrderTransition,
@@ -28,6 +27,7 @@ import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.r
 import { avatarUrlOf } from '../../identity/user.mapper';
 import { NotificationDispatcher } from '../../messaging/push/use-cases/notification-dispatcher';
 import { BUSINESSES_REPOSITORY, type BusinessesRepository } from '../businesses.repository';
+import { DriverPayPolicy } from '../driver-pay.policy';
 import { DRIVERS_REPOSITORY, type DriversRepository } from '../drivers.repository';
 import { ORDERS_REPOSITORY, type OrderChanges, type OrderRecord, type OrdersRepository } from '../orders.repository';
 
@@ -92,8 +92,8 @@ export function toBusinessOrder(order: OrderRecord, customers: Map<string, Order
 }
 
 /** Pedido para un repartidor: qué recoge, dónde y adónde va. Solo el nombre de pila del cliente. */
-export function toDriverOrder(order: OrderRecord, driverId: string, customers: Map<string, OrderCustomer>): DriverOrder {
-  const split = splitDelivery(order.deliveryFeeCents, order.tipCents);
+export function toDriverOrder(order: OrderRecord, driverId: string, customers: Map<string, OrderCustomer>, pay: DriverPayPolicy): DriverOrder {
+  const split = pay.split(order.deliveryFeeCents, order.tipCents);
   return {
     id: order.id,
     status: order.status,
@@ -104,6 +104,7 @@ export function toDriverOrder(order: OrderRecord, driverId: string, customers: M
     deliveryFeeCents: order.deliveryFeeCents,
     tipCents: order.tipCents,
     commissionCents: split.commissionCents,
+    commissionPercent: pay.commissionPercent,
     earningsCents: split.earningsCents,
     mine: order.driverId === driverId,
     timeline: order.timeline,
@@ -124,6 +125,7 @@ export class OrderEvents {
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     private readonly notifications: NotificationDispatcher,
+    private readonly pay: DriverPayPolicy,
   ) {}
 
   /**
@@ -157,13 +159,13 @@ export class OrderEvents {
     if (order.driverId) driverIds.add(order.driverId);
     if (previousDriverId) driverIds.add(previousDriverId);
     for (const driverId of driverIds) {
-      this.realtime.toUsers([driverId], 'driver-order:updated', toDriverOrder(order, driverId, customers));
+      this.realtime.toUsers([driverId], 'driver-order:updated', toDriverOrder(order, driverId, customers, this.pay));
     }
     const lostBy = previousDriverId ?? (order.status === 'cancelled' ? order.driverId : null);
     const lost = statusChanged && lostBy ? driverLostPush(order.id, order.status, order.business?.name ?? 'La tienda') : null;
     if (lostBy && lost) void this.notifications.notify([lostBy], () => lost);
     if (offerChanged && order.status === 'searching_driver') {
-      const offer = driverOfferPush(order.id, order.business?.name ?? 'Una tienda', splitDelivery(order.deliveryFeeCents, order.tipCents).earningsCents);
+      const offer = driverOfferPush(order.id, order.business?.name ?? 'Una tienda', this.pay.split(order.deliveryFeeCents, order.tipCents).earningsCents);
       // A quien lo acaba de soltar no se le vuelve a ofrecer por push.
       void this.notifications.notify([...driverIds].filter((id) => id !== previousDriverId), () => offer);
     }

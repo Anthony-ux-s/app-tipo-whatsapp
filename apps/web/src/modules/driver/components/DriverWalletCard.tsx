@@ -11,7 +11,7 @@ import { formatSoles } from '@shared/utils/money';
 
 const ENTRY_LABELS: Record<LedgerEntry['kind'], string> = {
   delivery_fee: 'Tarifa de delivery',
-  commission: 'Comisión Rapidito (5 %)',
+  commission: 'Comisión Rapidito',
   tip: 'Propina',
   payout: 'Depósito a tu PagaYa',
 };
