@@ -1,6 +1,7 @@
 import type { BusinessOrder, DriverOrder, InternalCreateOrder, Order } from '@parla/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../kernel/domain-error';
+import { DEFAULT_DELIVERY_PRICING } from '../../../kernel/delivery-pricing';
 import { PresenceRegistry } from '../../../infra/realtime/presence.registry';
 import {
   InMemoryAuthRepository,
@@ -162,7 +163,9 @@ describe('pedidos de Servicios (core)', () => {
     create = new CreateOrderUseCase(orders, users, businesses, events, coupons, addresses);
     update = new UpdateOrderUseCase(orders, events);
     decide = new DecideBusinessOrderUseCase(orders, users, events, dispatchPolicy);
-    take = new AcceptDeliveryUseCase(drivers, orders, users, events, payPolicy, dispatchPolicy);
+    // Un pedido por viaje en estas pruebas (soporte puede subirlo hasta 5).
+    const oneAtATime = { get: async () => ({ pricing: { ...DEFAULT_DELIVERY_PRICING, maxActiveOrders: 1 }, updatedAt: null, updatedById: null }), save: async () => { throw new Error('no se usa'); } };
+    take = new AcceptDeliveryUseCase(drivers, orders, users, events, payPolicy, dispatchPolicy, oneAtATime);
     deliver = new DeliverOrderUseCase(drivers, orders, users, events, ledger, payPolicy, dispatchPolicy, photos);
   });
 

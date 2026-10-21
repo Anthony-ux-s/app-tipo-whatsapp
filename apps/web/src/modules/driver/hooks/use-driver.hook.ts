@@ -25,7 +25,8 @@ export function useDriverOrders() {
 
   const available = useMemo(() => availableOrders(orders), [orders]);
   const mine = useMemo(() => myOrders(orders), [orders]);
-  const active = mine.find((o) => o.status === 'driver_assigned' || o.status === 'on_the_way') ?? null;
+  const inProgress = mine.filter((o) => o.status === 'driver_assigned' || o.status === 'on_the_way');
+  const active = inProgress[0] ?? null;
 
   return {
     driver,
@@ -34,11 +35,14 @@ export function useDriverOrders() {
     available,
     mine,
     active,
+    /** Cuántos pedidos lleva ahora (con más de uno, «Mis rutas» le da el orden). */
+    activeCount: inProgress.length,
     orders: tab === 'disponibles' ? available : mine,
     loading: (status === 'loading' || status === 'idle') && Object.keys(orders).length === 0,
     error,
     reload,
     open: (id: string) => navigate(`/app/rapidito/pedidos/${id}`),
+    openRoutes: () => navigate('/app/rapidito/rutas'),
     back: () => navigate('/app/pedidos'),
     togglingOnline,
     toggleOnline: async (online: boolean) => {

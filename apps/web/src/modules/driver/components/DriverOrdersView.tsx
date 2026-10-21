@@ -1,4 +1,4 @@
-import { Bike, ChevronRight, MapPin, Store, UserRound } from 'lucide-react';
+import { Bike, ChevronRight, MapPin, Route, Store, UserRound } from 'lucide-react';
 import { Link } from 'react-router';
 import { Toggle } from '@shared/ui/Toggle';
 import type { DriverOrder } from '@parla/types';
@@ -21,9 +21,14 @@ export function DriverOrdersView() {
         subtitle={r.driver ? `Repartidor · ${r.driver.vehicle}${r.driver.plate ? ` ${r.driver.plate}` : ''}` : 'Repartidor'}
         onBack={r.back}
         action={
-          <Link to="/app/rapidito/perfil" aria-label="Mi perfil de repartidor" title="Mi perfil de repartidor" data-testid="driver-profile-link" className="inline-flex size-10 items-center justify-center rounded-full text-ink-soft transition-colors duration-200 hover:bg-surface-3 hover:text-ink">
-            <UserRound className="size-5" />
-          </Link>
+          <span className="flex">
+            <Link to="/app/rapidito/rutas" aria-label="Mis rutas" title="Mis rutas" data-testid="driver-routes-link" className="inline-flex size-10 items-center justify-center rounded-full text-ink-soft transition-colors duration-200 hover:bg-surface-3 hover:text-ink">
+              <Route className="size-5" />
+            </Link>
+            <Link to="/app/rapidito/perfil" aria-label="Mi perfil de repartidor" title="Mi perfil de repartidor" data-testid="driver-profile-link" className="inline-flex size-10 items-center justify-center rounded-full text-ink-soft transition-colors duration-200 hover:bg-surface-3 hover:text-ink">
+              <UserRound className="size-5" />
+            </Link>
+          </span>
         }
       />
 
@@ -44,7 +49,7 @@ export function DriverOrdersView() {
       {r.active && (
         <button
           type="button"
-          onClick={() => r.open(r.active!.id)}
+          onClick={() => (r.activeCount > 1 ? r.openRoutes() : r.open(r.active!.id))}
           data-testid="active-delivery"
           className="group flex items-center gap-4 rounded-2xl bg-gradient-to-br from-teal-600 to-cyan-700 p-4 text-left text-white shadow-float transition-[filter] duration-200 hover:brightness-110 md:px-5"
         >
@@ -52,9 +57,13 @@ export function DriverOrdersView() {
             <Bike className="size-5" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[15px] font-bold">Entrega en curso</span>
+            <span className="block text-[15px] font-bold">{r.activeCount > 1 ? `${r.activeCount} entregas en curso` : 'Entrega en curso'}</span>
             <span className="block truncate text-sm text-teal-50">
-              {r.active.status === 'driver_assigned' ? `Recoger en ${r.active.business.name}` : `Llevar a ${r.active.customerName} · ${r.active.address.line}`}
+              {r.activeCount > 1
+                ? 'Ver el mejor orden en Mis rutas'
+                : r.active.status === 'driver_assigned'
+                  ? `Recoger en ${r.active.business.name}`
+                  : `Llevar a ${r.active.customerName} · ${r.active.address.line}`}
             </span>
           </span>
           <ChevronRight className="size-5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" />

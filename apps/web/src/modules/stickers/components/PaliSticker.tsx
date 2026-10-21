@@ -239,7 +239,7 @@ const POSES: Record<PaliMood, Pose> = {
           <path d="M92 104 q-5 -7 0 -14" />
           <path d="M104 104 q5 -7 0 -14" style={{ animationDelay: '.5s' }} />
         </g>
-        <path d="M80 110 h40 l-4 34 a6 6 0 0 1 -6 5 h-20 a6 6 0 0 1 -6 -5 z" fill="#fff" stroke="#0f766e" strokeWidth={2.5} />
+        <path d="M80 110 h40 l-4 34 a6 6 0 0 1 -6 5 h-20 a6 6 0 0 1 -6 -5 z" fill="#fff" stroke="#009d71" strokeWidth={2.5} />
         <path d="M120 118 a9 9 0 0 1 0 18" stroke="#fff" strokeWidth={5} fill="none" />
         <rect x={82} y={122} width={36} height={8} fill="#14b8a6" />
       </g>
@@ -273,7 +273,7 @@ const POSES: Record<PaliMood, Pose> = {
       <g className="stk-float">
         <circle cx={150} cy={44} r={20} fill="#fff" stroke="#cbd5e1" strokeWidth={2.5} />
         <circle cx={136} cy={70} r={5} fill="#fff" stroke="#cbd5e1" strokeWidth={2} />
-        <text x={150} y={53} textAnchor="middle" fontSize={26} fontWeight={900} fill="#0f766e" fontFamily="system-ui, sans-serif">
+        <text x={150} y={53} textAnchor="middle" fontSize={26} fontWeight={900} fill="#009d71" fontFamily="system-ui, sans-serif">
           ?
         </text>
       </g>
@@ -302,7 +302,7 @@ export function PaliSticker({ mood, className = '', withCaption = true }: PaliSt
       <defs>
         <linearGradient id={ids.body} x1="0" y1="0" x2="0.3" y2="1">
           <stop offset="0" stopColor="#2dd4bf" />
-          <stop offset="1" stopColor="#0f766e" />
+          <stop offset="1" stopColor="#009d71" />
         </linearGradient>
         <linearGradient id={ids.belly} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#f0fdfa" />
@@ -378,7 +378,7 @@ export function PaliSticker({ mood, className = '', withCaption = true }: PaliSt
           fontSize={caption.length > 12 ? 19 : 22}
           fontWeight={900}
           fontFamily="system-ui, 'Segoe UI', sans-serif"
-          fill="#0f766e"
+          fill="#009d71"
           stroke="#fff"
           strokeWidth={7}
           strokeLinejoin="round"

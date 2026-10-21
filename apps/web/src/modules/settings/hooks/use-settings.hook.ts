@@ -1,4 +1,4 @@
-import type { ThemePreference, UserPreferences } from '@parla/types';
+import type { ChatFont, ChatFontSize, ThemePreference, UserPreferences } from '@parla/types';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { useSessionStore } from '@shared/stores/session.store';
@@ -89,7 +89,7 @@ export function useProfileSettings() {
   };
 }
 
-/** Preferencias de la interfaz: tema, Enter para enviar y sonido. Se guardan en la cuenta. */
+/** Preferencias de la interfaz: tema, Enter para enviar, sonido y letra de los chats. Se guardan en la cuenta. */
 export function usePreferences() {
   const preferences = useSessionStore((s) => s.user)!.preferences;
   const updateProfile = useSessionStore((s) => s.updateProfile);
@@ -108,6 +108,8 @@ export function usePreferences() {
     setEnterToSend: (enterToSend: boolean) => save({ enterToSend }),
     setSound: (notificationSound: boolean) => save({ notificationSound }),
     setEffects: (chatEffects: boolean) => save({ chatEffects }),
+    setChatFontSize: (chatFontSize: ChatFontSize) => save({ chatFontSize }),
+    setChatFont: (chatFont: ChatFont) => save({ chatFont }),
   };
 }
 

@@ -11,7 +11,7 @@ interface MessageTextProps {
 /** Texto del mensaje con las @menciones resaltadas (la mía, más fuerte). */
 export function MessageText({ text, mentioned, myId, className = '' }: MessageTextProps) {
   return (
-    <p className={`text-[15px] leading-snug break-words whitespace-pre-wrap text-ink ${className}`}>
+    <p className={`chat-text leading-snug break-words whitespace-pre-wrap text-ink ${className}`}>
       {segmentMentions(text, mentioned, myId).map((segment, i) =>
         segment.mention ? (
           <span

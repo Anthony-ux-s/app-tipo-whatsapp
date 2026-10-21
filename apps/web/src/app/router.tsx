@@ -5,6 +5,7 @@ import { DriverOrderDetailView } from '../modules/driver/components/DriverOrderD
 import { DriverOrdersView } from '../modules/driver/components/DriverOrdersView';
 import { DriverProfileView } from '../modules/driver/components/DriverProfileView';
 import { DriverRegisterView } from '../modules/driver/components/DriverRegisterView';
+import { DriverRoutesView } from '../modules/driver/components/DriverRoutesView';
 import { ForgotPasswordView } from '../modules/auth/components/ForgotPasswordView';
 import { LoginView } from '../modules/auth/components/LoginView';
 import { RegisterView } from '../modules/auth/components/RegisterView';
@@ -60,6 +61,7 @@ export const router = createBrowserRouter([
           { path: 'rapidito', element: <DriverOrdersView /> },
           { path: 'rapidito/registro', element: <DriverRegisterView /> },
           { path: 'rapidito/perfil', element: <DriverProfileView /> },
+          { path: 'rapidito/rutas', element: <DriverRoutesView /> },
           { path: 'rapidito/pedidos/:orderId', element: <DriverOrderDetailView /> },
           { path: 'admin', element: <AdminView /> },
           { path: 'ajustes', element: <SettingsView /> },

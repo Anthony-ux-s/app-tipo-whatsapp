@@ -17,3 +17,9 @@ export const DELIVERY_STATUS_ORDER: readonly DeliveryStatus[] = ['sent', 'delive
 export type PresenceStatus = 'online' | 'offline';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
+
+/** Tamaño de la letra de los mensajes. */
+export type ChatFontSize = 'small' | 'medium' | 'large' | 'xlarge';
+
+/** Tipo de letra de los mensajes. */
+export type ChatFont = 'inter' | 'jakarta' | 'serif' | 'mono';

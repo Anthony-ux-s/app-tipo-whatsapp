@@ -5,25 +5,31 @@ import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
 import { errorMessage, http } from '@shared/utils/http';
 
-export type AdminTab = 'pedidos' | 'repartidores' | 'reclamos' | 'cupones';
+export type AdminTab = 'pedidos' | 'personas' | 'trafico' | 'tarifas' | 'repartidores' | 'reclamos' | 'cupones';
 export type ClaimsView = 'open' | 'resolved';
 
-/** Lista del panel de soporte que se vuelve a pedir al cambiar el filtro (o tras una acción). */
-export function useAdminList<T>(path: string) {
-  const [items, setItems] = useState<T[] | null>(null);
+/** Datos del panel de soporte que se vuelven a pedir al cambiar el filtro (o tras una acción). */
+export function useAdminData<T>(path: string) {
+  const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const reload = useCallback(() => {
     setError(null);
     http
-      .get<T[]>(path)
-      .then(setItems)
+      .get<T>(path)
+      .then(setData)
       .catch((err) => setError(errorMessage(err)));
   }, [path]);
   useEffect(() => {
-    setItems(null);
+    setData(null);
     reload();
   }, [reload]);
-  return { items, error, reload };
+  return { data, error, reload };
+}
+
+/** Lista del panel de soporte. */
+export function useAdminList<T>(path: string) {
+  const { data, error, reload } = useAdminData<T[]>(path);
+  return { items: data, error, reload };
 }
 
 /** Panel de soporte de Parla: verificar repartidores y resolver reclamos (solo cuentas de soporte). */

@@ -56,6 +56,7 @@ export function makeUser(overrides: Partial<UserRecord> = {}): UserRecord {
     termsVersion: null,
     termsAcceptedAt: null,
     isAdmin: false,
+    blockedAt: null,
     deletedAt: null,
     ...overrides,
   };

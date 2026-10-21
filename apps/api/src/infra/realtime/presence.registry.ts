@@ -18,4 +18,9 @@ export class PresenceRegistry {
   statusOf(userId: string): PresenceStatus {
     return this.online.has(userId) ? 'online' : 'offline';
   }
+
+  /** Cuántas personas tienen la app abierta ahora. */
+  onlineCount(): number {
+    return this.online.size;
+  }
 }

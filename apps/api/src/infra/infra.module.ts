@@ -1,9 +1,11 @@
 import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_ENV, loadEnv, type AppEnv } from '../config/env.validation';
+import { ACCOUNT_ACCESS } from './identity/account-access.port';
 import { BcryptPasswordHasher } from './identity/bcrypt-password-hasher.adapter';
 import { JwtTokenService } from './identity/jwt-token-service.adapter';
 import { PASSWORD_HASHER } from './identity/password-hasher.port';
+import { PrismaAccountAccess } from './identity/prisma-account-access.adapter';
 import { TOKEN_SERVICE } from './identity/token-service.port';
 import { PrismaService } from './prisma/prisma.service';
 import { DevConsoleSender } from './messaging/dev-console-sender.adapter';
@@ -29,6 +31,7 @@ const env = loadEnv();
     PresenceRegistry,
     { provide: PASSWORD_HASHER, useClass: BcryptPasswordHasher },
     { provide: TOKEN_SERVICE, useClass: JwtTokenService },
+    { provide: ACCOUNT_ACCESS, useClass: PrismaAccountAccess },
     { provide: FILE_STORAGE, useClass: LocalDiskFileStorage },
     // El tiempo real vive en el servicio de Elixir (services/realtime).
     { provide: REALTIME_PUBLISHER, useClass: ElixirRealtimePublisher },
@@ -42,6 +45,7 @@ const env = loadEnv();
     PresenceRegistry,
     PASSWORD_HASHER,
     TOKEN_SERVICE,
+    ACCOUNT_ACCESS,
     FILE_STORAGE,
     REALTIME_PUBLISHER,
     PUSH_SENDER,

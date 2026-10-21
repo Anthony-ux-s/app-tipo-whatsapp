@@ -99,7 +99,7 @@ export function Composer({ conversationId, threadRootId = null }: ComposerProps)
               onKeyUp={composer.onCaretMove}
               placeholder={threadRootId ? 'Responder en el hilo' : 'Escribe un mensaje · @ para mencionar'}
               aria-label={threadRootId ? 'Responder en el hilo' : 'Escribe un mensaje'}
-              className="max-h-36 w-full resize-none bg-transparent text-[15px] leading-6 text-ink placeholder:text-ink-faint outline-none"
+              className="max-h-36 w-full resize-none bg-transparent chat-text leading-snug text-ink placeholder:text-ink-faint outline-none"
             />
           </div>
           {composer.canSend ? (

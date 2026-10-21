@@ -1,5 +1,5 @@
 import type { ThemePreference } from '@parla/types';
-import { Bell, FileLock2, MessageSquareText, Palette, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react';
+import { Bell, FileLock2, MapPin, MessageSquareText, Palette, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react';
 
 export const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
   { id: 'light', label: 'Claro' },
@@ -7,7 +7,7 @@ export const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
   { id: 'system', label: 'Sistema' },
 ];
 
-export type SettingsSectionId = 'perfil' | 'apariencia' | 'chats' | 'notificaciones' | 'privacidad' | 'datos';
+export type SettingsSectionId = 'perfil' | 'direcciones' | 'apariencia' | 'chats' | 'notificaciones' | 'privacidad' | 'datos';
 
 export interface SettingsSectionInfo {
   id: SettingsSectionId;
@@ -26,6 +26,13 @@ export const SETTINGS_SECTIONS: Record<SettingsSectionId, SettingsSectionInfo> =
     summary: 'Foto, nombre, usuario y correo de recuperación',
     description: 'Así te ven tus contactos en los chats y al buscarte en Parla.',
     icon: UserRound,
+  },
+  direcciones: {
+    id: 'direcciones',
+    title: 'Direcciones',
+    summary: 'Casa, trabajo y donde recibes tus pedidos',
+    description: 'Se guardan solas cuando pides. Ponles nombre o bórralas.',
+    icon: MapPin,
   },
   privacidad: {
     id: 'privacidad',
@@ -51,7 +58,7 @@ export const SETTINGS_SECTIONS: Record<SettingsSectionId, SettingsSectionInfo> =
   chats: {
     id: 'chats',
     title: 'Chats',
-    summary: 'Enviar con Enter, sonidos y efectos',
+    summary: 'Tamaño y tipo de letra, Enter, sonidos y efectos',
     description: 'Cómo escribes y cómo te enteras de lo que llega.',
     icon: MessageSquareText,
   },
@@ -65,7 +72,7 @@ export const SETTINGS_SECTIONS: Record<SettingsSectionId, SettingsSectionInfo> =
 };
 
 /** Secciones de la pantalla principal de Ajustes, en orden (una sola lista, sin títulos de grupo). */
-export const SETTINGS_HOME_SECTIONS: SettingsSectionId[] = ['privacidad', 'datos', 'apariencia', 'chats', 'notificaciones'];
+export const SETTINGS_HOME_SECTIONS: SettingsSectionId[] = ['direcciones', 'chats', 'apariencia', 'notificaciones', 'privacidad', 'datos'];
 
 export const LEGAL_LINKS = [
   { to: '/legal/terminos', label: 'Términos y condiciones' },

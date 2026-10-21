@@ -1,4 +1,6 @@
 import type {
+  ChatFont,
+  ChatFontSize,
   DeleteAccountRequest,
   EncryptedKeyBackup,
   ForgotPasswordRequest,
@@ -70,6 +72,8 @@ class PreferencesDto implements Partial<UserPreferences> {
   @IsOptional() @IsBoolean() enterToSend?: boolean;
   @IsOptional() @IsBoolean() notificationSound?: boolean;
   @IsOptional() @IsBoolean() chatEffects?: boolean;
+  @IsOptional() @IsIn(['small', 'medium', 'large', 'xlarge']) chatFontSize?: ChatFontSize;
+  @IsOptional() @IsIn(['inter', 'jakarta', 'serif', 'mono']) chatFont?: ChatFont;
 }
 
 export class UpdateProfileDto implements UpdateProfileRequest {

@@ -24,6 +24,8 @@ export interface UserRecord {
   deletedAt: Date | null;
   /** Soporte de Parla (aprueba repartidores y resuelve reclamos). */
   isAdmin: boolean;
+  /** Suspendida por soporte: no puede entrar. */
+  blockedAt: Date | null;
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
@@ -31,4 +33,6 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   enterToSend: true,
   notificationSound: true,
   chatEffects: true,
+  chatFontSize: 'medium',
+  chatFont: 'inter',
 };

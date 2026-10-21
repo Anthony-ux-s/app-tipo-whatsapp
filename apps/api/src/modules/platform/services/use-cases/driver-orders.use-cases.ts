@@ -7,14 +7,13 @@ import { DispatchPolicy } from '../dispatch.policy';
 import { DRIVER_LEDGER_REPOSITORY, type DriverLedgerRepository } from '../driver-ledger.repository';
 import { DriverPayPolicy } from '../driver-pay.policy';
 import { DRIVERS_REPOSITORY, type DriverRecord, type DriversRepository } from '../drivers.repository';
+import { DELIVERY_SETTINGS_REPOSITORY, type DeliverySettingsRepository } from '../delivery-settings.repository';
 import { ORDERS_REPOSITORY, type OrderChanges, type OrderRecord, type OrdersRepository } from '../orders.repository';
 import { PHOTOS_REPOSITORY, type PhotosRepository } from '../photos.repository';
 import { customersOf, OrderEvents, toDriverOrder } from './orders.use-cases';
 import { assertOwnPhoto } from './photos.use-cases';
 
 const DRIVER_LIMIT = 50;
-/** Como en Rappi o PedidosYa con un solo pedido por viaje: una entrega a la vez. */
-const MAX_ACTIVE_DELIVERIES = 1;
 
 /** Repartidor activo; para tomar o entregar pedidos, además, aprobado por soporte. */
 export async function requireDriver(drivers: DriversRepository, userId: string, approved = true): Promise<DriverRecord> {
@@ -97,7 +96,8 @@ export class GetDriverOrderUseCase {
 
 /**
  * El repartidor toma un pedido listo. Gana el primero (cambio atómico): si otro lo tomó un instante
- * antes, recibe 409. Repetirlo siendo suyo no cambia nada.
+ * antes, recibe 409. Repetirlo siendo suyo no cambia nada. Puede llevar varios a la vez, hasta lo
+ * que configure soporte (como Rappi o PedidosYa); «Mis rutas» le da el orden para recogerlos y entregarlos.
  */
 @Injectable()
 export class AcceptDeliveryUseCase {
@@ -108,6 +108,7 @@ export class AcceptDeliveryUseCase {
     private readonly events: OrderEvents,
     private readonly pay: DriverPayPolicy,
     private readonly dispatch: DispatchPolicy,
+    @Inject(DELIVERY_SETTINGS_REPOSITORY) private readonly settings: DeliverySettingsRepository,
   ) {}
 
   async execute(userId: string, id: string): Promise<DriverOrder> {
@@ -115,8 +116,9 @@ export class AcceptDeliveryUseCase {
     let order = await findDriverOrder(this.orders, this.dispatch, driver, id);
     if (order.driverId !== userId) {
       if (!driver.online) throw new ConflictError('Conéctate para tomar pedidos');
-      if ((await this.orders.countActiveForDriver(userId)) >= MAX_ACTIVE_DELIVERIES) {
-        throw new ConflictError('Termina tu entrega en curso antes de tomar otra');
+      const max = (await this.settings.get()).pricing.maxActiveOrders;
+      if ((await this.orders.countActiveForDriver(userId)) >= max) {
+        throw new ConflictError(max === 1 ? 'Termina tu entrega en curso antes de tomar otra' : `Ya llevas ${max} pedidos: entrega alguno antes de tomar otro`);
       }
       const [me] = await this.users.findActiveByIds([userId]);
       const name = me?.displayName ?? 'Repartidor';

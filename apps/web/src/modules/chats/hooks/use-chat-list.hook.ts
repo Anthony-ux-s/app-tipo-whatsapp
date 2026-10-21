@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { sortConversations, useChatStore } from '@shared/stores/chat.store';
+import { useMenuStore } from '@shared/stores/menu.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { formatListTimestamp } from '@shared/utils/date';
 import { errorMessage } from '@shared/utils/http';
 import { matchesSearch } from '@shared/utils/text';
 import { CHAT_FILTERS } from '../const/chats.const';
-import type { ChatFilter, ChatListEntry, NewChatMode } from '../types/chats.types';
+import type { ChatFilter, ChatListEntry } from '../types/chats.types';
 import { counterpart, previewFor, typingLabel } from '../utils/conversation-preview.utils';
 
 export function useChatList() {
@@ -20,7 +21,7 @@ export function useChatList() {
   const loadConversations = useChatStore((s) => s.loadConversations);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<ChatFilter>('all');
-  const [newChat, setNewChat] = useState<NewChatMode | null>(null);
+  const openNewChat = useMenuStore((s) => s.openNewChat);
   const [error, setError] = useState<string | null>(null);
 
   const entries = useMemo<ChatListEntry[]>(() => {
@@ -55,12 +56,10 @@ export function useChatList() {
     filters: CHAT_FILTERS,
     totalUnread,
     hasAnyConversation: Object.keys(conversations).length > 0,
-    newChat,
     onSearchChange: (value: string) => setSearch(value),
     clearSearch: () => setSearch(''),
     selectFilter: (value: ChatFilter) => setFilter(value),
-    openNewChat: (mode: NewChatMode = 'direct') => setNewChat(mode),
-    closeNewChat: () => setNewChat(null),
+    openNewChat,
     openConversation: (id: string) => navigate(`/app/c/${id}`),
     retry: () => {
       setError(null);

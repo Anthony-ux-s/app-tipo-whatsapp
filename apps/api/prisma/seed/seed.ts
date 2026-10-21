@@ -20,7 +20,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { TERMS_VERSION } from '../../src/kernel/legal';
 import { PACKAGING_SVG, ROUTE_SVG, WIREFRAME_SVG, voiceNoteWav } from './seed-media';
@@ -224,10 +224,107 @@ const MEDIA_FILES = {
   voice: { mimeType: 'audio/wav', data: () => voiceNoteWav(4).data, durationMs: 4000 },
 } as const;
 
+/**
+ * Fotos de perfil de los usuarios de ejemplo (retratos de randomuser.me en `seed/avatars`). Solo a
+ * quien aún no tiene foto: también sirve sobre una base ya cargada, sin borrar nada.
+ */
+async function attachDemoPhotos(): Promise<void> {
+  await mkdir(STORAGE_DIR, { recursive: true });
+  for (const u of USERS) {
+    const photo = resolve(process.cwd(), 'prisma/seed/avatars', `${u.key}.jpg`);
+    if (!existsSync(photo)) continue;
+    const row = await prisma.user.findFirst({ where: u.username ? { username: u.username } : { phone: u.phone }, select: { id: true, avatarFileId: true } });
+    if (!row || row.avatarFileId) continue;
+    const fileId = `av${randomBytes(16).toString('hex')}`;
+    await writeFile(join(STORAGE_DIR, `${fileId}.bin`), await readFile(photo));
+    await prisma.user.update({ where: { id: row.id }, data: { avatarFileId: fileId } });
+  }
+}
+
+/** Crea una cuenta de ejemplo con su par de claves (la privada, cifrada con la contraseña de prueba). */
+async function createDemoUser(u: SeedUser, passwordHash: string) {
+  const pair = await generateIdentityKeyPair();
+  const row = await prisma.user.create({
+    data: {
+      username: u.username,
+      phone: u.phone,
+      phoneVerifiedAt: u.phone ? new Date(Date.now() - 30 * 24 * 3600_000) : null,
+      // Laura ya agregó su correo: puede restablecer la contraseña desde «¿Olvidaste tu contraseña?».
+      email: u.key === 'laura' ? 'laura@example.com' : null,
+      isAdmin: u.key === 'soporte',
+      emailVerifiedAt: u.key === 'laura' ? new Date(Date.now() - 29 * 24 * 3600_000) : null,
+      displayName: u.displayName,
+      about: u.about,
+      avatarColor: u.avatarColor,
+      passwordHash,
+      publicKey: pair.publicKeyJwk,
+      keyBackup: JSON.stringify(await encryptPrivateKey(pair.privateKeyJwk, DEMO_PASSWORD)),
+      preferences: JSON.stringify({ theme: 'system', enterToSend: true, notificationSound: true }),
+      termsVersion: TERMS_VERSION,
+      termsAcceptedAt: new Date(Date.now() - 30 * 24 * 3600_000),
+      lastSeenAt: new Date(Date.now() - Math.floor(Math.random() * 90) * 60_000),
+      createdAt: new Date(Date.now() - 30 * 24 * 3600_000),
+    },
+  });
+  return { row, pair };
+}
+
+function driverData(d: (typeof DRIVERS)[number], userId: string) {
+  return {
+    userId,
+    vehicle: d.vehicle,
+    plate: d.plate,
+    payoutPhone: d.payoutPhone,
+    dniNumber: d.dniNumber,
+    licenseNumber: d.licenseNumber,
+    // Ya verificados por soporte (los nuevos quedan en revisión).
+    status: 'approved',
+    online: true,
+  };
+}
+
+/**
+ * Sobre una base ya cargada: crea solo las cuentas de ejemplo que falten (soporte, la tienda y los
+ * repartidores, con su negocio y su perfil de Rapidito). No borra ni cambia nada de lo que ya hay.
+ */
+async function addMissingDemoAccounts(): Promise<void> {
+  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
+  const ids = new Map<string, string>();
+  const created: string[] = [];
+  for (const u of USERS) {
+    // Las cuentas con usuario se buscan por usuario (por si alguien cambió el suyo, también por teléfono).
+    const found = await prisma.user.findFirst({ where: { OR: [...(u.username ? [{ username: u.username }] : []), ...(u.phone ? [{ phone: u.phone }] : [])] }, select: { id: true } });
+    if (found) {
+      ids.set(u.key, found.id);
+      continue;
+    }
+    const { row } = await createDemoUser(u, passwordHash);
+    ids.set(u.key, row.id);
+    created.push(u.username ?? u.phone ?? u.key);
+  }
+  const owner = ids.get(BUSINESS.owner);
+  if (owner && !(await prisma.business.findFirst({ where: { service: BUSINESS.service } }))) {
+    await prisma.business.create({
+      data: { name: BUSINESS.name, service: BUSINESS.service, address: BUSINESS.address, lat: BUSINESS.lat, lng: BUSINESS.lng, opensAt: BUSINESS.opensAt, closesAt: BUSINESS.closesAt, ownerId: owner },
+    });
+    created.push(`negocio ${BUSINESS.name}`);
+  }
+  for (const d of DRIVERS) {
+    const userId = ids.get(d.user);
+    if (userId && !(await prisma.driver.findUnique({ where: { userId } }))) {
+      await prisma.driver.create({ data: driverData(d, userId) });
+      created.push(`perfil de repartidor de ${d.user}`);
+    }
+  }
+  if (created.length) console.log(`Cuentas de ejemplo que faltaban: ${created.join(', ')} (contraseña: ${DEMO_PASSWORD})`);
+}
+
 async function main(): Promise<void> {
   const force = process.argv.includes('--force');
   if (!force && (await prisma.user.count()) > 0) {
     console.log('La base ya tiene datos: no se vuelve a cargar el seed (usa npm run db:reset para empezar de cero).');
+    await addMissingDemoAccounts();
+    await attachDemoPhotos();
     return;
   }
   await mkdir(STORAGE_DIR, { recursive: true });
@@ -236,29 +333,7 @@ async function main(): Promise<void> {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
   const people = new Map<string, { id: string; privateKey: CryptoKey; publicKey: CryptoKey; publicKeyJwk: string; displayName: string }>();
   for (const u of USERS) {
-    const pair = await generateIdentityKeyPair();
-    const row = await prisma.user.create({
-      data: {
-        username: u.username,
-        phone: u.phone,
-        phoneVerifiedAt: u.phone ? new Date(Date.now() - 30 * 24 * 3600_000) : null,
-        // Laura ya agregó su correo: puede restablecer la contraseña desde «¿Olvidaste tu contraseña?».
-        email: u.key === 'laura' ? 'laura@example.com' : null,
-        isAdmin: u.key === 'soporte',
-        emailVerifiedAt: u.key === 'laura' ? new Date(Date.now() - 29 * 24 * 3600_000) : null,
-        displayName: u.displayName,
-        about: u.about,
-        avatarColor: u.avatarColor,
-        passwordHash,
-        publicKey: pair.publicKeyJwk,
-        keyBackup: JSON.stringify(await encryptPrivateKey(pair.privateKeyJwk, DEMO_PASSWORD)),
-        preferences: JSON.stringify({ theme: 'system', enterToSend: true, notificationSound: true }),
-        termsVersion: TERMS_VERSION,
-        termsAcceptedAt: new Date(Date.now() - 30 * 24 * 3600_000),
-        lastSeenAt: new Date(Date.now() - Math.floor(Math.random() * 90) * 60_000),
-        createdAt: new Date(Date.now() - 30 * 24 * 3600_000),
-      },
-    });
+    const { row, pair } = await createDemoUser(u, passwordHash);
     people.set(u.key, {
       id: row.id,
       displayName: u.displayName,
@@ -268,6 +343,7 @@ async function main(): Promise<void> {
     });
   }
   const person = (key: string) => people.get(key)!;
+  await attachDemoPhotos();
 
   console.log('Creando cupones de ejemplo…');
   await prisma.coupon.createMany({
@@ -282,18 +358,7 @@ async function main(): Promise<void> {
     data: { name: BUSINESS.name, service: BUSINESS.service, address: BUSINESS.address, lat: BUSINESS.lat, lng: BUSINESS.lng, opensAt: BUSINESS.opensAt, closesAt: BUSINESS.closesAt, ownerId: person(BUSINESS.owner).id },
   });
   for (const d of DRIVERS) {
-    await prisma.driver.create({ data: {
-        userId: person(d.user).id,
-        vehicle: d.vehicle,
-        plate: d.plate,
-        payoutPhone: d.payoutPhone,
-        dniNumber: d.dniNumber,
-        licenseNumber: d.licenseNumber,
-        // Ya verificados por soporte (los nuevos quedan en revisión).
-        status: 'approved',
-        online: true,
-      },
-    });
+    await prisma.driver.create({ data: driverData(d, person(d.user).id) });
   }
 
   console.log('Cifrando conversaciones y mensajes…');

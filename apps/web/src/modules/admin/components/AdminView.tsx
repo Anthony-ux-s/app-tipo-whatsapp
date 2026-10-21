@@ -13,6 +13,9 @@ import { PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { CLAIM_REASON_LABEL, CLAIM_STATUS_LABEL } from '../../services/const/services.const';
 import { useAdmin, type ClaimsView } from '../hooks/use-admin.hook';
 import { AdminCoupons } from './AdminCoupons';
+import { AdminDeliverySettings } from './AdminDeliverySettings';
+import { AdminPeople } from './AdminPeople';
+import { AdminTraffic } from './AdminTraffic';
 import { AdminOrders } from './AdminOrders';
 
 const DRIVER_FILTERS: { id: DriverStatus; label: string }[] = [
@@ -25,7 +28,7 @@ const CLAIM_FILTERS: { id: ClaimsView; label: string }[] = [
   { id: 'resolved', label: 'Resueltos' },
 ];
 
-/** Panel de soporte de Parla: aprobar o rechazar repartidores y resolver reclamos con devolución. */
+/** Panel de soporte de Parla: pedidos, personas, tráfico, tarifas del delivery, repartidores, reclamos y cupones. */
 export function AdminView() {
   const a = useAdmin();
   const [rejecting, setRejecting] = useState<{ kind: 'driver' | 'claim'; id: string; name: string } | null>(null);
@@ -37,7 +40,7 @@ export function AdminView() {
     <ServicePage>
       <PageHeader
         title="Soporte Parla"
-        subtitle="Pedidos, repartidores, reclamos y cupones"
+        subtitle="Pedidos, personas, tráfico, tarifas del delivery, repartidores, reclamos y cupones"
         onBack={a.back}
         action={
           ownList ? (
@@ -52,6 +55,9 @@ export function AdminView() {
         {(
           [
             ['pedidos', 'Pedidos'],
+            ['personas', 'Personas'],
+            ['trafico', 'Tráfico'],
+            ['tarifas', 'Tarifas y rutas'],
             ['repartidores', 'Repartidores'],
             ['reclamos', 'Reclamos'],
             ['cupones', 'Cupones'],
@@ -73,6 +79,17 @@ export function AdminView() {
         />
       )}
       {a.tab === 'cupones' && <AdminCoupons />}
+      {a.tab === 'tarifas' && <AdminDeliverySettings />}
+      {a.tab === 'trafico' && <AdminTraffic />}
+      {a.tab === 'personas' && (
+        <AdminPeople
+          chip={(on, onClick, label) => (
+            <Chip key={label} small on={on} onClick={onClick}>
+              {label}
+            </Chip>
+          )}
+        />
+      )}
 
       {ownList && (
       <div className="-mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Filtro">

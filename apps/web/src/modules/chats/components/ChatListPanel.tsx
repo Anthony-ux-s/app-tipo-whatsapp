@@ -1,26 +1,19 @@
-import { MessageSquarePlus, Search, Users, X } from 'lucide-react';
-import { Button, IconButton } from '@shared/ui/Button';
+import { MessageSquarePlus, Search, X } from 'lucide-react';
+import { Button } from '@shared/ui/Button';
 import { ProfileButton } from '@shared/ui/ProfileButton';
 import { EmptyChatsIllustration, NoResultsIllustration } from '@shared/ui/illustrations';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
 import { useChatList } from '../hooks/use-chat-list.hook';
 import { ChatListItem } from './ChatListItem';
-import { NewChatModal } from './NewChatModal';
 
-/** Barra lateral: nuevo chat o grupo, búsqueda, filtros y la lista de conversaciones. */
+/** Barra lateral: menú, búsqueda, filtros, la lista de conversaciones y el botón flotante de nuevo chat. */
 export function ChatListPanel() {
   const list = useChatList();
   return (
-    <section className="flex min-h-0 flex-1 flex-col bg-surface" aria-label="Chats">
+    <section className="relative flex min-h-0 flex-1 flex-col bg-surface" aria-label="Chats">
       <header className="flex items-center gap-2 px-3 pt-3 pb-2 md:px-4">
         <ProfileButton />
         <h1 className="min-w-0 flex-1 truncate px-1 font-display text-2xl font-extrabold text-ink">Chats</h1>
-        <IconButton label="Nuevo grupo" onClick={() => list.openNewChat('group')}>
-          <Users className="size-5" />
-        </IconButton>
-        <IconButton label="Nuevo chat" onClick={() => list.openNewChat('direct')} className="bg-brand text-white hover:bg-brand-strong hover:text-white">
-          <MessageSquarePlus className="size-5" />
-        </IconButton>
       </header>
 
       <div className="px-3 pb-2 md:px-4">
@@ -82,7 +75,7 @@ export function ChatListPanel() {
             description={list.search ? `No hay chats que coincidan con «${list.search}».` : 'No hay chats en este filtro.'}
           />
         ) : (
-          <ul className="pb-2" data-testid="chat-list">
+          <ul className="pb-24" data-testid="chat-list">
             {list.entries.map((entry) => (
               <ChatListItem key={entry.conversation.id} entry={entry} active={entry.conversation.id === list.activeId} onOpen={list.openConversation} />
             ))}
@@ -90,7 +83,15 @@ export function ChatListPanel() {
         )}
       </div>
 
-      <NewChatModal mode={list.newChat} onClose={list.closeNewChat} />
+      <button
+        type="button"
+        onClick={() => list.openNewChat('direct')}
+        aria-label="Nuevo chat"
+        title="Nuevo chat"
+        className="absolute right-4 bottom-20 flex size-14 items-center justify-center rounded-2xl bg-brand text-white shadow-pop transition-colors duration-200 hover:bg-brand-strong md:bottom-5"
+      >
+        <MessageSquarePlus className="size-6" />
+      </button>
     </section>
   );
 }

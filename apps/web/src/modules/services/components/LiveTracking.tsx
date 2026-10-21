@@ -38,7 +38,7 @@ export function LiveTracking({ order, audience }: { order: Pick<Order, 'status' 
 
   return (
     <section className="flex flex-col gap-2 rounded-2xl bg-surface p-3 shadow-float md:p-4" aria-label="Seguimiento en vivo" data-testid="live-tracking">
-      <LazyDeliveryMap store={store} destination={destination} driver={driver} route={route?.path} label="Mapa del delivery en vivo" />
+      <LazyDeliveryMap store={store} destination={destination} driver={driver} vehicle={order.delivery?.vehicle} route={route?.path} label="Mapa del delivery en vivo" />
       <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-sm">
         {!driver ? (
           <span className="text-ink-soft">Esperando la ubicación del repartidor…</span>

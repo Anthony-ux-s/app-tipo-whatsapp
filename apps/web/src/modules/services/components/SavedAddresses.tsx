@@ -57,6 +57,15 @@ export function SavedAddresses({ current, onPick }: { current: DeliveryAddress; 
 }
 
 function EditAddresses({ list, onChange, onClose }: { list: SavedAddress[]; onChange: (list: SavedAddress[]) => void; onClose: () => void }) {
+  return (
+    <Modal open onClose={onClose} title="Mis direcciones" footer={<Button onClick={onClose}>Listo</Button>}>
+      <AddressList list={list} onChange={onChange} />
+    </Modal>
+  );
+}
+
+/** Lista para nombrar («Casa», «Trabajo») o borrar las direcciones guardadas. También en Ajustes. */
+export function AddressList({ list, onChange }: { list: SavedAddress[]; onChange: (list: SavedAddress[]) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
 
   const label = async (a: SavedAddress, value: string) => {
@@ -82,42 +91,38 @@ function EditAddresses({ list, onChange, onClose }: { list: SavedAddress[]; onCh
     }
   };
 
-  return (
-    <Modal open onClose={onClose} title="Mis direcciones" footer={<Button onClick={onClose}>Listo</Button>}>
-      {list.length === 0 ? (
-        <p className="text-sm text-ink-soft">No tienes direcciones guardadas. Se guardan solas cuando pides.</p>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {list.map((a) => (
-            <li key={a.id} className="flex flex-col gap-2 rounded-xl bg-surface-3 p-3" data-testid="saved-address">
-              <div className="flex items-start justify-between gap-2">
-                <p className="min-w-0 text-sm text-ink">
-                  <span className="block font-semibold">{a.line}</span>
-                  {a.reference && <span className="block text-ink-soft">{a.reference}</span>}
-                </p>
-                <button type="button" onClick={() => void remove(a)} disabled={busy === a.id} aria-label={`Borrar ${a.line}`} className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-surface hover:text-ink">
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={`Nombre de ${a.line}`}>
-                {[...QUICK_LABELS, ''].map((l) => (
-                  <button
-                    key={l || 'none'}
-                    type="button"
-                    role="radio"
-                    aria-checked={a.label === l}
-                    disabled={busy === a.id}
-                    onClick={() => void label(a, l)}
-                    className={`h-8 rounded-full px-3 text-xs font-semibold transition-colors duration-200 ${a.label === l ? 'bg-brand text-white' : 'bg-surface text-ink-soft hover:text-ink'}`}
-                  >
-                    {l || 'Sin nombre'}
-                  </button>
-                ))}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Modal>
+  return list.length === 0 ? (
+    <p className="text-sm text-ink-soft">No tienes direcciones guardadas. Se guardan solas cuando pides.</p>
+  ) : (
+    <ul className="flex flex-col gap-3">
+      {list.map((a) => (
+        <li key={a.id} className="flex flex-col gap-2 rounded-xl bg-surface-3 p-3" data-testid="saved-address">
+          <div className="flex items-start justify-between gap-2">
+            <p className="min-w-0 text-sm text-ink">
+              <span className="block font-semibold">{a.line}</span>
+              {a.reference && <span className="block text-ink-soft">{a.reference}</span>}
+            </p>
+            <button type="button" onClick={() => void remove(a)} disabled={busy === a.id} aria-label={`Borrar ${a.line}`} className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-surface hover:text-ink">
+              <Trash2 className="size-4" />
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={`Nombre de ${a.line}`}>
+            {[...QUICK_LABELS, ''].map((l) => (
+              <button
+                key={l || 'none'}
+                type="button"
+                role="radio"
+                aria-checked={a.label === l}
+                disabled={busy === a.id}
+                onClick={() => void label(a, l)}
+                className={`h-8 rounded-full px-3 text-xs font-semibold transition-colors duration-200 ${a.label === l ? 'bg-brand text-white' : 'bg-surface text-ink-soft hover:text-ink'}`}
+              >
+                {l || 'Sin nombre'}
+              </button>
+            ))}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

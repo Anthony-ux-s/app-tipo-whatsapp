@@ -13,6 +13,8 @@ export interface AppEnv {
   jwtSecret: string;
   jwtExpiresIn: string;
   storageDir: string;
+  /** Servidor OSRM para calcular rutas por las calles (vacío = solo línea recta × factor de calles). */
+  routingUrl: string;
   /** Si la API también sirve la web compilada (un solo proceso en producción). */
   webDist: string | null;
   /** Claves VAPID para Web Push; si faltan, el adaptador las genera y las guarda. */
@@ -100,6 +102,7 @@ export function loadEnv(): AppEnv {
     jwtSecret: env.JWT_SECRET!,
     jwtExpiresIn: env.JWT_EXPIRES_IN ?? '7d',
     storageDir: resolve(process.cwd(), env.STORAGE_DIR ?? './storage'),
+    routingUrl: (env.ROUTING_URL ?? 'https://router.project-osrm.org').replace(/\/$/, ''),
     webDist: webDistPath && existsSync(resolve(webDistPath, 'index.html')) ? webDistPath : null,
     vapid:
       env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY

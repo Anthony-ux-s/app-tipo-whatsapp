@@ -1,4 +1,4 @@
-import type { PresenceStatus, ThemePreference } from './enums.types';
+import type { ChatFont, ChatFontSize, PresenceStatus, ThemePreference } from './enums.types';
 
 /** Clave privada ECDH cifrada con la contraseña del usuario (el servidor nunca la ve en claro). */
 export interface EncryptedKeyBackup {
@@ -14,6 +14,8 @@ export interface UserPreferences {
   notificationSound: boolean;
   /** Efectos a pantalla completa (confeti, corazones…) con ciertas frases y stickers. */
   chatEffects: boolean;
+  chatFontSize: ChatFontSize;
+  chatFont: ChatFont;
 }
 
 export interface UserProfile {

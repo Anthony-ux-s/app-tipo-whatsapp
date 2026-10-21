@@ -41,6 +41,9 @@ model User {
   deletedAt       DateTime?
   /// Soporte de Parla: aprueba repartidores y resuelve reclamos.
   isAdmin         Boolean   @default(false)
+  /// Suspendida por soporte: no puede entrar ni usar la app (motivo visible para soporte).
+  blockedAt       DateTime?
+  blockedReason   String?
 
   participants      ConversationParticipant[]
   wrappedKeys       ConversationParticipant[] @relation("WrappedBy")
@@ -54,6 +57,7 @@ model User {
   business          Business?
   /// Perfil de repartidor de Rapidito; null si no reparte.
   driver            Driver?
+  activity          UserActivityDay[]
 }
 
 model Conversation {
@@ -463,4 +467,25 @@ model CouponRedemption {
 
   @@index([couponCode])
   @@index([userId])
+}
+
+/// Tarifa del delivery que configura soporte (una sola fila, id «default»; JSON DeliveryPricing).
+model DeliverySettings {
+  id          String   @id @default("default")
+  pricing     String
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+/// Tráfico: cuántas veces abrió la app cada persona por día (hora de Lima), para el panel de soporte.
+model UserActivityDay {
+  userId String
+  /// AAAA-MM-DD
+  day    String
+  visits Int    @default(1)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day])
+  @@index([day])
 }

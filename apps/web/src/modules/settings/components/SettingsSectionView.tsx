@@ -3,6 +3,7 @@ import { Navigate } from 'react-router';
 import type { SettingsSectionId } from '../const/settings.const';
 import { useSettingsSection } from '../hooks/use-settings.hook';
 import { AccountDataSection } from './sections/AccountDataSection';
+import { AddressesSection } from './sections/AddressesSection';
 import { AppearanceSection, ChatsSection, NotificationsSection } from './sections/PreferenceSections';
 import { PrivacySection } from './sections/PrivacySection';
 import { ProfileSection } from './sections/ProfileSection';
@@ -10,6 +11,7 @@ import { SectionHeader, SettingsPage } from './SettingsUi';
 
 const SECTION_CONTENT: Record<SettingsSectionId, ComponentType> = {
   perfil: ProfileSection,
+  direcciones: AddressesSection,
   apariencia: AppearanceSection,
   chats: ChatsSection,
   notificaciones: NotificationsSection,

@@ -12,7 +12,7 @@ export function LogoMark({ className = 'size-9' }: LogoMarkProps) {
       />
       <path
         d="M11 15h16a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8H17l-8 6v-6.4A8 8 0 0 1 3 33V23a8 8 0 0 1 8-8z"
-        fill="#0f766e"
+        fill="#009d71"
         stroke="var(--surface)"
         strokeWidth="2.5"
         strokeLinejoin="round"

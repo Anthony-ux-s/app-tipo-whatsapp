@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, StreamableFile } from '@nestjs/common';
-import type { DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, DriverVehicle, DriverWallet, GeoPoint } from '@parla/types';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, Query, StreamableFile } from '@nestjs/common';
+import type { DriverEarnings, DriverInfo, DriverRoutePlan, DriverRoutesSummary, DriverOrder, DriverOrders, DriverProfileRequest, DriverVehicle, DriverWallet, GeoPoint } from '@parla/types';
 import { IsBoolean, IsLatitude, IsLongitude, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../../../http/current-user.decorator';
+import { DriverRoutePlanUseCase, DriverRoutesHistoryUseCase } from '../../platform/services/use-cases/logistics.use-cases';
 import {
   AcceptDeliveryUseCase,
   DeliverOrderUseCase,
@@ -77,6 +78,8 @@ export class DriverController {
     private readonly setDocument: SetDriverDocumentUseCase,
     private readonly document: GetDriverDocumentUseCase,
     private readonly readPhoto: ReadPhotoUseCase,
+    private readonly routePlan: DriverRoutePlanUseCase,
+    private readonly routesHistory: DriverRoutesHistoryUseCase,
   ) {}
 
   @Get()
@@ -147,6 +150,19 @@ export class DriverController {
   @Post('location')
   location(@CurrentUser() user: AuthUser, @Body() body: LocationDto): Promise<{ shared: number }> {
     return this.reportLocation.execute(user.userId, { lat: body.lat, lng: body.lng });
+  }
+
+  /** El mejor orden para recoger y entregar los pedidos en curso, desde donde está. */
+  @Get('route-plan')
+  plan(@CurrentUser() user: AuthUser): Promise<DriverRoutePlan> {
+    return this.routePlan.execute(user.userId);
+  }
+
+  /** Sus entregas de los últimos días (1, 7, 30 o 90) con el recorrido, lo ganado y el combustible. */
+  @Get('routes')
+  routes(@CurrentUser() user: AuthUser, @Query('days') days?: string): Promise<DriverRoutesSummary> {
+    const d = [1, 7, 30, 90].includes(Number(days)) ? Number(days) : 7;
+    return this.routesHistory.execute(user.userId, d);
   }
 
   @Get('orders')

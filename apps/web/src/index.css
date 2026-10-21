@@ -3,17 +3,40 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Tokens de Parla. La marca usa solo teal, emerald y cyan (guía web); los neutros salen de la
+ * Tokens de Parla. La marca es el verde #009d71 (escalas teal y emerald) con cyan de apoyo; los neutros salen de la
  * investigación (#F0F2F5 de fondo, #111B21 de texto). Cada superficie cambia en modo oscuro.
  */
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  --color-brand: #0f766e;
-  --color-brand-strong: #115e59;
-  --color-accent: #10b981;
+  /* Verde de Parla: #009d71. Teal y emerald usan la misma escala, así toda la app lleva el color. */
+  --color-brand: #009d71;
+  --color-brand-strong: #007353;
+  --color-accent: #22b68d;
   --color-glow: #06b6d4;
+  --color-teal-50: #e6f7f1;
+  --color-teal-100: #c4ede0;
+  --color-teal-200: #92dec7;
+  --color-teal-300: #58cba9;
+  --color-teal-400: #22b68d;
+  --color-teal-500: #009d71;
+  --color-teal-600: #008a63;
+  --color-teal-700: #007353;
+  --color-teal-800: #005d44;
+  --color-teal-900: #004a37;
+  --color-teal-950: #002e22;
+  --color-emerald-50: #e6f7f1;
+  --color-emerald-100: #c4ede0;
+  --color-emerald-200: #92dec7;
+  --color-emerald-300: #58cba9;
+  --color-emerald-400: #22b68d;
+  --color-emerald-500: #009d71;
+  --color-emerald-600: #008a63;
+  --color-emerald-700: #007353;
+  --color-emerald-800: #005d44;
+  --color-emerald-900: #004a37;
+  --color-emerald-950: #002e22;
 
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
@@ -50,10 +73,13 @@
   --ink: #111b21;
   --ink-soft: #54656f;
   --ink-faint: #8696a0;
-  --chat: #eef5f3;
+  --chat: #eef6f2;
   --bubble-in: #ffffff;
-  --bubble-out: #d1fae5;
+  --bubble-out: #d4f3e8;
   --tick-read: #0891b2;
+  /* Series de los gráficos (validadas para daltonismo contra la superficie de cada modo). */
+  --chart-1: #009d71;
+  --chart-2: #d97706;
   color-scheme: light;
 }
 
@@ -68,8 +94,10 @@
   --ink-faint: #7b8d97;
   --chat: #0b141a;
   --bubble-in: #202c33;
-  --bubble-out: #065f46;
+  --bubble-out: #005d44;
   --tick-read: #22d3ee;
+  --chart-1: #1fa77f;
+  --chart-2: #d97706;
   color-scheme: dark;
 }
 
@@ -218,7 +246,7 @@ svg .stk-bob, svg .stk-shake, svg .stk-bow, svg .stk-sway, .stk-wave, .stk-spin 
   /* Fondo del área de chat: textura sutil de burbujas en tono teal. */
   .chat-wallpaper {
     background-color: var(--chat);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%230f766e' stroke-opacity='0.07' stroke-width='1.5'%3E%3Cpath d='M18 20h18a6 6 0 0 1 6 6v8a6 6 0 0 1-6 6h-8l-6 5v-5h-4a6 6 0 0 1-6-6v-8a6 6 0 0 1 6-6z'/%3E%3Ccircle cx='88' cy='34' r='9'/%3E%3Cpath d='M70 86l6 6 12-12'/%3E%3Cpath d='M20 92h14M27 85v14'/%3E%3C/g%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23009d71' stroke-opacity='0.07' stroke-width='1.5'%3E%3Cpath d='M18 20h18a6 6 0 0 1 6 6v8a6 6 0 0 1-6 6h-8l-6 5v-5h-4a6 6 0 0 1-6-6v-8a6 6 0 0 1 6-6z'/%3E%3Ccircle cx='88' cy='34' r='9'/%3E%3Cpath d='M70 86l6 6 12-12'/%3E%3Cpath d='M20 92h14M27 85v14'/%3E%3C/g%3E%3C/svg%3E");
   }
   .skeleton {
     background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 50%, var(--surface-3) 75%);
@@ -235,4 +263,10 @@ svg .stk-bob, svg .stk-shake, svg .stk-bow, svg .stk-sway, .stk-wave, .stk-spin 
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
   }
+}
+
+/* Letra de los mensajes: tamaño y tipo elegidos en Ajustes → Chats (variables en <html>). */
+.chat-text {
+  font-size: var(--chat-font-size, 15px);
+  font-family: var(--chat-font, var(--font-sans));
 }

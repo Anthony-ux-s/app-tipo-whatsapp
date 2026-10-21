@@ -1,4 +1,5 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
+import { CHAT_FONT_FAMILIES, CHAT_FONT_OPTIONS, CHAT_FONT_SIZE_OPTIONS, CHAT_FONT_SIZES } from '@shared/const/chat-text.const';
 import { Toggle } from '@shared/ui/Toggle';
 import { THEME_OPTIONS } from '../../const/settings.const';
 import { useNotificationSettings } from '../../hooks/use-notification-settings.hook';
@@ -36,10 +37,60 @@ export function AppearanceSection() {
   );
 }
 
+const optionClass = (active: boolean) =>
+  `rounded-[var(--radius-card)] border px-2 py-3 text-sm font-semibold transition-all duration-200 ${active ? 'border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-200' : 'border-line text-ink-soft hover:border-teal-300 hover:text-ink'}`;
+
 export function ChatsSection() {
   const p = usePreferences();
   return (
     <>
+      <SettingsGroup title="Letra de los mensajes" footer="Solo cambia en tus chats y en lo que escribes; tus contactos ven su propia letra.">
+        <SettingsBlock>
+          <div className="flex flex-col gap-4">
+            <div className="rounded-[var(--radius-card)] bg-chat p-3" aria-hidden>
+              <p className="chat-text ml-auto w-fit max-w-[85%] rounded-[var(--radius-bubble)] rounded-tr-sm bg-bubble-out px-3 py-1.5 text-ink">
+                ¡Hola! Así se verán tus mensajes 👋
+              </p>
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-semibold text-ink">Tamaño</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Tamaño de letra">
+                {CHAT_FONT_SIZE_OPTIONS.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={p.preferences.chatFontSize === o.id}
+                    onClick={() => p.setChatFontSize(o.id)}
+                    className={optionClass(p.preferences.chatFontSize === o.id)}
+                  >
+                    <span className="block" style={{ fontSize: CHAT_FONT_SIZES[o.id] }}>Aa</span>
+                    <span className="block text-xs font-medium">{o.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-semibold text-ink">Tipo de letra</p>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de letra">
+                {CHAT_FONT_OPTIONS.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={p.preferences.chatFont === o.id}
+                    onClick={() => p.setChatFont(o.id)}
+                    className={optionClass(p.preferences.chatFont === o.id)}
+                    style={{ fontFamily: CHAT_FONT_FAMILIES[o.id] }}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </SettingsBlock>
+      </SettingsGroup>
       <SettingsGroup title="Escribir">
         <SettingsBlock>
           <Toggle checked={p.preferences.enterToSend} onChange={p.setEnterToSend} label="Enviar con Enter" description="Usa Mayús + Enter para un salto de línea." />

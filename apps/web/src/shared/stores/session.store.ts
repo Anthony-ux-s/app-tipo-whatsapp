@@ -1,5 +1,6 @@
 import { decryptPrivateKey, encryptPrivateKey, generateIdentityKeyPair } from '@parla/crypto';
-import type { AuthResponse, PublicUser, SessionUser, ThemePreference, UpdateProfileRequest } from '@parla/types';
+import type { AuthResponse, PublicUser, SessionUser, ThemePreference, UpdateProfileRequest, UserPreferences } from '@parla/types';
+import { CHAT_FONT_FAMILIES, CHAT_FONT_SIZES } from '../const/chat-text.const';
 import { create } from 'zustand';
 import { lockVault, restoreVault, unlockVault } from '../utils/crypto-vault';
 import { http, setUnauthorizedHandler, tokenStorage } from '../utils/http';
@@ -48,6 +49,13 @@ export function applyTheme(theme: ThemePreference): void {
   document.documentElement.classList.toggle('dark', dark);
 }
 
+/** Tamaño y tipo de letra de los mensajes (variables CSS que usa `.chat-text`). */
+export function applyChatText({ chatFontSize, chatFont }: Pick<UserPreferences, 'chatFontSize' | 'chatFont'>): void {
+  const root = document.documentElement.style;
+  root.setProperty('--chat-font-size', CHAT_FONT_SIZES[chatFontSize] ?? CHAT_FONT_SIZES.medium);
+  root.setProperty('--chat-font', CHAT_FONT_FAMILIES[chatFont] ?? CHAT_FONT_FAMILIES.inter);
+}
+
 export const useSessionStore = create<SessionState>((set, get) => {
   const startSession = async ({ token, user }: AuthResponse, password: string) => {
     // La clave privada se descifra en el navegador con la contraseña: el servidor nunca la ve.
@@ -56,6 +64,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
     tokenStorage.set(token);
     localStorage.setItem(LAST_USER_KEY, user.id);
     applyTheme(user.preferences.theme);
+    applyChatText(user.preferences);
     set({ status: 'ready', user });
   };
 
@@ -85,6 +94,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
       try {
         const user = await http.get<SessionUser>('/auth/me');
         applyTheme(user.preferences.theme);
+        applyChatText(user.preferences);
         set({ status: 'ready', user });
       } catch {
         logout();
@@ -153,6 +163,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
     updateProfile: async (changes) => {
       const user = await http.patch<SessionUser>('/auth/me', changes);
       if (changes.preferences?.theme) applyTheme(user.preferences.theme);
+      applyChatText(user.preferences);
       set({ user });
     },
   };

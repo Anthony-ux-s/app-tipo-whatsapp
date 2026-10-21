@@ -21,6 +21,7 @@ export function DriverOrderDetailView() {
   const chat = useOrderChat(order?.id);
   const sharing = useDriverStore((s) => s.sharing);
   const myLocation = useDriverStore((s) => s.myLocation);
+  const vehicle = useDriverStore((s) => s.driver?.vehicle);
   const pickingUp = order?.status === 'driver_assigned';
   // Ruta por las calles: de donde estás a la tienda (si aún no recoges) y de ahí al cliente.
   const route = useRoute(
@@ -54,6 +55,7 @@ export function DriverOrderDetailView() {
             store={order.business.location}
             destination={order.address.location ?? null}
             driver={onRoute ? myLocation : null}
+            vehicle={vehicle}
             route={route?.path}
             label="Mapa con la tienda, el destino y tu ubicación"
           />

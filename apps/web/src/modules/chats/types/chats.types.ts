@@ -13,7 +13,7 @@ export interface ChatListEntry {
 }
 
 /** Persona, grupo, o buscar entre los contactos del teléfono. */
-export type NewChatMode = 'direct' | 'group' | 'contacts';
+export type { NewChatMode } from '@shared/stores/menu.store';
 
 export interface PendingAttachment {
   file: File;

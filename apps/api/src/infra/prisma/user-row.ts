@@ -24,5 +24,6 @@ export function toUserRecord(row: User): UserRecord {
     termsAcceptedAt: row.termsAcceptedAt,
     deletedAt: row.deletedAt,
     isAdmin: row.isAdmin,
+    blockedAt: row.blockedAt,
   };
 }

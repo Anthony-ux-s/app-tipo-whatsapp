@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AuthResponse, LoginRequest } from '@parla/types';
-import { DomainError, UnauthorizedError } from '../../../../../kernel/domain-error';
+import { DomainError, ForbiddenError, UnauthorizedError } from '../../../../../kernel/domain-error';
 import { parseIdentifier, type Identifier } from '../../../../../kernel/identifier';
 import { PASSWORD_HASHER, type PasswordHasher } from '../../../../../infra/identity/password-hasher.port';
 import { TOKEN_SERVICE, type TokenService } from '../../../../../infra/identity/token-service.port';
@@ -8,6 +8,7 @@ import { toSessionUser } from '../../user.mapper';
 import { AUTH_REPOSITORY, type AuthRepository } from '../auth.repository';
 
 const INVALID = 'Usuario, teléfono o contraseña incorrectos';
+const SUSPENDED = 'Tu cuenta está suspendida. Escríbenos a soporte para revisarla.';
 
 @Injectable()
 export class LoginUseCase {
@@ -38,6 +39,7 @@ export class LoginUseCase {
     const hash = user?.passwordHash ?? (await this.dummyHash);
     const matches = await this.hasher.verify(input.password, hash);
     if (!user || !matches) throw new UnauthorizedError(INVALID);
+    if (user.blockedAt) throw new ForbiddenError(SUSPENDED);
 
     return { token: await this.tokens.issue(user.id), user: toSessionUser(user, 'online') };
   }
