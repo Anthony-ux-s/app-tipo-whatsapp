@@ -3,6 +3,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 import type {
   Currency,
   DeliveryAddress,
+  GeoPoint,
   InternalCreateOrder,
   InternalOrder,
   InternalUpdateOrder,
@@ -20,6 +21,8 @@ import {
   IsIn,
   IsInt,
   IsISO8601,
+  IsLatitude,
+  IsLongitude,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -31,7 +34,7 @@ import {
 } from 'class-validator';
 import { InternalTokenGuard } from '../../../http/internal-token.guard';
 import { Public } from '../../../http/public.decorator';
-import { ORDER_STATUSES } from '../../../kernel/order-rules';
+import { MAX_TIP_CENTS, ORDER_STATUSES } from '../../../kernel/order-rules';
 import { CreateOrderUseCase, GetInternalOrderUseCase, UpdateOrderUseCase } from './use-cases/orders.use-cases';
 
 const MAX_CENTS = 10_000_000; // S/ 100 000: tope de cordura para un pedido de supermercado
@@ -45,17 +48,25 @@ class OrderLineDto implements OrderLine {
   @IsInt() @Min(0) @Max(MAX_CENTS) totalCents: number;
 }
 
+class GeoPointDto implements GeoPoint {
+  @IsLatitude() lat: number;
+  @IsLongitude() lng: number;
+}
+
 class AddressDto implements DeliveryAddress {
   @IsString() @IsNotEmpty() @MaxLength(200) line: string;
   @IsString() @MaxLength(200) reference: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoPointDto) location?: GeoPointDto | null;
 }
 
 class PaymentDto implements OrderPayment {
   @IsString() @IsNotEmpty() @MaxLength(40) provider: string;
+  @IsOptional() @IsString() @MaxLength(80) chargeId?: string;
   @IsString() @IsNotEmpty() @MaxLength(500) qrText: string;
   @IsString() @IsNotEmpty() @MaxLength(500) payUrl: string;
   @IsISO8601() expiresAt: string;
   @IsOptional() @IsISO8601() paidAt: string | null;
+  @IsOptional() @IsISO8601() refundedAt?: string | null;
 }
 
 class DeliveryDto implements OrderDelivery {
@@ -73,18 +84,25 @@ class CreateOrderDto implements InternalCreateOrder {
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(30) @ValidateNested({ each: true }) @Type(() => OrderLineDto) lines: OrderLineDto[];
   @IsInt() @Min(0) @Max(MAX_CENTS) subtotalCents: number;
   @IsInt() @Min(0) @Max(MAX_CENTS) deliveryFeeCents: number;
+  @IsInt() @Min(0) @Max(MAX_TIP_CENTS) tipCents: number;
+  @IsOptional() @IsInt() @Min(0) @Max(MAX_CENTS) discountCents?: number;
+  @IsOptional() @IsString() @MaxLength(20) couponCode?: string | null;
   @IsInt() @Min(1) @Max(MAX_CENTS) totalCents: number;
   @IsIn(['PEN']) currency: Currency;
   @ValidateNested() @Type(() => AddressDto) address: AddressDto;
   @ValidateNested() @Type(() => PaymentDto) payment: PaymentDto;
   @IsString() @IsNotEmpty() @MaxLength(64) deliveryQuoteId: string;
+  @IsInt() @Min(1) @Max(600) etaMinutes: number;
 }
 
 class UpdateOrderDto implements InternalUpdateOrder {
   @IsOptional() @IsIn(ORDER_STATUSES) expectStatus?: OrderStatus;
   @IsIn(ORDER_STATUSES) status: OrderStatus;
   @IsOptional() @IsISO8601() paidAt?: string;
+  @IsOptional() @IsISO8601() refundedAt?: string;
+  @IsOptional() @IsString() @MaxLength(80) chargeId?: string;
   @IsOptional() @ValidateNested() @Type(() => DeliveryDto) delivery?: DeliveryDto;
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
 }
 
 /**

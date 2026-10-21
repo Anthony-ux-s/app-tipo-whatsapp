@@ -1,4 +1,4 @@
-import { ChevronRight, ShoppingBasket, Store } from 'lucide-react';
+import { Bike, ChevronRight, ShoppingBasket, Store } from 'lucide-react';
 import { Link } from 'react-router';
 import { ServiceIcon } from './ServiceIcons';
 import { Button } from '@shared/ui/Button';
@@ -30,6 +30,42 @@ export function OrdersView() {
             <span className="block text-[15px] font-bold">Mi negocio · {o.business.name}</span>
             <span className="block truncate text-sm text-orange-50">
               {o.newBusinessOrders > 0 ? `${o.newBusinessOrders} ${o.newBusinessOrders === 1 ? 'pedido nuevo' : 'pedidos nuevos'} por aceptar` : 'Pedidos que recibes, para preparar y entregar a Rapidito'}
+            </span>
+          </span>
+          <ChevronRight className="size-5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" />
+        </Link>
+      )}
+
+      {o.canBecomeDriver && (
+        <Link
+          to="/app/rapidito/registro"
+          data-testid="become-driver"
+          className="group flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float transition-colors duration-200 hover:bg-surface-2 md:px-5"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-brand dark:bg-teal-950/60 dark:text-teal-300">
+            <Bike className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold text-ink">Trabaja con Rapidito</span>
+            <span className="block truncate text-sm text-ink-soft">Reparte pedidos en tu zona y gana por cada entrega</span>
+          </span>
+          <ChevronRight className="size-5 shrink-0 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5" />
+        </Link>
+      )}
+
+      {o.driver && (
+        <Link
+          to="/app/rapidito"
+          data-testid="my-rapidito"
+          className="group flex items-center gap-4 rounded-2xl bg-gradient-to-br from-teal-600 to-cyan-700 p-4 text-white shadow-float transition-[filter] duration-200 hover:brightness-110 md:px-5"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/20">
+            <Bike className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-bold">Rapidito · Repartidor</span>
+            <span className="block truncate text-sm text-teal-50">
+              {o.driverOffers > 0 ? `${o.driverOffers} ${o.driverOffers === 1 ? 'pedido listo' : 'pedidos listos'} para recoger` : `${o.driver.vehicle} ${o.driver.plate} · toma pedidos y entrégalos`}
             </span>
           </span>
           <ChevronRight className="size-5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" />

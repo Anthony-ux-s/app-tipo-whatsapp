@@ -28,14 +28,13 @@ el tiempo real (Elixir), y levanta cinco procesos:
 | Servicio | URL | Quién lo ve |
 | --- | --- | --- |
 | Web (PWA) | http://localhost:3100 | el navegador |
-| **Gateway** (Go) | http://localhost:4100 — `/api`, `/ws`, `/hooks`, salud en `/gateway/health` | la única puerta del backend |
+| **Gateway** (Go) | http://localhost:4100 — `/api`, `/ws`, `/hooks/pagaya`, salud en `/gateway/health` | la única puerta del backend |
 | Core (NestJS) | http://localhost:4101/api | solo el gateway y el tiempo real |
 | Tiempo real (Elixir) | http://localhost:4102 | solo el gateway y el core |
 | APIs externas simuladas | http://localhost:4103 — MercaYa (tienda), Rapidito (delivery), PagaYa (billetera) | el gateway, y la página de pago que abre el QR |
 
 Los puertos se pueden cambiar con `PARLA_WEB_PORT`, `PARLA_GATEWAY_PORT`, `PARLA_CORE_PORT`,
-`PARLA_REALTIME_PORT` y `PARLA_PROVIDERS_PORT`. `RAPIDITO_STEP_MS` (4000 por defecto) controla cuánto
-tarda el delivery simulado en cada paso.
+`PARLA_REALTIME_PORT` y `PARLA_PROVIDERS_PORT`.
 
 Para instalarla en el celular, abre la web desde el navegador del teléfono y elige «Agregar a la
 pantalla de inicio». La cámara, el micrófono y las notificaciones push exigen HTTPS fuera de
@@ -63,8 +62,12 @@ Contraseña para todos: **`Parla2026!`**
 | `laura` | Laura Méndez | La más activa: grupos, chats y pedidos |
 | `andres` | Andrés Rojas | Para chatear o llamar a Laura |
 | `camila` | Camila Torres | Creó (y administra) el grupo «Diseño tienda en línea» |
-| `tienda` | Elena Condori | **Dueña de Bodega MercaYa**: recibe los pedidos del Mercado, los acepta y llama a Rapidito |
+| `tienda` | Elena Condori | **Dueña de Bodega MercaYa**: recibe los pedidos del Mercado, los acepta, los alista y se los entrega al repartidor |
+| `repartidor` | Carlos Huamán | **Repartidor de Rapidito** (moto B7K-482): toma pedidos listos, los recoge y los entrega con el código del cliente |
+| `repartidora` | Lucía Ramos | **Repartidora de Rapidito** (moto D5T-663): para ver que el primero que toma un pedido se lo queda |
+| `soporte` | Soporte Parla | **Soporte**: en *Ajustes → Soporte Parla* ve todos los pedidos (y cancela los trabados), aprueba repartidores, resuelve reclamos y crea cupones |
 | `+57 300 123 4567` | Sofía Ramírez | Entra con su **teléfono** |
+| `diego`, `mateo`, `valentina` | Resto de contactos | |
 
 Todas las cuentas de ejemplo tienen el teléfono verificado (Andrés `+57 300 555 0101`, Camila `…0102`,
 Diego `…0103`, Mateo `…0104`, Valentina `…0105` y Laura `+57 310 456 7890`). Laura además tiene
@@ -73,16 +76,26 @@ correo de recuperación (`laura@example.com`).
 **Registro nuevo**: en `/registro` escribes tu número y llega un código por SMS. Sin OneSignal
 configurado, el código aparece en pantalla como «modo de prueba» y en la consola del core. Luego
 pones tu nombre, un usuario opcional y la contraseña.
-| `diego`, `mateo`, `valentina` | Resto de contactos | |
 
 - **Llamada**: entra con `laura` en una ventana y con `andres` en otra (o en una ventana privada) y
   pulsa el botón de video o de teléfono en su chat.
 - **Compra**: *Servicios → Mercado*, busca «un kilo de azúcar, arroz», agrega, escribe la dirección y
   pulsa *Pagar con QR*. Escanea el QR con el celular (en la misma red) o pulsa *Pagar desde este
-  celular*: se abre la billetera simulada. Al pagar, el pedido le llega a la tienda: entra con
-  `tienda` en otra ventana, *Delivery → Mi negocio*, acepta el pedido y pulsa *Listo · llamar a
-  Rapidito*; el cliente lo ve pasar a «Preparando», «Motorizado», «En camino» y «Entregado». Desde el
-  pedido, cliente y tienda se escriben por el chat (en los dos sentidos).
+  celular*: se abre la billetera simulada.
+- **Delivery con los tres roles** (una ventana privada para cada uno):
+  1. `tienda`: *Delivery → Mi negocio*, abre el pedido, *Aceptar pedido* y luego *Listo · llamar a Rapidito*.
+  2. `repartidor`: *Delivery → Rapidito · Repartidor*, el pedido aparece en «Para recoger» con lo que
+     ganas; ábrelo y *Tomar este pedido*.
+  3. `tienda`: cuando el repartidor llega, *Le entregué el pedido a Carlos Huamán*.
+  4. El cliente ve su **código de entrega** en el pedido; el repartidor se lo pide y lo escribe en
+     *Confirmar entrega*. Sin el código correcto no se puede marcar como entregado.
+  Todos lo ven en vivo, con el historial de cada paso, y cualquiera se escribe con los otros desde el
+  pedido (cliente ↔ tienda, cliente ↔ repartidor, tienda ↔ repartidor).
+- **Reclamo con devolución parcial**: con el pedido entregado, el cliente pulsa *Tengo un problema con
+  mi pedido*, elige «Faltaron productos» y cuántos. `soporte` lo abre en *Ajustes → Soporte Parla →
+  Reclamos*, ajusta el monto y pulsa *Devolver*: PagaYa devuelve esa parte y el cliente lo ve en el pedido.
+- **Nuevo repartidor**: con cualquier cuenta, *Delivery → Trabaja con Rapidito*, con DNI, licencia y
+  foto del documento. Queda en revisión hasta que `soporte` lo apruebe en *Repartidores*.
 
 ## Qué tiene esta versión
 
@@ -101,15 +114,106 @@ pones tu nombre, un usuario opcional y la contraseña.
   *Productos + Delivery = Total* antes de pagar. Nunca usa los precios que mande el navegador.
 - **Pago con QR tipo Yape** (billetera PagaYa): QR en pantalla, cuenta regresiva del cobro y botón para
   pagar desde el mismo celular. El aviso de pago llega firmado al gateway.
-- **Delivery Rapidito**, para los dos lados:
-  - **Cliente**: el pedido avanza en vivo (*Pago → Preparando → Motorizado → En camino → Entregado*)
-    con el nombre del motorizado y el tiempo estimado, y te llega un push si no tienes Parla abierta.
+- **Delivery Rapidito** (tu propia flota, al estilo de PedidosYa y Rappi), para los tres lados:
+  - **Cliente**: el pedido avanza en vivo (*Pago → Preparando → Repartidor → En camino → Entregado*)
+    con el nombre y la moto del repartidor, un **código de entrega de 4 dígitos** (como el PIN de
+    Rappi) y el historial con la hora de cada paso. Le llega un push en cada etapa.
   - **Dueño del negocio** (*Delivery → Mi negocio*): le llegan los pedidos pagados (con push), los
-    acepta o rechaza, y cuando están listos pulsa *Listo · llamar a Rapidito*: recién ahí el gateway
-    pide la moto. Pestañas Nuevos · Preparando · Con Rapidito · Terminados.
-  - **Chat del pedido**: cliente y dueño se escriben desde el pedido, en los dos sentidos, con el
-    chat cifrado de siempre. El core solo le dice a cada uno quién es la otra parte, y solo a ellos.
-- **Mis pedidos**: historial con el estado de cada uno.
+    acepta o rechaza, avisa cuando están listos, ve qué repartidor viene y **confirma que se lo
+    entregó** (como «Despachado» en PedidosYa). Al final ve la **constancia**: entregado a quién, a qué
+    hora y confirmado con el código del cliente. Pestañas Nuevos · Preparando · Con Rapidito · Terminados.
+  - **Mi tienda**: el dueño ve si está abierta, puede **pausar los pedidos** («Recibir pedidos») y
+    fijar el **horario** (hora de Lima, también nocturno o 24 horas). Cerrada, el cliente ve el aviso
+    y el gateway no cotiza ni cobra. En **Catálogo y precios** cambia el precio, pone o quita la
+    **oferta** (precio normal tachado) y el **stock** (o lo marca agotado de un toque); se guarda en el
+    sistema de la tienda y se ve al instante en Mercado y Ofertas.
+  - **Registro de repartidores**: cualquiera entra a *Delivery → Trabaja con Rapidito*, elige su
+    vehículo (moto, bicicleta, auto o a pie) y su placa, escribe su **DNI** (y su **licencia** si maneja
+    moto o auto) y sube la **foto del documento**. Queda **en revisión** hasta que soporte lo apruebe;
+    mientras tanto no puede conectarse. Si lo rechazan ve el motivo y vuelve a enviar la foto. Ya
+    aprobado, en su perfil se **conecta o desconecta** (solo a los conectados les llegan pedidos),
+    cambia el vehículo, ve sus **ganancias** (hoy, 7 días y total) y puede **dejar de repartir** (su
+    historial queda y, si vuelve, no repite la verificación).
+  - **Ofertas por cercanía y tarifa por distancia**: un pedido listo se ofrece primero a los
+    repartidores a menos de 3 km de la tienda; si nadie lo toma en 2 minutos, se amplía a 6 km, luego
+    a 12 km y al final a todos los conectados (`DISPATCH_RADII_KM`, `DISPATCH_WAVE_MINUTES`). Para
+    eso el celular del repartidor conectado manda su ubicación cada 30 s (no se comparte con nadie).
+    Cada oferta muestra a cuántos km está la tienda. La tarifa de delivery depende de la distancia de
+    la tienda a la dirección (el carrito la muestra).
+  - **Entrega con foto**: el repartidor puede adjuntar una foto al entregar con el código; si el
+    cliente no responde, **lo deja con una foto** como prueba («Dejado sin código»). El cliente, la
+    tienda y soporte ven la foto (privada: solo se sirve con sesión).
+  - **Reclamos y devoluciones parciales**: hasta 48 horas después de recibirlo, el cliente reporta
+    *Faltaron productos · Llegó dañado · Llegó otro producto · No me llegó · Otro*, marca qué productos
+    y cuántos (la devolución sugerida es lo que costaron), con comentario y foto. Soporte decide el
+    monto y **PagaYa devuelve esa parte** del cobro (con referencia única, nunca dos veces ni más de
+    lo pagado), o lo cierra con un motivo. El cliente ve el estado en el pedido y la tienda, el reclamo.
+  - **Panel de soporte** (*Ajustes → Soporte Parla*, solo cuentas de soporte):
+    - **Pedidos**: todos, por pestaña (en curso, entregados, cancelados) y buscando por id, nombre o
+      teléfono del cliente, con su historial. Un pedido trabado se **cancela con devolución** (o se
+      anula el cobro si no se pagó), hasta antes de que salga de la tienda.
+    - **Repartidores** por revisar con su DNI, licencia y foto del documento para **aprobar o rechazar**.
+    - **Reclamos** con las fotos del cliente y de la entrega para devolver o rechazar.
+    - **Cupones**: crearlos y pausarlos, con cuántas veces se usó cada uno.
+  - **Cupones y envío gratis**: en el carrito el cliente escribe un código. Hay de **% en productos**
+    (con tope), de **monto fijo** y de **envío gratis**, con compra mínima, solo para el primer pedido,
+    usos por persona, límite total y fecha de vencimiento. El core decide si vale (y dice por qué no:
+    «Ya usaste este cupón», «es para compras desde S/ 20.00»…) y lo vuelve a validar al crear el pedido.
+    El descuento lo asume Parla: la tienda cobra sus productos y el repartidor su tarifa completa, y
+    la propina nunca se descuenta. Si el pedido se cancela o vence, el cupón vuelve a quedar libre.
+    Vienen dos de ejemplo: `BIENVENIDA` (envío gratis en el primer pedido) y `PARLA10` (10 % desde S/ 20,
+    hasta S/ 10).
+  - **Direcciones guardadas y «Volver a pedir»**: cada dirección con la que pide se guarda sola (las 8
+    más recientes); en el carrito aparece para elegirla de un toque, ponerle nombre («Casa»,
+    «Trabajo») o borrarla. Desde un pedido anterior, *Volver a pedir* arma el carrito con los mismos
+    productos y la misma dirección, con los precios y el stock de ahora.
+  - **Stock que vuelve a la tienda**: si un pedido se cancela, se rechaza o vence sin pagar, el gateway
+    anula la reserva en la tienda y el stock vuelve. Si el core falla justo después de cobrar, el
+    gateway anula el cobro y devuelve el stock (y si igual lo pagaron, ese pago se devuelve solo).
+  - **Propina**: en el carrito el cliente elige S/ 1, 2, 3, 5 u otro monto; se cobra en el mismo QR
+    y va completa al repartidor (que la ve en la oferta y en sus ganancias).
+  - **Ganancias del repartidor y comisión automática**: el repartidor gana el **95 % de la tarifa de
+    delivery** y el **100 % de la propina**; Rapidito se queda con el 5 %. El cliente paga todo en un
+    solo cobro a la plataforma, así que la comisión **se descuenta sola**: cada entrega anota en el
+    libro de movimientos del repartidor + tarifa, − comisión y + propina (una sola vez, aunque se
+    confirme dos veces). En la oferta y en la entrega ve el detalle («Para ti S/ …»).
+    El porcentaje y los mínimos se configuran con `DRIVER_SHARE_PERCENT` (95 por defecto, de 50 a
+    100), `DRIVER_MIN_AUTO_PAYOUT_SOLES` (5) y `DRIVER_MIN_MANUAL_PAYOUT_SOLES` (1); un valor inválido
+    no deja arrancar el core. Cambiarlos no toca lo que ya está anotado en los libros.
+  - **Depósitos a PagaYa**: en su perfil el repartidor pone su número de PagaYa, ve su **saldo** y
+    sus movimientos, y puede **retirar ahora**. Además, el gateway le **deposita automáticamente cada
+    día a las 23:00** (hora de Lima) si tiene S/ 5 o más (`RAPIDITO_PAYOUT_AT`). El retiro primero
+    reserva el saldo en el core, luego transfiere con PagaYa usando el id del depósito como referencia
+    (PagaYa no la paga dos veces) y recién entonces lo confirma; si PagaYa falla, el saldo vuelve. Cada
+    hora se concilian los depósitos que quedaron sin confirmar.
+  - **Calificaciones**: al recibir el pedido, el cliente califica al repartidor y a la tienda (1 a 5
+    estrellas y un comentario). La tienda la ve en el pedido y su promedio en «Mi tienda»; el
+    repartidor, su promedio en su perfil.
+  - **Vigilancia automática** (cada minuto): un pedido listo que nadie toma en 5 minutos se vuelve a
+    ofrecer y se avisa a la tienda; si el repartidor no lo recoge en 25 minutos o su celular deja de
+    mandar ubicación 8 minutos, el pedido se le quita y se ofrece a otros (con aviso a él y anotado en
+    el historial). Los tiempos se cambian con `DELIVERY_*` en `apps/api/.env`.
+  - **Mapa en vivo** (OpenStreetMap): el cliente marca en el carrito dónde le entregan; mientras dura
+    la entrega, el celular del repartidor comparte su ubicación (solo con el cliente y la tienda de ese
+    pedido) y ambos lo ven moverse **por la ruta de las calles** (OSRM), con la distancia que falta,
+    la hora estimada según esa ruta y un aviso si se queda sin señal. El repartidor ve la ruta a la
+    tienda y al cliente. Si el servicio de rutas no responde, se usa la línea recta.
+  - **Repartidor** (*Delivery → Rapidito · Repartidor*): ve los pedidos listos con la tienda, el destino
+    y lo que gana; el primero que lo toma se lo queda (una entrega a la vez). Recoge en la tienda y
+    entrega **solo con el código del cliente**: con 5 códigos equivocados se bloquea, para que no se
+    pueda adivinar.
+  - **Chat del pedido**: cliente, tienda y repartidor se escriben entre ellos desde el pedido, en los
+    dos sentidos, con el chat cifrado de siempre. El core solo dice quién es la otra parte, y solo a
+    quienes participan en ese pedido.
+  - El código lo ve solo el cliente: ni la tienda ni el repartidor lo reciben del servidor. Si se
+    bloquea por intentos equivocados, el cliente genera uno nuevo desde el pedido.
+  - **Cancelar y devolver**: el cliente cancela mientras la tienda no lo acepte; la tienda lo rechaza
+    o lo cancela después de aceptarlo. Si ya estaba pagado, PagaYa devuelve el pago al instante; si
+    no, se anula el QR y ya no se puede pagar. Un pago que llega después de cancelar se devuelve solo.
+  - **Si el repartidor no puede**: lo suelta antes de recogerlo («No puedo llevarlo») o la tienda pide
+    otro («No llega · buscar otro»); el pedido vuelve a ofrecerse a los demás repartidores.
+  - **Hora estimada de llegada** con el tiempo que cotiza Rapidito, que se ajusta al recoger el pedido.
+- **Mis pedidos**: historial con el estado de cada uno, y *Volver a pedir*.
 - **Salud**: aparece como «Próximamente». La arquitectura ya permite sumarlo con su propio traductor.
 
 **Registro con el teléfono verificado (como WhatsApp)**
@@ -188,8 +292,8 @@ pones tu nombre, un usuario opcional y la contraseña.
  navegador ── HTTPS /api ────►│   gateway  Go    │                                 ▲  │ /internal/publish
             ── WSS  /ws  ────►│     (4100)       │── WebSocket /link ─────────► tiempo real Elixir (4102)
                               │  traductores +   │── traductor mercaya ───────► MercaYa  (tienda)    ┐
- billetera / delivery ─/hooks►│  orquestador     │── traductor rapidito  ───────► Rapidito   (delivery)  ├ 4103
-   (avisos firmados)          └──────────────────┘── traductor pagaya  ───────► PagaYa   (billetera) ┘
+   billetera ─/hooks/pagaya ─►│  orquestador     │── traductor rapidito  ───────► Rapidito (tarifa)    ├ 4103
+   (aviso firmado)            └──────────────────┘── traductor pagaya  ───────► PagaYa   (billetera) ┘
 ```
 
 - **Gateway (Go)**: única puerta pública. Valida el JWT y limita peticiones.
@@ -240,7 +344,7 @@ si no los defines, y el gateway sirve todo en el puerto `PORT` (4100).
 
 En producción ningún servicio arranca con secretos de desarrollo:
 - `JWT_SECRET` debe tener 32+ caracteres;
-- `INTERNAL_TOKEN`, `PAGAYA_WEBHOOK_SECRET` y `RAPIDITO_WEBHOOK_SECRET`, 24+.
+- `INTERNAL_TOKEN` y `PAGAYA_WEBHOOK_SECRET`, 24+.
 
 El core además envía cabeceras de seguridad con helmet (CSP estricta, HSTS, `nosniff`,
 `frame-ancestors 'none'`).
@@ -260,9 +364,8 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 - **Gateway (Go, 36)**:
   - JWT, límite de peticiones y traductor del chat;
   - traductores de tienda, delivery y billetera: respuestas inválidas, firmas válidas y falsificadas;
-  - orquestador: suma correcta que ignora precios del navegador, el pago espera al negocio, solo el
-    dueño marca «listo» y eso despacha a Rapidito una sola vez (y se puede reintentar si falla), aviso
-    repetido sin efecto, cobro vencido;
+  - orquestador: suma correcta que ignora precios del navegador (con la tarifa de Rapidito), el pago
+    espera al negocio, aviso repetido sin efecto, cobro vencido;
   - rutas sin sesión → 401.
 - **Simuladores (Go, 11)**: búsqueda, stock, cobros con vencimiento, pago idempotente y avisos firmados.
 - **Tiempo real (Elixir, 17)**: llamadas y el enlace con el gateway.
@@ -275,7 +378,7 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
   - menciones, hilos y push;
   - **registro con código por SMS**, foto, correo verificado y **contactos del teléfono** (libreta simulada): encuentra a Laura y conversan;
   - **recupera la cuenta con el correo**: claves nuevas, chat bloqueado hasta que Andrés se lo vuelve a compartir, y lee de nuevo el historial;
-  - **compra completa con los dos roles**: busca, carrito, total, QR, pago en PagaYa; la tienda acepta, se escriben por el chat del pedido en los dos sentidos, llama a Rapidito y el delivery llega hasta «Entregado», en vivo;
+  - **compra completa con los tres roles**: busca, carrito, total, QR, pago en PagaYa; la tienda acepta y se escriben por el chat del pedido en los dos sentidos; la tienda lo alista, el repartidor lo toma, la tienda se lo entrega, un código equivocado no entrega y el de la clienta sí; todos lo ven en vivo y la tienda queda con la constancia;
   - el gateway rechaza precios manipulados;
   - legal, exportar y eliminar la cuenta;
   - vista de celular.
@@ -297,7 +400,12 @@ Variables completas en `apps/api/.env.example` y `.env.production.example`.
 - **Probado en esta PC sin Docker**: los `Dockerfile` y el `docker-compose.yml` no se pudieron
   construir aquí; el modo producción sí se probó sin Docker.
 - **Llamadas**: TURN propio para redes muy restrictivas, compartir pantalla, SFU para grupos grandes.
-- **Seguridad**: SMS/OTP para el teléfono, rotación de la clave del grupo cuando alguien sale, clave
-  privada no extraíble en IndexedDB, recuperación de cuenta, auditoría externa.
+- **Delivery**: en producción, un servidor de mapas y de rutas propio o con clave (las teselas y OSRM
+  públicos tienen límites de uso), y la billetera real de pagos (PagaYa es un simulador).
+- **Negocios**: se registran y administran en el sistema de producción de cada negocio; Parla solo
+  los consulta y procesa sus pedidos.
+- **Ofertas de restaurantes y salud**: son una vitrina de ejemplo; todavía no se pueden pedir.
+- **Seguridad**: rotación de la clave del grupo cuando alguien sale, clave privada no extraíble en
+  IndexedDB, auditoría externa.
 - **Escala**: varios nodos de Elixir en clúster y varios gateways; presencia del core en Redis;
   archivos en S3/R2; colas para los avisos de los proveedores.

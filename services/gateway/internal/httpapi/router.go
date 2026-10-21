@@ -90,10 +90,20 @@ func New(opts Options) http.Handler {
 		mux.HandleFunc("GET /api/services/mercado/products", authed(svc.Products))
 		mux.HandleFunc("POST /api/services/mercado/quote", authed(svc.Quote))
 		mux.HandleFunc("POST /api/services/mercado/orders", authed(svc.Create))
-		// Aceptar o rechazar lo resuelve el core; «listo» pasa por aquí porque despacha a Rapidito.
-		mux.HandleFunc("POST /api/business/orders/{id}/ready", authed(svc.Ready))
+		// Cancelar y rechazar mueven dinero (anular o devolver en la billetera): los resuelve el gateway.
+		mux.HandleFunc("POST /api/orders/{id}/cancel", authed(svc.CancelOrder))
+		mux.HandleFunc("POST /api/business/orders/{id}/reject", authed(svc.RejectOrder))
+		mux.HandleFunc("POST /api/business/orders/{id}/cancel", authed(svc.CancelBusinessOrder))
+		// Catálogo de la tienda: precios, ofertas y stock viven en MercaYa; la dueña los cambia por aquí.
+		mux.HandleFunc("GET /api/business/catalog", authed(svc.StoreCatalog))
+		mux.HandleFunc("PATCH /api/business/catalog/{sku}", authed(svc.UpdateStoreProduct))
+		// Retiro de ganancias: lo hace el gateway porque mueve dinero en la billetera.
+		mux.HandleFunc("POST /api/driver/payouts", authed(svc.Payout))
+		// Soporte aprueba un reclamo: el core decide cuánto y si puede; aquí se devuelve en PagaYa.
+		mux.HandleFunc("POST /api/admin/claims/{id}/refund", authed(svc.RefundClaim))
+		// Soporte destraba un pedido: cancelarlo devuelve el pago en PagaYa.
+		mux.HandleFunc("POST /api/admin/orders/{id}/cancel", authed(svc.CancelBySupport))
 		mux.HandleFunc("POST /hooks/pagaya", svc.PagayaHook)
-		mux.HandleFunc("POST /hooks/rapidito", svc.RapiditoHook)
 	}
 	mux.HandleFunc("/api/", limited(proxy.ServeHTTP))
 	mux.Handle("/", proxy)

@@ -8,11 +8,13 @@ import { OFFER_CATEGORY_INFO, OFFER_TABS, type OfferCategory, type ShowcaseOffer
 import { useOffers } from '../hooks/use-offers.hook';
 import { discountPercent } from '../utils/services.utils';
 import { ProductCard } from './ProductCard';
-import { CartBar, PageHeader, ServicePage } from './ServicesUi';
+import { useStoreStatus } from '../hooks/use-store-status.hook';
+import { CartBar, PageHeader, ServicePage, StoreClosedBanner } from './ServicesUi';
 
 /** Ofertas de todos los servicios: Mercado (se compran aquí mismo), restaurantes y salud. */
 export function OffersView() {
   const o = useOffers();
+  const store = useStoreStatus('mercado');
   return (
     <ServicePage footer={<CartBar count={o.count} estimateCents={o.estimate} onOpen={o.goToCart} />}>
       <PageHeader title="Ofertas" subtitle="Lo más rebajado de la semana en todos los servicios." action={<ProfileButton />} />
@@ -34,6 +36,7 @@ export function OffersView() {
 
       {o.shows('mercado') && (
         <OfferSection category="mercado">
+          <StoreClosedBanner status={store.status} />
           {o.error ? (
             <ErrorState message={o.error} onRetry={o.retry} />
           ) : o.marketLoading ? (

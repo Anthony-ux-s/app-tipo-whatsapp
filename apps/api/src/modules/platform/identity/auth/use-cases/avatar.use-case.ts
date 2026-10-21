@@ -3,6 +3,7 @@ import type { SessionUser } from '@parla/types';
 import { randomBytes } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import { NotFoundError, ValidationError } from '../../../../../kernel/domain-error';
+import { isJpeg } from '../../../../../kernel/images';
 import { FILE_STORAGE, type FileStorage } from '../../../../../infra/storage/file-storage.port';
 import { toSessionUser } from '../../user.mapper';
 import { AUTH_REPOSITORY, type AuthRepository } from '../auth.repository';
@@ -11,11 +12,6 @@ import { ProfileEvents } from './update-profile.use-case';
 /** El navegador recorta la foto a 512×512 y la pasa a JPEG (sin datos EXIF ni GPS) antes de subirla. */
 export const MAX_AVATAR_BYTES = 300 * 1024;
 const AVATAR_ID = /^av[a-f0-9]{32}$/;
-
-/** Se mira el contenido, no lo que dice el navegador: solo JPEG de verdad. */
-function isJpeg(data: Buffer): boolean {
-  return data.length > 4 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff && data[data.length - 2] === 0xff && data[data.length - 1] === 0xd9;
-}
 
 @Injectable()
 export class UploadAvatarUseCase {

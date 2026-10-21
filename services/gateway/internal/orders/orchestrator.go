@@ -1,6 +1,7 @@
-// Package orders orquesta un pedido entre sistemas externos: precios y reserva en la tienda,
-// cotización y despacho del delivery (Rapidito), cobro con QR, y el registro en el core. Entre el
-// pago y el delivery está el negocio: acepta el pedido, lo prepara y avisa cuando está listo.
+// Package orders orquesta un pedido entre sistemas externos: precios y reserva en la tienda, la
+// tarifa del delivery (cotización de Rapidito), cobro con QR, y el registro en el core. Desde el pago,
+// el pedido sigue en el core: el negocio lo acepta y lo prepara, y lo reparten los repartidores de
+// Parla (la flota de Rapidito).
 package orders
 
 import (
@@ -10,21 +11,25 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
+	"github.com/parla/gateway/internal/payments"
 	"github.com/parla/gateway/internal/services"
 	"github.com/parla/gateway/internal/translators/mercaya"
-	"github.com/parla/gateway/internal/translators/pagaya"
 	"github.com/parla/gateway/internal/translators/rapidito"
 )
 
 const (
 	maxItems    = 30
 	maxQuantity = 50
+	// maxTipCents: tope de la propina para el repartidor (S/ 100).
+	maxTipCents = 10_000
 )
 
 // Commerce: lo que el orquestador necesita de la tienda.
@@ -32,17 +37,25 @@ type Commerce interface {
 	Search(ctx context.Context, query string) ([]services.Product, error)
 	Product(ctx context.Context, id string) (services.Product, error)
 	Reserve(ctx context.Context, reference string, items []services.CartItem) error
+	// Release anula la reserva (el pedido no siguió) y la tienda devuelve el stock; idempotente.
+	Release(ctx context.Context, reference string) error
+	// Update cambia precio, oferta o stock (lo usa la dueña de la tienda).
+	Update(ctx context.Context, id string, patch mercaya.ProductPatch) (services.Product, error)
 }
 
-// Delivery: lo que necesita del delivery.
+// Delivery: la tarifa y el tiempo estimado del delivery.
 type Delivery interface {
-	Quote(ctx context.Context, address services.Address) (rapidito.Quote, error)
-	Dispatch(ctx context.Context, quoteID, reference, callbackURL string) (string, error)
+	// Quote: pickup es la tienda (nil si no se conoce su ubicación) y address trae el punto de entrega.
+	Quote(ctx context.Context, pickup *services.GeoPoint, address services.Address) (rapidito.Quote, error)
 }
 
 // Payments: lo que necesita de la billetera.
 type Payments interface {
-	CreateCharge(ctx context.Context, req pagaya.ChargeRequest) (pagaya.Charge, error)
+	CreateCharge(ctx context.Context, req payments.ChargeRequest) (payments.Charge, error)
+	// Cancel anula un cobro sin pagar (payments.ErrAlreadyPaid si ya se pagó).
+	Cancel(ctx context.Context, chargeID string) error
+	// Refund devuelve un cobro pagado; repetirlo no duplica la devolución.
+	Refund(ctx context.Context, chargeID string) (time.Time, error)
 }
 
 // Error lleva el código HTTP y el mensaje para la persona.
@@ -67,6 +80,12 @@ type Orchestrator struct {
 	Delivery Delivery
 	Payments Payments
 	Core     Core
+	// Payouts y Wallet: retiros de las ganancias de los repartidores a su billetera.
+	Payouts PayoutCore
+	Wallet  Wallet
+	// Claims y Refunds: devoluciones parciales por reclamos que aprueba soporte.
+	Claims  ClaimsCore
+	Refunds PartialRefunds
 	// PublicURL es la dirección pública del gateway, para los avisos de los proveedores.
 	PublicURL string
 	Now       func() time.Time
@@ -76,7 +95,7 @@ type Orchestrator struct {
 // Catalog: los servicios que ofrece Parla.
 func Catalog() []services.ServiceInfo {
 	return []services.ServiceInfo{
-		{ID: services.Mercado, Name: "Mercado", Description: "Abarrotes, frutas y productos del día. Pagas con QR y te lo lleva un motorizado.", Provider: "MercaYa · delivery Rapidito · pago PagaYa", Available: true},
+		{ID: services.Mercado, Name: "Mercado", Description: "Abarrotes, frutas y productos del día. Pagas con QR y te lo lleva un repartidor de Rapidito.", Provider: "MercaYa · delivery Rapidito · pago PagaYa", Available: true},
 		{ID: services.Salud, Name: "Salud", Description: "Citas médicas, farmacia y resultados en un solo lugar.", Provider: "Próximamente", Available: false},
 	}
 }
@@ -95,6 +114,42 @@ func (o *Orchestrator) newID() string {
 	b := make([]byte, 10)
 	_, _ = rand.Read(b)
 	return "ord_" + hex.EncodeToString(b)
+}
+
+// ProductsByID trae de la tienda los productos pedidos (para «Volver a pedir»), con su precio y stock
+// de ahora. Los que ya no existen no vienen.
+func (o *Orchestrator) ProductsByID(ctx context.Context, ids []string) ([]services.Product, error) {
+	if len(ids) > maxItems {
+		return nil, invalid(fmt.Sprintf("Se pueden pedir hasta %d productos", maxItems))
+	}
+	for _, id := range ids {
+		if !services.ValidID.MatchString(id) {
+			return nil, invalid("Hay un producto no válido")
+		}
+	}
+	products := make([]services.Product, len(ids))
+	errs := make([]error, len(ids))
+	var wg sync.WaitGroup
+	for i, id := range ids {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			products[i], errs[i] = o.Commerce.Product(ctx, id)
+		}()
+	}
+	wg.Wait()
+	found := make([]services.Product, 0, len(ids))
+	for i, err := range errs {
+		if errors.Is(err, mercaya.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			slog.Warn("producto de la tienda falló", "producto", ids[i], "error", err)
+			return nil, unavailable("La tienda")
+		}
+		found = append(found, products[i])
+	}
+	return found, nil
 }
 
 // Products busca en la tienda.
@@ -139,13 +194,24 @@ func validateRequest(req services.QuoteRequest) (services.QuoteRequest, error) {
 	if utf8.RuneCountInString(req.Address.Reference) > 200 {
 		return req, invalid("La referencia puede tener hasta 200 caracteres")
 	}
+	if p := req.Address.Location; p != nil && (math.IsNaN(p.Lat) || math.IsNaN(p.Lng) || math.Abs(p.Lat) > 90 || math.Abs(p.Lng) > 180) {
+		return req, invalid("La ubicación marcada en el mapa no es válida")
+	}
+	if req.TipCents < 0 || req.TipCents > maxTipCents {
+		return req, invalid("La propina debe estar entre S/ 0 y S/ 100")
+	}
 	return req, nil
 }
 
 // quote calcula el pedido con los precios vigentes de la tienda (nunca los del navegador) y la
-// tarifa del delivery, y devuelve también la cotización del delivery para despacharla después.
-func (o *Orchestrator) quote(ctx context.Context, req services.QuoteRequest) (services.OrderQuote, services.QuoteRequest, rapidito.Quote, error) {
-	req, err := validateRequest(req)
+// tarifa del delivery, y devuelve también la cotización del delivery (el core la guarda con el pedido).
+func (o *Orchestrator) quote(ctx context.Context, userID string, req services.QuoteRequest) (services.OrderQuote, services.QuoteRequest, rapidito.Quote, error) {
+	// Una sola consulta al core: si la tienda atiende y desde dónde sale el repartidor.
+	pickup, err := o.storeOpen(ctx, services.Mercado)
+	if err != nil {
+		return services.OrderQuote{}, req, rapidito.Quote{}, err
+	}
+	req, err = validateRequest(req)
 	if err != nil {
 		return services.OrderQuote{}, req, rapidito.Quote{}, err
 	}
@@ -180,26 +246,45 @@ func (o *Orchestrator) quote(ctx context.Context, req services.QuoteRequest) (se
 		q.SubtotalCents += line.TotalCents
 	}
 
-	delivery, err := o.Delivery.Quote(ctx, req.Address)
+	delivery, err := o.Delivery.Quote(ctx, pickup, req.Address)
 	if err != nil {
 		slog.Warn("cotización del delivery falló", "error", err)
 		return q, req, rapidito.Quote{}, unavailable("El delivery")
 	}
 	q.DeliveryFeeCents = delivery.FeeCents
-	q.TotalCents = q.SubtotalCents + q.DeliveryFeeCents
+	// La propina va íntegra al repartidor: se suma aparte del delivery.
+	q.TipCents = req.TipCents
 	q.ETAMinutes = delivery.ETAMinutes
+	q.DistanceKm = delivery.DistanceKm
+	// El cupón lo evalúa el core (usos, primer pedido, compra mínima); nunca descuenta la propina.
+	if code := strings.TrimSpace(req.CouponCode); code != "" {
+		coupon, err := o.Core.QuoteCoupon(ctx, services.CouponQuote{Code: code, UserID: userID, SubtotalCents: q.SubtotalCents, DeliveryFeeCents: q.DeliveryFeeCents})
+		var conflict *ConflictError
+		switch {
+		case errors.Is(err, ErrNotFound):
+			return q, req, rapidito.Quote{}, &Error{Status: http.StatusUnprocessableEntity, Code: "coupon", Message: "Ese cupón no existe"}
+		case errors.As(err, &conflict):
+			return q, req, rapidito.Quote{}, &Error{Status: http.StatusUnprocessableEntity, Code: "coupon", Message: conflict.Message}
+		case err != nil:
+			slog.Warn("no se pudo evaluar el cupón", "error", err)
+			return q, req, rapidito.Quote{}, unavailable("Parla")
+		}
+		q.Coupon = &coupon
+		q.DiscountCents = coupon.DiscountCents
+	}
+	q.TotalCents = q.SubtotalCents + q.DeliveryFeeCents + q.TipCents - q.DiscountCents
 	return q, req, delivery, nil
 }
 
-// Quote: subtotal de productos + delivery = total, sin crear nada.
-func (o *Orchestrator) Quote(ctx context.Context, req services.QuoteRequest) (services.OrderQuote, error) {
-	q, _, _, err := o.quote(ctx, req)
+// Quote: productos + delivery + propina − cupón = total, sin crear nada.
+func (o *Orchestrator) Quote(ctx context.Context, userID string, req services.QuoteRequest) (services.OrderQuote, error) {
+	q, _, _, err := o.quote(ctx, userID, req)
 	return q, err
 }
 
 // Create recotiza, reserva en la tienda, genera el cobro con QR y guarda el pedido en el core.
 func (o *Orchestrator) Create(ctx context.Context, userID string, req services.QuoteRequest) (services.Order, error) {
-	q, req, delivery, err := o.quote(ctx, req)
+	q, req, delivery, err := o.quote(ctx, userID, req)
 	if err != nil {
 		return services.Order{}, err
 	}
@@ -218,40 +303,73 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 	for _, line := range q.Lines {
 		units += line.Quantity
 	}
-	charge, err := o.Payments.CreateCharge(ctx, pagaya.ChargeRequest{
+	concept := fmt.Sprintf("Pedido Parla · %d productos + delivery", units)
+	if q.TipCents > 0 {
+		concept += " + propina"
+	}
+	couponCode := ""
+	if q.Coupon != nil {
+		concept += " − cupón " + q.Coupon.Code
+		couponCode = q.Coupon.Code
+	}
+	charge, err := o.Payments.CreateCharge(ctx, payments.ChargeRequest{
 		AmountCents: q.TotalCents,
-		Concept:     fmt.Sprintf("Pedido Parla · %d productos + delivery", units),
+		Concept:     concept,
 		Reference:   id,
 		NotifyURL:   o.PublicURL + "/hooks/pagaya",
 	})
 	if err != nil {
 		slog.Warn("cobro en la billetera falló", "pedido", id, "error", err)
+		o.release(ctx, id)
 		return services.Order{}, unavailable("El pago")
 	}
 
 	saved, err := o.Core.CreateOrder(ctx, services.InternalCreateOrder{
 		ID: id, UserID: userID, Service: services.Mercado, Lines: q.Lines,
-		SubtotalCents: q.SubtotalCents, DeliveryFeeCents: q.DeliveryFeeCents, TotalCents: q.TotalCents, Currency: services.Currency,
+		SubtotalCents: q.SubtotalCents, DeliveryFeeCents: q.DeliveryFeeCents, TipCents: q.TipCents, TotalCents: q.TotalCents, Currency: services.Currency,
+		DiscountCents: q.DiscountCents, CouponCode: couponCode,
 		Address: req.Address,
 		Payment: services.OrderPayment{
-			Provider: pagaya.Provider, QRText: charge.QRText, PayURL: charge.PayURL,
+			Provider: charge.Provider, ChargeID: charge.ID, QRText: charge.QRText, PayURL: charge.PayURL,
 			ExpiresAt: charge.ExpiresAt.UTC().Format(time.RFC3339),
 		},
 		DeliveryQuoteID: delivery.ID,
+		ETAMinutes:      delivery.ETAMinutes,
 	})
 	if err != nil {
-		slog.Error("no se pudo guardar el pedido en el core", "pedido", id, "error", err)
+		// Sin pedido en el core nadie lo seguiría: se anula el cobro (para que el QR no se pueda pagar) y
+		// se devuelve el stock. Si justo lo pagaron, el aviso de pago de un pedido desconocido lo devuelve.
+		slog.Error("no se pudo guardar el pedido en el core; se deshace", "pedido", id, "error", err)
+		if err := o.Payments.Cancel(ctx, charge.ID); err != nil && !errors.Is(err, payments.ErrAlreadyPaid) {
+			slog.Error("no se pudo anular el cobro de un pedido fallido", "pedido", id, "cobro", charge.ID, "error", err)
+		}
+		o.release(ctx, id)
 		return services.Order{}, unavailable("Parla")
 	}
 	return saved.Order, nil
 }
 
+// release devuelve a la tienda el stock de un pedido que no siguió. Si la tienda no responde se
+// anota en el log: la reserva queda apartada hasta que alguien la anule (es idempotente).
+func (o *Orchestrator) release(ctx context.Context, orderID string) {
+	if err := o.Commerce.Release(ctx, orderID); err != nil {
+		slog.Error("no se pudo devolver el stock a la tienda", "pedido", orderID, "error", err)
+	}
+}
+
 // PaymentEvent aplica un aviso de la billetera: pagado → queda esperando al negocio; vencido → lo marca.
 // Es idempotente: los avisos repetidos no cambian nada.
-func (o *Orchestrator) PaymentEvent(ctx context.Context, ev pagaya.Event) error {
+func (o *Orchestrator) PaymentEvent(ctx context.Context, ev payments.Event) error {
 	order, err := o.Core.GetOrder(ctx, ev.Reference)
 	if errors.Is(err, ErrNotFound) {
+		// Un pedido que no llegó a guardarse (el core falló al crearlo): si igual lo pagaron, se devuelve.
 		slog.Warn("aviso de pago de un pedido desconocido", "pedido", ev.Reference)
+		if ev.Status == services.Paid && ev.ChargeID != "" {
+			if _, err := o.Payments.Refund(ctx, ev.ChargeID); err != nil {
+				slog.Error("no se pudo devolver el pago de un pedido desconocido", "pedido", ev.Reference, "error", err)
+				return err
+			}
+		}
 		return nil
 	}
 	if err != nil {
@@ -264,100 +382,336 @@ func (o *Orchestrator) PaymentEvent(ctx context.Context, ev pagaya.Event) error 
 			if err != nil && !errors.Is(err, ErrConflict) {
 				return err
 			}
+			if err == nil {
+				o.release(ctx, order.ID)
+			}
 		}
 		return nil
 	}
 
-	if order.Status != services.PendingPayment {
-		return nil
-	}
 	paidAt := o.now()
 	if ev.PaidAt != nil {
 		paidAt = *ev.PaidAt
 	}
-	_, err = o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{
-		ExpectStatus: services.PendingPayment, Status: services.Paid, PaidAt: paidAt.UTC().Format(time.RFC3339),
-	})
+	// Pagó después de que se canceló o rechazó (o mientras se cancelaba): se le devuelve.
+	if (order.Status == services.Cancelled || order.Status == services.Rejected) && order.Payment.RefundedAt == nil {
+		// El id del pago que llegó en el aviso es el que se devuelve (el del pedido puede ser el del checkout).
+		chargeID := ev.ChargeID
+		if chargeID == "" {
+			chargeID = order.Payment.ChargeID
+		}
+		refundedAt, err := o.Payments.Refund(ctx, chargeID)
+		if err != nil {
+			// Se devuelve el error para que la billetera reintente el aviso y volvamos a devolver.
+			slog.Error("no se pudo devolver un pago que llegó tras cancelar", "pedido", order.ID, "error", err)
+			return err
+		}
+		_, err = o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{
+			ExpectStatus: order.Status, Status: order.Status,
+			PaidAt: paidAt.UTC().Format(time.RFC3339), RefundedAt: refundedAt.UTC().Format(time.RFC3339), ChargeID: chargeID,
+			Note: "Pago recibido tras cancelar · devuelto",
+		})
+		if errors.Is(err, ErrConflict) {
+			return nil
+		}
+		return err
+	}
+	if order.Status != services.PendingPayment {
+		return nil
+	}
+	update := services.InternalUpdateOrder{ExpectStatus: services.PendingPayment, Status: services.Paid, PaidAt: paidAt.UTC().Format(time.RFC3339)}
+	if ev.ChargeID != "" && ev.ChargeID != order.Payment.ChargeID {
+		update.ChargeID = ev.ChargeID
+	}
+	_, err = o.Core.UpdateOrder(ctx, order.ID, update)
 	if errors.Is(err, ErrConflict) {
 		return nil
 	}
 	return err
 }
 
-// Ready: el dueño del negocio avisa que el pedido está listo y Rapidito sale a recogerlo. Solo lo
-// puede hacer el dueño, y solo con el pedido en preparación; si el delivery falla, el pedido sigue
-// en preparación y el dueño puede volver a intentarlo. Repetirlo no despacha dos motorizados.
-func (o *Orchestrator) Ready(ctx context.Context, userID, orderID string) (services.Order, error) {
+// Quién pide cancelar o rechazar: el cliente del pedido o el dueño del negocio que lo atiende.
+type actor int
+
+const (
+	byCustomer actor = iota
+	byOwner
+	// bySupport: soporte destraba un pedido (p. ej. sin repartidor por mucho tiempo).
+	bySupport
+)
+
+// cancellation describe una forma de cerrar el pedido devolviendo el pago.
+type cancellation struct {
+	who    actor
+	target services.OrderStatus
+	// from: estados desde los que se puede; otro estado → 409 con late.
+	from map[services.OrderStatus]bool
+	late string
+	// note: lo que queda en la línea de tiempo cuando se devuelve el pago.
+	note string
+}
+
+var (
+	customerCancel = cancellation{
+		who: byCustomer, target: services.Cancelled,
+		from: map[services.OrderStatus]bool{services.PendingPayment: true, services.Paid: true},
+		late: "La tienda ya aceptó tu pedido. Escríbele para cancelarlo.",
+		note: "Cancelado por el cliente · pago devuelto",
+	}
+	ownerReject = cancellation{
+		who: byOwner, target: services.Rejected,
+		from: map[services.OrderStatus]bool{services.Paid: true},
+		late: "Este pedido ya no está esperando tu respuesta",
+		note: "Rechazado por la tienda · pago devuelto",
+	}
+	supportCancel = cancellation{
+		who: bySupport, target: services.Cancelled,
+		from: map[services.OrderStatus]bool{
+			services.PendingPayment: true, services.Paid: true, services.Preparing: true, services.SearchingDriver: true, services.DriverAssigned: true,
+		},
+		late: "Ya no se puede cancelar: el pedido va en camino o terminó",
+		note: "Cancelado por soporte · pago devuelto",
+	}
+	ownerCancel = cancellation{
+		who: byOwner, target: services.Cancelled,
+		from: map[services.OrderStatus]bool{services.Preparing: true, services.SearchingDriver: true, services.DriverAssigned: true},
+		late: "Ya no se puede cancelar: el pedido va en camino o terminó",
+		note: "Cancelado por la tienda · pago devuelto",
+	}
+)
+
+// CancelByCustomer: el cliente cancela antes de que la tienda acepte. Si no pagó, se anula el cobro;
+// si pagó, se le devuelve.
+func (o *Orchestrator) CancelByCustomer(ctx context.Context, userID, orderID string) (services.Order, error) {
+	return o.close(ctx, userID, orderID, customerCancel)
+}
+
+// RejectByOwner: la tienda no acepta un pedido pagado y se le devuelve el pago al cliente.
+func (o *Orchestrator) RejectByOwner(ctx context.Context, userID, orderID string) (services.Order, error) {
+	return o.close(ctx, userID, orderID, ownerReject)
+}
+
+// CancelBySupport: soporte cancela un pedido trabado y devuelve el pago (o anula el cobro sin pagar).
+func (o *Orchestrator) CancelBySupport(ctx context.Context, userID, orderID string) (services.Order, error) {
+	isAdmin, err := o.Core.IsAdmin(ctx, userID)
+	if err != nil {
+		slog.Error("no se pudo verificar la cuenta de soporte", "error", err)
+		return services.Order{}, unavailable("Parla")
+	}
+	if !isAdmin {
+		return services.Order{}, &Error{Status: http.StatusForbidden, Code: "forbidden", Message: "Solo soporte puede hacer esto"}
+	}
+	return o.close(ctx, userID, orderID, supportCancel)
+}
+
+// CancelByOwner: la tienda cancela un pedido aceptado que aún no sale de la tienda; se devuelve el pago.
+func (o *Orchestrator) CancelByOwner(ctx context.Context, userID, orderID string) (services.Order, error) {
+	return o.close(ctx, userID, orderID, ownerCancel)
+}
+
+// close cierra el pedido según c. Primero mueve el dinero (anular o devolver, ambos idempotentes) y
+// solo si eso salió bien lo registra en el core: si la billetera falla, el pedido no cambia y se
+// puede reintentar sin cobrar ni devolver dos veces.
+func (o *Orchestrator) close(ctx context.Context, userID, orderID string, c cancellation) (services.Order, error) {
 	order, err := o.Core.GetOrder(ctx, orderID)
-	if errors.Is(err, ErrNotFound) || (err == nil && (order.BusinessOwnerID == nil || *order.BusinessOwnerID != userID)) {
-		// También 404 si el pedido es de otro negocio: no se revela que existe.
+	if err == nil && !o.allowed(order, userID, c.who) {
+		err = ErrNotFound
+	}
+	if errors.Is(err, ErrNotFound) {
 		return services.Order{}, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Pedido no encontrado"}
 	}
 	if err != nil {
 		slog.Error("no se pudo leer el pedido en el core", "pedido", orderID, "error", err)
 		return services.Order{}, unavailable("Parla")
 	}
-	switch order.Status {
-	case services.SearchingDriver, services.OnTheWay, services.Delivered:
+	if order.Status == c.target {
 		return order.Order, nil
-	case services.Preparing:
-	default:
-		return services.Order{}, &Error{Status: http.StatusConflict, Code: "conflict", Message: "Primero acepta el pedido para prepararlo"}
 	}
-	if _, err := o.Delivery.Dispatch(ctx, order.DeliveryQuoteID, order.ID, o.PublicURL+"/hooks/rapidito"); err != nil {
-		slog.Error("no se pudo despachar el delivery", "pedido", order.ID, "error", err)
-		return services.Order{}, unavailable("Rapidito")
+	if !c.from[order.Status] {
+		return services.Order{}, conflict(c.late)
 	}
-	updated, err := o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{
-		ExpectStatus: services.Preparing, Status: services.SearchingDriver,
-		Delivery: &services.OrderDelivery{Provider: rapidito.Provider, UpdatedAt: o.now().UTC().Format(time.RFC3339)},
-	})
-	if errors.Is(err, ErrConflict) {
-		if updated, err = o.Core.GetOrder(ctx, order.ID); err == nil {
-			return updated.Order, nil
+
+	update := services.InternalUpdateOrder{ExpectStatus: order.Status, Status: c.target, Note: c.note}
+	if order.Status == services.PendingPayment {
+		// Sin pagar: se anula el cobro. Si justo se pagó (carrera con el pago), se devuelve.
+		update.Note = "Cancelado por el cliente"
+		if c.who == bySupport {
+			update.Note = "Cancelado por soporte"
 		}
+		err := o.Payments.Cancel(ctx, order.Payment.ChargeID)
+		if errors.Is(err, payments.ErrAlreadyPaid) {
+			err = o.refund(ctx, order, &update)
+			update.Note = c.note
+		}
+		if err != nil {
+			slog.Warn("no se pudo anular el cobro", "pedido", order.ID, "error", err)
+			return services.Order{}, unavailable("El pago")
+		}
+	} else if err := o.refund(ctx, order, &update); err != nil {
+		slog.Warn("no se pudo devolver el pago", "pedido", order.ID, "error", err)
+		return services.Order{}, unavailable("El pago")
+	}
+
+	updated, err := o.Core.UpdateOrder(ctx, order.ID, update)
+	if errors.Is(err, ErrConflict) {
+		// Cambió mientras tanto: si ya quedó como se pedía, listo; si no, ya no se puede.
+		if current, err := o.Core.GetOrder(ctx, order.ID); err == nil && current.Status == c.target {
+			return current.Order, nil
+		}
+		return services.Order{}, conflict(c.late)
 	}
 	if err != nil {
-		slog.Error("no se pudo guardar el despacho en el core", "pedido", order.ID, "error", err)
+		slog.Error("no se pudo guardar la cancelación en el core", "pedido", order.ID, "error", err)
 		return services.Order{}, unavailable("Parla")
 	}
+	o.release(ctx, order.ID)
 	return updated.Order, nil
 }
 
-// DeliveryEvent aplica un aviso del delivery (motorizado asignado, entregado).
-func (o *Orchestrator) DeliveryEvent(ctx context.Context, ev rapidito.Event) error {
-	order, err := o.Core.GetOrder(ctx, ev.Reference)
-	if errors.Is(err, ErrNotFound) {
-		slog.Warn("aviso de delivery de un pedido desconocido", "pedido", ev.Reference)
-		return nil
+func (o *Orchestrator) allowed(order services.InternalOrder, userID string, who actor) bool {
+	switch who {
+	case byCustomer:
+		return order.UserID == userID
+	case bySupport:
+		return true
 	}
+	return order.BusinessOwnerID != nil && *order.BusinessOwnerID == userID
+}
+
+// refund devuelve el pago del pedido y anota cuándo en update.
+func (o *Orchestrator) refund(ctx context.Context, order services.InternalOrder, update *services.InternalUpdateOrder) error {
+	at, err := o.Payments.Refund(ctx, order.Payment.ChargeID)
 	if err != nil {
 		return err
 	}
-	allowed := map[services.OrderStatus][]services.OrderStatus{
-		services.OnTheWay:  {services.SearchingDriver},
-		services.Delivered: {services.SearchingDriver, services.OnTheWay},
+	update.RefundedAt = at.UTC().Format(time.RFC3339)
+	return nil
+}
+
+func conflict(message string) error {
+	return &Error{Status: http.StatusConflict, Code: "conflict", Message: message}
+}
+
+// storeOpen: con la tienda cerrada (por horario o porque la dueña la cerró) no se cotiza ni se pide.
+// Si ningún negocio atiende el servicio, se vende igual (la tienda externa siempre atiende). Devuelve
+// la ubicación de la tienda (punto de recojo para la tarifa por distancia), o nil si no se conoce.
+func (o *Orchestrator) storeOpen(ctx context.Context, service services.ServiceID) (*services.GeoPoint, error) {
+	business, err := o.Core.BusinessByService(ctx, service)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return nil, nil
+	case err != nil:
+		slog.Error("no se pudo consultar el horario de la tienda", "servicio", service, "error", err)
+		return nil, unavailable("Parla")
+	case business.Open:
+		return business.Location, nil
 	}
-	ok := false
-	for _, from := range allowed[ev.Status] {
-		ok = ok || order.Status == from
+	message := "La tienda está cerrada ahora"
+	if business.ClosedMessage != nil && strings.TrimSpace(*business.ClosedMessage) != "" {
+		message = *business.ClosedMessage
 	}
-	if !ok {
-		return nil // aviso repetido o fuera de orden
+	return nil, conflict(message)
+}
+
+// ── Catálogo de la tienda (lo administra la dueña) ────────────────────────────
+
+const (
+	minPriceCents = 10
+	maxPriceCents = 1_000_000
+	maxStock      = 100_000
+)
+
+// CatalogPatch: lo que pide cambiar la dueña. ListPriceSet distingue «no viene» de «null» (quitar oferta).
+type CatalogPatch struct {
+	PriceCents     *int
+	ListPriceSet   bool
+	ListPriceCents *int
+	Stock          *int
+}
+
+func noBusiness() error {
+	return &Error{Status: http.StatusNotFound, Code: "not_found", Message: "No tienes un negocio en Parla"}
+}
+
+// ownStore comprueba que la persona es dueña de la tienda del Mercado (la única con catálogo hoy).
+func (o *Orchestrator) ownStore(ctx context.Context, userID string) error {
+	business, err := o.Core.BusinessByOwner(ctx, userID)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return noBusiness()
+	case err != nil:
+		slog.Error("no se pudo consultar el negocio", "error", err)
+		return unavailable("Parla")
+	case business.Service != services.Mercado:
+		return noBusiness()
 	}
-	delivery := services.OrderDelivery{Provider: rapidito.Provider, ETAMinutes: ev.ETAMinutes, UpdatedAt: o.now().UTC().Format(time.RFC3339)}
-	if order.Delivery != nil {
-		delivery.DriverName, delivery.Vehicle = order.Delivery.DriverName, order.Delivery.Vehicle
+	return nil
+}
+
+// StoreCatalog: todo el catálogo de la tienda, también lo agotado, por categoría y nombre.
+func (o *Orchestrator) StoreCatalog(ctx context.Context, userID string) ([]services.Product, error) {
+	if err := o.ownStore(ctx, userID); err != nil {
+		return nil, err
 	}
-	if ev.DriverName != "" {
-		delivery.DriverName = &ev.DriverName
+	products, err := o.Commerce.Search(ctx, "")
+	if err != nil {
+		slog.Warn("catálogo de la tienda falló", "error", err)
+		return nil, unavailable("La tienda")
 	}
-	if ev.Vehicle != "" {
-		delivery.Vehicle = &ev.Vehicle
+	sort.SliceStable(products, func(i, j int) bool {
+		if products[i].Category != products[j].Category {
+			return products[i].Category < products[j].Category
+		}
+		return products[i].Name < products[j].Name
+	})
+	return products, nil
+}
+
+// UpdateStoreProduct: la dueña cambia precio, oferta o stock de un producto de su tienda.
+func (o *Orchestrator) UpdateStoreProduct(ctx context.Context, userID, productID string, patch CatalogPatch) (services.Product, error) {
+	if err := o.ownStore(ctx, userID); err != nil {
+		return services.Product{}, err
 	}
-	_, err = o.Core.UpdateOrder(ctx, order.ID, services.InternalUpdateOrder{ExpectStatus: order.Status, Status: ev.Status, Delivery: &delivery})
-	if errors.Is(err, ErrConflict) {
-		return nil
+	if patch.PriceCents == nil && !patch.ListPriceSet && patch.Stock == nil {
+		return services.Product{}, invalid("No hay cambios")
 	}
-	return err
+	if p := patch.PriceCents; p != nil && (*p < minPriceCents || *p > maxPriceCents) {
+		return services.Product{}, invalid("El precio debe estar entre S/ 0.10 y S/ 10 000")
+	}
+	if s := patch.Stock; s != nil && (*s < 0 || *s > maxStock) {
+		return services.Product{}, invalid("El stock debe estar entre 0 y 100 000")
+	}
+	if patch.ListPriceSet && patch.ListPriceCents != nil {
+		list := *patch.ListPriceCents
+		price := patch.PriceCents
+		if price == nil {
+			// Sin precio nuevo, la oferta se compara con el precio vigente de la tienda.
+			current, err := o.Commerce.Product(ctx, productID)
+			if errors.Is(err, mercaya.ErrNotFound) {
+				return services.Product{}, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Producto no encontrado"}
+			}
+			if err != nil {
+				return services.Product{}, unavailable("La tienda")
+			}
+			price = &current.PriceCents
+		}
+		if list <= *price || list > maxPriceCents {
+			return services.Product{}, invalid("El precio normal debe ser mayor que el de oferta")
+		}
+	}
+	product, err := o.Commerce.Update(ctx, productID, mercaya.ProductPatch{
+		PriceCents: patch.PriceCents, ListPriceCents: patch.ListPriceCents,
+		ClearListPrice: patch.ListPriceSet && patch.ListPriceCents == nil, Stock: patch.Stock,
+	})
+	switch {
+	case errors.Is(err, mercaya.ErrNotFound):
+		return services.Product{}, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Producto no encontrado"}
+	case errors.Is(err, mercaya.ErrRejected):
+		// Con el precio nuevo, la oferta que ya tenía dejó de ser mayor.
+		return services.Product{}, invalid("El precio normal debe ser mayor que el de oferta")
+	case err != nil:
+		slog.Warn("cambio en el catálogo falló", "producto", productID, "error", err)
+		return services.Product{}, unavailable("La tienda")
+	}
+	return product, nil
 }

@@ -23,5 +23,6 @@ export function toUserRecord(row: User): UserRecord {
     termsVersion: row.termsVersion,
     termsAcceptedAt: row.termsAcceptedAt,
     deletedAt: row.deletedAt,
+    isAdmin: row.isAdmin,
   };
 }

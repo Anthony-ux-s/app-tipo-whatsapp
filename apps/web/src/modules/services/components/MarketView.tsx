@@ -3,16 +3,19 @@ import { EmptyState, ErrorState } from '@shared/ui/States';
 import { NoResultsIllustration } from '@shared/ui/illustrations';
 import { useMarket } from '../hooks/use-market.hook';
 import { ProductCard } from './ProductCard';
-import { CartBar, PageHeader, ServicePage } from './ServicesUi';
+import { useStoreStatus } from '../hooks/use-store-status.hook';
+import { CartBar, PageHeader, ServicePage, StoreClosedBanner } from './ServicesUi';
 
 /** Mercado (tienda MercaYa): se escribe la lista como se habla y se arma el carrito. */
 export function MarketView() {
   const m = useMarket();
+  const store = useStoreStatus('mercado');
   return (
     <ServicePage
       footer={<CartBar count={m.count} estimateCents={m.estimate} onOpen={m.goToCart} />}
     >
       <PageHeader title="Mercado" subtitle="Tienda MercaYa · delivery Rapidito · pago con QR" onBack={m.back} />
+      <StoreClosedBanner status={store.status} />
 
       <form onSubmit={m.search} className="flex flex-col gap-2" role="search">
         <label className="relative flex items-center">

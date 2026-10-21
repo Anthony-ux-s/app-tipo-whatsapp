@@ -2,6 +2,7 @@ package rapidito
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/parla/gateway/internal/services"
-	"github.com/parla/gateway/internal/webhook"
 )
 
 func TestMontoEnTextoACentimosSinFloat(t *testing.T) {
@@ -37,7 +37,7 @@ func quoteServer(t *testing.T, body string) Client {
 func TestCotizacionValidaYAbsurda(t *testing.T) {
 	ctx := context.Background()
 	address := services.Address{Line: "Av. Larco 123"}
-	q, err := quoteServer(t, `{"quote_id":"q_1","fee":{"amount":"6.50","currency":"PEN"},"eta_minutes":30}`).Quote(ctx, address)
+	q, err := quoteServer(t, `{"quote_id":"q_1","fee":{"amount":"6.50","currency":"PEN"},"eta_minutes":30}`).Quote(ctx, nil, address)
 	if err != nil || q.FeeCents != 650 || q.ETAMinutes != 30 || q.ID != "q_1" {
 		t.Fatalf("cotización inesperada: %+v %v", q, err)
 	}
@@ -47,28 +47,34 @@ func TestCotizacionValidaYAbsurda(t *testing.T) {
 		`{"quote_id":"q_1","fee":{"amount":"6.50","currency":"PEN"}}`,
 		`{"fee":{"amount":"6.50","currency":"PEN"},"eta_minutes":30}`,
 	} {
-		if _, err := quoteServer(t, body).Quote(ctx, address); !errors.Is(err, ErrInvalid) {
+		if _, err := quoteServer(t, body).Quote(ctx, nil, address); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s debía rechazarse, obtuve %v", body, err)
 		}
 	}
 }
 
-const secret = "rapidito-test-secret"
-
-func TestAvisoFirmadoSeTraduce(t *testing.T) {
-	body := []byte(`{"delivery_id":"dlv_1","reference":"ord_1","status":"DRIVER_ASSIGNED","driver":{"name":"Rosa Quispe","vehicle":"Moto · C3M-915"},"eta_minutes":20}`)
-	ev, err := ParseWebhook(body, webhook.Sign(secret, body), secret)
-	if err != nil || ev.Status != services.OnTheWay || ev.DriverName != "Rosa Quispe" || ev.Reference != "ord_1" || *ev.ETAMinutes != 20 {
-		t.Fatalf("aviso inesperado: %+v %v", ev, err)
+func TestConCoordenadasMandaRecojoYEntregaYLeeLaDistancia(t *testing.T) {
+	var sent map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sent = nil
+		_ = json.NewDecoder(r.Body).Decode(&sent)
+		_, _ = io.WriteString(w, `{"quote_id":"q_2","fee":{"amount":"6.00","currency":"PEN"},"eta_minutes":18,"distancia_km":2.5}`)
+	}))
+	t.Cleanup(srv.Close)
+	c := Client{BaseURL: srv.URL, HTTP: srv.Client()}
+	store := &services.GeoPoint{Lat: -12.1268, Lng: -77.0195}
+	home := services.Address{Line: "Calle Berlín 300", Location: &services.GeoPoint{Lat: -12.1191, Lng: -77.0349}}
+	q, err := c.Quote(context.Background(), store, home)
+	if err != nil || q.FeeCents != 600 || q.DistanceKm == nil || *q.DistanceKm != 2.5 {
+		t.Fatalf("cotización inesperada: %+v %v", q, err)
 	}
-	if _, err := ParseWebhook(body, webhook.Sign("otro-secreto", body), secret); !errors.Is(err, webhook.ErrSignature) {
-		t.Fatalf("una firma ajena debe rechazarse, obtuve %v", err)
+	pickup := sent["pickup"].(map[string]any)
+	dropoff := sent["dropoff"].(map[string]any)
+	if pickup["lat"] != -12.1268 || dropoff["lng"] != -77.0349 || dropoff["address"] != "Calle Berlín 300" {
+		t.Fatalf("no mandó los puntos: %v", sent)
 	}
-	if _, err := ParseWebhook(body, "", secret); !errors.Is(err, webhook.ErrSignature) {
-		t.Fatalf("sin firma debe rechazarse, obtuve %v", err)
-	}
-	unknown := []byte(`{"delivery_id":"dlv_1","reference":"ord_1","status":"PICKED_UP"}`)
-	if _, err := ParseWebhook(unknown, webhook.Sign(secret, unknown), secret); !errors.Is(err, ErrUnknownStatus) {
-		t.Fatalf("estado desconocido, obtuve %v", err)
+	// Sin la ubicación de la tienda no manda recojo.
+	if _, err := c.Quote(context.Background(), nil, home); err != nil || sent["pickup"] != nil {
+		t.Fatalf("sin tienda no debía mandar recojo: %v %v", sent, err)
 	}
 }

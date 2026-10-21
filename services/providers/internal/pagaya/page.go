@@ -64,6 +64,10 @@ var page = template.Must(template.New("pagar").Parse(`<!doctype html>
       </form>
     {{else if eq .Estado "PAGADO"}}
       <div class="status ok"><div class="check">✓</div>Pago realizado. Ya puedes volver a Parla.</div>
+    {{else if eq .Estado "ANULADO"}}
+      <div class="status bad">Este cobro fue anulado. No se te cobró nada.</div>
+    {{else if eq .Estado "DEVUELTO"}}
+      <div class="status ok">Este pago ya fue devuelto a tu billetera.</div>
     {{else}}
       <div class="status bad">Este cobro venció. Genera uno nuevo desde Parla.</div>
     {{end}}

@@ -1,6 +1,7 @@
-import type { OrderStatus } from '@parla/types';
-import { ArrowLeft, ShoppingCart } from 'lucide-react';
+import type { BusinessStatus, OrderStatus, OrderTimelineEntry } from '@parla/types';
+import { ArrowLeft, Moon, ShoppingCart } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { formatTime } from '@shared/utils/date';
 import { formatSoles } from '@shared/utils/money';
 import { ORDER_STATUS_LABELS } from '../const/services.const';
 
@@ -46,6 +47,7 @@ const STATUS_STYLES: Record<OrderStatus, string> = {
   preparing: 'bg-teal-100 text-teal-900 dark:bg-teal-900/50 dark:text-teal-200',
   rejected: 'bg-rose-100 text-rose-900 dark:bg-rose-900/50 dark:text-rose-200',
   searching_driver: 'bg-teal-100 text-teal-900 dark:bg-teal-900/50 dark:text-teal-200',
+  driver_assigned: 'bg-cyan-100 text-cyan-900 dark:bg-cyan-900/50 dark:text-cyan-200',
   on_the_way: 'bg-cyan-100 text-cyan-900 dark:bg-cyan-900/50 dark:text-cyan-200',
   delivered: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-200',
   payment_expired: 'bg-surface-3 text-ink-soft',
@@ -91,6 +93,60 @@ export function CartBar({ count, estimateCents, onOpen }: { count: number; estim
         <span className="text-sm text-teal-100">aprox.</span>
         <span className="font-extrabold">{formatSoles(estimateCents)}</span>
       </button>
+    </div>
+  );
+}
+
+/** Qué se ve en la línea de tiempo por cada paso (la misma para cliente, tienda y repartidor). */
+const TIMELINE_LABELS: Record<OrderStatus, string> = {
+  pending_payment: 'Pedido creado',
+  paid: 'Pago recibido',
+  preparing: 'La tienda aceptó el pedido',
+  rejected: 'La tienda no aceptó el pedido',
+  searching_driver: 'Listo para recoger',
+  driver_assigned: 'Repartidor asignado',
+  on_the_way: 'Recogido en la tienda',
+  delivered: 'Entregado al cliente',
+  payment_expired: 'El cobro venció',
+  cancelled: 'Cancelado',
+};
+
+/** Constancia del pedido: cada paso con su hora (como el historial de PedidosYa o Rappi). */
+export function OrderTimeline({ entries }: { entries: OrderTimelineEntry[] }) {
+  return (
+    <section className="rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Historial del pedido" data-testid="order-timeline">
+      <h2 className="mb-3 text-sm font-bold text-ink-soft">Historial</h2>
+      <ol className="flex flex-col gap-3">
+        {entries.map((entry, i) => {
+          const last = i === entries.length - 1;
+          return (
+            <li key={`${entry.status}-${entry.at}`} className="relative flex gap-3 pl-1">
+              {!last && <span aria-hidden="true" className="absolute top-4 left-[9px] h-[calc(100%+4px)] w-px bg-line" />}
+              <span className={`relative mt-1 size-3 shrink-0 rounded-full ring-4 ${last ? 'bg-brand ring-teal-100 dark:ring-teal-900/60' : 'bg-teal-300 ring-transparent dark:bg-teal-700'}`} />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-baseline justify-between gap-3">
+                  <span className={`text-sm ${last ? 'font-bold text-ink' : 'font-medium text-ink'}`}>{TIMELINE_LABELS[entry.status]}</span>
+                  <span className="shrink-0 text-xs text-ink-faint">{formatTime(entry.at)}</span>
+                </span>
+                {entry.note && <span className="block text-xs text-ink-soft">{entry.note}</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+/** Aviso de tienda cerrada (fuera de horario o pausada por el dueño): se puede mirar, no pagar. */
+export function StoreClosedBanner({ status }: { status: BusinessStatus | null }) {
+  if (!status || status.open) return null;
+  return (
+    <div role="status" data-testid="store-closed" className="flex items-center gap-3 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900">
+      <Moon className="size-5 shrink-0 text-amber-700 dark:text-amber-300" />
+      <p className="text-sm text-ink">
+        <span className="font-semibold">{status.closedMessage}</span> Puedes armar tu carrito y pagar cuando abra.
+      </p>
     </div>
   );
 }

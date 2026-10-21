@@ -22,6 +22,8 @@ export interface UserRecord {
   termsVersion: string | null;
   termsAcceptedAt: Date | null;
   deletedAt: Date | null;
+  /** Soporte de Parla (aprueba repartidores y resuelve reclamos). */
+  isAdmin: boolean;
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {

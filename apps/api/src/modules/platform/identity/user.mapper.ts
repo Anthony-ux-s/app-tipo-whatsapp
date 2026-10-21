@@ -37,5 +37,6 @@ export function toSessionUser(user: UserRecord, presence: PresenceStatus): Sessi
     preferences: user.preferences,
     publicKey: user.publicKey,
     keyBackup: user.keyBackup,
+    isAdmin: user.isAdmin,
   };
 }

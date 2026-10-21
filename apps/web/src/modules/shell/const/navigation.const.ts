@@ -25,8 +25,9 @@ export const MOBILE_NAV_ITEMS = NAV_ITEMS.filter((item) => item.id !== 'ajustes'
 export function sectionOf(pathname: string): AppSection {
   if (pathname.startsWith('/app/servicios')) return 'servicios';
   if (pathname.startsWith('/app/ofertas')) return 'ofertas';
-  // «Mi negocio» vive dentro de Delivery: es el otro lado de los mismos pedidos.
-  if (pathname.startsWith('/app/pedidos') || pathname.startsWith('/app/negocio')) return 'delivery';
-  if (pathname.startsWith('/app/ajustes')) return 'ajustes';
+  // «Mi negocio» y Rapidito (repartidores) viven dentro de Delivery: son los otros lados de los mismos pedidos.
+  if (['/app/pedidos', '/app/negocio', '/app/rapidito'].some((p) => pathname.startsWith(p))) return 'delivery';
+  // El panel de soporte se abre desde Ajustes.
+  if (pathname.startsWith('/app/ajustes') || pathname.startsWith('/app/admin')) return 'ajustes';
   return 'chats';
 }

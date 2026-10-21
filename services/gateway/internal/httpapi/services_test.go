@@ -41,13 +41,16 @@ func (shopFake) Product(_ context.Context, id string) (services.Product, error) 
 	return services.Product{ID: id, Name: "Azúcar rubia", Unit: "1 kg", PriceCents: 450, Stock: 9, Currency: "PEN"}, nil
 }
 func (shopFake) Reserve(context.Context, string, []services.CartItem) error { return nil }
+func (shopFake) Release(context.Context, string) error                      { return nil }
+func (shopFake) Update(_ context.Context, id string, _ mercaya.ProductPatch) (services.Product, error) {
+	return services.Product{ID: id, Name: "Azúcar rubia", PriceCents: 450, Stock: 9, Currency: "PEN"}, nil
+}
 
 type motoFake struct{}
 
-func (motoFake) Quote(context.Context, services.Address) (rapidito.Quote, error) {
+func (motoFake) Quote(context.Context, *services.GeoPoint, services.Address) (rapidito.Quote, error) {
 	return rapidito.Quote{ID: "q_1", FeeCents: 600, ETAMinutes: 30}, nil
 }
-func (motoFake) Dispatch(context.Context, string, string, string) (string, error) { return "d_1", nil }
 
 type coreFake struct{ seen []string }
 
@@ -62,12 +65,26 @@ func (c *coreFake) GetOrder(_ context.Context, id string) (services.InternalOrde
 func (c *coreFake) UpdateOrder(context.Context, string, services.InternalUpdateOrder) (services.InternalOrder, error) {
 	return services.InternalOrder{}, nil
 }
+func (c *coreFake) BusinessByService(context.Context, services.ServiceID) (services.Business, error) {
+	return services.Business{}, orders.ErrNotFound
+}
+func (c *coreFake) BusinessByOwner(context.Context, string) (services.Business, error) {
+	return services.Business{}, orders.ErrNotFound
+}
+func (c *coreFake) QuoteCoupon(context.Context, services.CouponQuote) (services.AppliedCoupon, error) {
+	return services.AppliedCoupon{}, orders.ErrNotFound
+}
+func (c *coreFake) IsAdmin(context.Context, string) (bool, error) { return false, nil }
 
 type payFake struct{}
 
 func (payFake) CreateCharge(context.Context, pagaya.ChargeRequest) (pagaya.Charge, error) {
 	return pagaya.Charge{ID: "cob_1", QRText: "http://p", PayURL: "http://p", ExpiresAt: time.Now().Add(time.Minute)}, nil
 }
+
+func (payFake) Cancel(context.Context, string) error { return nil }
+
+func (payFake) Refund(context.Context, string) (time.Time, error) { return time.Now(), nil }
 
 func servicesGateway(t *testing.T) (*httptest.Server, *coreFake) {
 	t.Helper()
@@ -82,7 +99,7 @@ func servicesGateway(t *testing.T) (*httptest.Server, *coreFake) {
 		JWTSecret: jwtSecret,
 		Services: &orders.HTTP{
 			Orch:         &orders.Orchestrator{Commerce: shopFake{}, Delivery: motoFake{}, Payments: payFake{}, Core: core, PublicURL: "http://gw"},
-			PagayaSecret: pagayaSecret, RapiditoSecret: "rapidito-secreto-de-prueba",
+			PagayaSecret: pagayaSecret,
 		},
 	}))
 	t.Cleanup(gw.Close)
@@ -126,6 +143,14 @@ func TestServiciosExigenSesion(t *testing.T) {
 			t.Errorf("%s con token falso: esperaba 401, obtuve %d", path, status)
 		}
 	}
+	// El retiro de ganancias mueve dinero: sin sesión no existe.
+	if status, _ := call(t, http.MethodPost, gw.URL+"/api/driver/payouts", "", "", nil); status != http.StatusUnauthorized {
+		t.Errorf("retiro sin sesión: esperaba 401, obtuve %d", status)
+	}
+	// Devolver dinero por un reclamo tampoco existe sin sesión.
+	if status, _ := call(t, http.MethodPost, gw.URL+"/api/admin/claims/cl_1/refund", "", `{"amountCents":100}`, nil); status != http.StatusUnauthorized {
+		t.Errorf("devolución sin sesión: esperaba 401, obtuve %d", status)
+	}
 	status, body := call(t, http.MethodGet, gw.URL+"/api/services", jwt("u_1"), "", nil)
 	var catalog []services.ServiceInfo
 	_ = json.Unmarshal([]byte(body), &catalog)
@@ -143,6 +168,14 @@ func TestLaCotizacionIgnoraPreciosDelNavegador(t *testing.T) {
 	_ = json.Unmarshal([]byte(raw), &q)
 	if status != 200 || q.SubtotalCents != 900 || q.DeliveryFeeCents != 600 || q.TotalCents != 1500 {
 		t.Fatalf("cotización inesperada: %d %s", status, raw)
+	}
+	// La propina sí la elige el cliente: se suma al total que calcula el gateway.
+	tipped := `{"items":[{"productId":"AZU-RUB-1K","quantity":2,"priceCents":1}],"address":{"line":"Av. Larco 123","reference":""},"tipCents":200,"totalCents":1}`
+	status, raw = call(t, http.MethodPost, gw.URL+"/api/services/mercado/quote", jwt("u_1"), tipped, nil)
+	q = services.OrderQuote{}
+	_ = json.Unmarshal([]byte(raw), &q)
+	if status != 200 || q.TipCents != 200 || q.TotalCents != 1700 {
+		t.Fatalf("cotización con propina inesperada: %d %s", status, raw)
 	}
 	status, raw = call(t, http.MethodPost, gw.URL+"/api/services/mercado/quote", jwt("u_1"), `{"items":[]`, nil)
 	if status != 400 || !strings.Contains(raw, `"statusCode":400`) {
@@ -170,9 +203,6 @@ func TestAvisosDeProveedoresExigenFirma(t *testing.T) {
 	}
 	if status, _ := call(t, http.MethodPost, gw.URL+"/hooks/pagaya", "", payload, map[string]string{"x-pagaya-firma": webhook.Sign(pagayaSecret, []byte(payload))}); status != http.StatusNoContent {
 		t.Fatalf("aviso válido: esperaba 204, obtuve %d", status)
-	}
-	if status, _ := call(t, http.MethodPost, gw.URL+"/hooks/rapidito", "", `{}`, nil); status != http.StatusUnauthorized {
-		t.Fatalf("Rapidito sin firma: esperaba 401, obtuve %d", status)
 	}
 }
 

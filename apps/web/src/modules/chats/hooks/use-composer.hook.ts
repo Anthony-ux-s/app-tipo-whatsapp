@@ -41,8 +41,9 @@ export function useComposer(conversationId: string, threadRootId: string | null 
   const fileInput = useRef<HTMLInputElement | null>(null);
   const textArea = useRef<HTMLTextAreaElement | null>(null);
   const lastPing = useRef(0);
-  const pendingCaret = useRef<number | null>(null);
   const stopTimer = useRef<number | null>(null);
+  /** Dónde dejar el cursor tras insertar una mención (se aplica apenas se pinta el texto nuevo). */
+  const pendingCaret = useRef<number | null>(null);
 
   const replyToId = threadRootId ?? replyDraft?.id ?? null;
 
@@ -81,6 +82,16 @@ export function useComposer(conversationId: string, threadRootId: string | null 
       clearError();
     }
   }, [recorderError, clearError]);
+
+  // Tras insertar una mención, el cursor va después de ella antes de que llegue otra tecla: con un
+  // requestAnimationFrame, lo que se escribía rápido justo después quedaba en el lugar equivocado.
+  useLayoutEffect(() => {
+    const el = textArea.current;
+    if (pendingCaret.current === null || !el) return;
+    el.focus();
+    el.setSelectionRange(pendingCaret.current, pendingCaret.current);
+    pendingCaret.current = null;
+  }, [text]);
 
   // Ajusta la altura del área de texto al contenido (hasta 6 líneas).
   useEffect(() => {

@@ -1,15 +1,16 @@
 package orders
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/parla/gateway/internal/services"
 	"github.com/parla/gateway/internal/translators/pagaya"
-	"github.com/parla/gateway/internal/translators/rapidito"
 )
 
 const (
@@ -17,11 +18,10 @@ const (
 	maxWebhookBody = 64 << 10
 )
 
-// HTTP expone el orquestador: rutas de servicios (con sesión) y avisos de los proveedores.
+// HTTP expone el orquestador: rutas de servicios (con sesión) y el aviso de la billetera.
 type HTTP struct {
-	Orch           *Orchestrator
-	PagayaSecret   string
-	RapiditoSecret string
+	Orch         *Orchestrator
+	PagayaSecret string
 }
 
 // UserHandler recibe la persona autenticada (el id sale del JWT, nunca del cuerpo).
@@ -32,7 +32,16 @@ func (h *HTTP) Catalog(w http.ResponseWriter, _ *http.Request, _ string) {
 }
 
 func (h *HTTP) Products(w http.ResponseWriter, r *http.Request, _ string) {
-	products, err := h.Orch.Products(r.Context(), r.URL.Query().Get("q"))
+	var (
+		products []services.Product
+		err      error
+	)
+	// ?ids=A,B trae esos productos (para «Volver a pedir»); si no, busca con ?q=.
+	if ids := r.URL.Query().Get("ids"); ids != "" {
+		products, err = h.Orch.ProductsByID(r.Context(), strings.Split(ids, ","))
+	} else {
+		products, err = h.Orch.Products(r.Context(), r.URL.Query().Get("q"))
+	}
 	if err != nil {
 		writeError(w, err)
 		return
@@ -40,12 +49,12 @@ func (h *HTTP) Products(w http.ResponseWriter, r *http.Request, _ string) {
 	WriteJSON(w, http.StatusOK, products)
 }
 
-func (h *HTTP) Quote(w http.ResponseWriter, r *http.Request, _ string) {
+func (h *HTTP) Quote(w http.ResponseWriter, r *http.Request, userID string) {
 	req, ok := decodeRequest(w, r)
 	if !ok {
 		return
 	}
-	quote, err := h.Orch.Quote(r.Context(), req)
+	quote, err := h.Orch.Quote(r.Context(), userID, req)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -66,14 +75,108 @@ func (h *HTTP) Create(w http.ResponseWriter, r *http.Request, userID string) {
 	WriteJSON(w, http.StatusCreated, order)
 }
 
-// Ready: el dueño del negocio marca el pedido como listo y sale el motorizado de Rapidito.
-func (h *HTTP) Ready(w http.ResponseWriter, r *http.Request, userID string) {
-	order, err := h.Orch.Ready(r.Context(), userID, r.PathValue("id"))
+// CancelOrder: el cliente cancela su pedido antes de que la tienda lo acepte (se anula o devuelve el pago).
+func (h *HTTP) CancelOrder(w http.ResponseWriter, r *http.Request, userID string) {
+	h.respond(w)(h.Orch.CancelByCustomer(r.Context(), userID, r.PathValue("id")))
+}
+
+// RejectOrder: la tienda no acepta un pedido pagado; se devuelve el pago.
+func (h *HTTP) RejectOrder(w http.ResponseWriter, r *http.Request, userID string) {
+	h.respond(w)(h.Orch.RejectByOwner(r.Context(), userID, r.PathValue("id")))
+}
+
+// CancelBusinessOrder: la tienda cancela un pedido aceptado que aún no salió; se devuelve el pago.
+func (h *HTTP) CancelBusinessOrder(w http.ResponseWriter, r *http.Request, userID string) {
+	h.respond(w)(h.Orch.CancelByOwner(r.Context(), userID, r.PathValue("id")))
+}
+
+// StoreCatalog: el catálogo completo de la tienda, para la dueña.
+func (h *HTTP) StoreCatalog(w http.ResponseWriter, r *http.Request, userID string) {
+	products, err := h.Orch.StoreCatalog(r.Context(), userID)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, order)
+	WriteJSON(w, http.StatusOK, products)
+}
+
+// catalogPatchBody: listPriceCents puede no venir (no cambia), venir null (quita la oferta) o un número.
+type catalogPatchBody struct {
+	PriceCents     *int            `json:"priceCents"`
+	ListPriceCents json.RawMessage `json:"listPriceCents"`
+	Stock          *int            `json:"stock"`
+}
+
+// UpdateStoreProduct: la dueña cambia precio, oferta o stock de un producto.
+func (h *HTTP) UpdateStoreProduct(w http.ResponseWriter, r *http.Request, userID string) {
+	var body catalogPatchBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBody)).Decode(&body); err != nil {
+		writeError(w, invalid("La solicitud no es válida"))
+		return
+	}
+	patch := CatalogPatch{PriceCents: body.PriceCents, Stock: body.Stock}
+	if raw := bytes.TrimSpace(body.ListPriceCents); len(raw) > 0 {
+		patch.ListPriceSet = true
+		if !bytes.Equal(raw, []byte("null")) {
+			var n int
+			if err := json.Unmarshal(raw, &n); err != nil {
+				writeError(w, invalid("El precio normal no es válido"))
+				return
+			}
+			patch.ListPriceCents = &n
+		}
+	}
+	product, err := h.Orch.UpdateStoreProduct(r.Context(), userID, r.PathValue("sku"), patch)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, product)
+}
+
+func (h *HTTP) respond(w http.ResponseWriter) func(services.Order, error) {
+	return func(order services.Order, err error) {
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, order)
+	}
+}
+
+// Payout: «Retirar ahora» — el repartidor retira su saldo a su billetera PagaYa.
+func (h *HTTP) Payout(w http.ResponseWriter, r *http.Request, userID string) {
+	payout, err := h.Orch.Payout(r.Context(), userID, "manual")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, payout)
+}
+
+// RefundClaim: soporte aprueba un reclamo y devuelve parte del pedido en la billetera del cliente.
+// CancelBySupport: soporte cancela un pedido trabado (con devolución del pago).
+func (h *HTTP) CancelBySupport(w http.ResponseWriter, r *http.Request, userID string) {
+	h.respond(w)(h.Orch.CancelBySupport(r.Context(), userID, r.PathValue("id")))
+}
+
+func (h *HTTP) RefundClaim(w http.ResponseWriter, r *http.Request, userID string) {
+	var body struct {
+		AmountCents *int `json:"amountCents"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBody))
+	if err := decoder.Decode(&body); err != nil || body.AmountCents == nil {
+		writeError(w, invalid("Indica el monto a devolver"))
+		return
+	}
+	claim, err := h.Orch.RefundClaim(r.Context(), userID, r.PathValue("id"), *body.AmountCents)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(claim)
 }
 
 // PagayaHook: aviso firmado de la billetera.
@@ -89,27 +192,14 @@ func (h *HTTP) PagayaHook(w http.ResponseWriter, r *http.Request) {
 	h.finish(w, h.Orch.PaymentEvent(r.Context(), ev), "pagaya")
 }
 
-// RapiditoHook: aviso firmado del delivery.
-func (h *HTTP) RapiditoHook(w http.ResponseWriter, r *http.Request) {
-	body, ok := readWebhook(w, r)
-	if !ok {
-		return
-	}
-	ev, err := rapidito.ParseWebhook(body, r.Header.Get("x-rapidito-signature"), h.RapiditoSecret)
-	if !h.accept(w, err, "rapidito") {
-		return
-	}
-	h.finish(w, h.Orch.DeliveryEvent(r.Context(), ev), "rapidito")
-}
-
 func (h *HTTP) accept(w http.ResponseWriter, err error, provider string) bool {
 	switch {
 	case err == nil:
 		return true
-	case errors.Is(err, pagaya.ErrUnknownStatus), errors.Is(err, rapidito.ErrUnknownStatus):
+	case errors.Is(err, pagaya.ErrUnknownStatus):
 		// Estados que no nos interesan: se confirman para que el proveedor no reintente.
 		w.WriteHeader(http.StatusNoContent)
-	case errors.Is(err, pagaya.ErrInvalid), errors.Is(err, rapidito.ErrInvalid):
+	case errors.Is(err, pagaya.ErrInvalid):
 		WriteJSON(w, http.StatusBadRequest, errorBody(http.StatusBadRequest, "bad_request", "Aviso inválido"))
 	default:
 		slog.Warn("aviso con firma inválida", "proveedor", provider)

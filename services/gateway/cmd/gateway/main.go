@@ -56,16 +56,23 @@ func main() {
 	}()
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	servicesAPI := &orders.HTTP{
-		Orch: &orders.Orchestrator{
-			Commerce:  mercaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
-			Delivery:  rapidito.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
-			Payments:  pagaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
-			Core:      orders.HTTPCore{BaseURL: cfg.CoreURL, Token: cfg.InternalToken, HTTP: client},
-			PublicURL: cfg.PublicURL,
-		},
-		PagayaSecret:   cfg.PagayaSecret,
-		RapiditoSecret: cfg.RapiditoSecret,
+	core := orders.HTTPCore{BaseURL: cfg.CoreURL, Token: cfg.InternalToken, HTTP: client}
+	wallet := pagaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client, APIKey: cfg.PagayaAPIKey}
+	orch := &orders.Orchestrator{
+		Commerce:  mercaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client, AdminKey: cfg.MercayaAdminKey},
+		Delivery:  rapidito.Client{BaseURL: cfg.ProvidersURL, HTTP: client},
+		Payments:  wallet,
+		Core:      core,
+		Payouts:   core,
+		Wallet:    wallet,
+		Claims:    core,
+		Refunds:   wallet,
+		PublicURL: cfg.PublicURL,
+	}
+	servicesAPI := &orders.HTTP{Orch: orch, PagayaSecret: cfg.PagayaSecret}
+	if err := orch.StartPayoutScheduler(ctx, cfg.PayoutAt); err != nil {
+		slog.Error("no se pudo programar el retiro automático", "error", err)
+		os.Exit(1)
 	}
 
 	server := &http.Server{

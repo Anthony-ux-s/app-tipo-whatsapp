@@ -20,9 +20,11 @@ export function applySecurityHeaders(app: NestExpressApplication, env: AppEnv): 
               scriptSrc: ["'self'"],
               styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
               fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-              imgSrc: ["'self'", 'data:', 'blob:'],
+              // Teselas del mapa de OpenStreetMap (seguimiento del delivery).
+              imgSrc: ["'self'", 'data:', 'blob:', 'https://tile.openstreetmap.org'],
               mediaSrc: ["'self'", 'blob:'],
-              connectSrc: ["'self'", 'ws:', 'wss:', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
+              // Rutas por las calles del mapa del delivery (OSRM de OpenStreetMap).
+              connectSrc: ["'self'", 'ws:', 'wss:', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://router.project-osrm.org'],
               workerSrc: ["'self'"],
               manifestSrc: ["'self'"],
               objectSrc: ["'none'"],
@@ -37,7 +39,8 @@ export function applySecurityHeaders(app: NestExpressApplication, env: AppEnv): 
     }),
   );
   app.use((_req: Request, res: Response, next: NextFunction) => {
-    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(), payment=()');
+    // Ubicación solo para la propia app: el repartidor la comparte mientras reparte y el cliente marca su dirección.
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(self), payment=()');
     next();
   });
 }

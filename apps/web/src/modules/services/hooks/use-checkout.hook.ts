@@ -1,10 +1,10 @@
-import type { Order, OrderQuote, Product, QuoteRequest } from '@parla/types';
+import type { GeoPoint, Order, OrderQuote, Product, QuoteRequest } from '@parla/types';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { cartCount, useCartStore } from '@shared/stores/cart.store';
 import { useOrdersStore } from '@shared/stores/orders.store';
 import { toast } from '@shared/stores/toast.store';
-import { errorMessage, http } from '@shared/utils/http';
+import { ApiError, errorMessage, http } from '@shared/utils/http';
 
 const QUOTE_DEBOUNCE_MS = 400;
 const MIN_ADDRESS = 6;
@@ -21,19 +21,29 @@ export function useCheckout() {
   const remove = useCartStore((s) => s.remove);
   const setAddress = useCartStore((s) => s.setAddress);
   const clear = useCartStore((s) => s.clear);
+  const tipCents = useCartStore((s) => s.tipCents);
+  const setTip = useCartStore((s) => s.setTip);
+  const [customTip, setCustomTip] = useState('');
   const upsertOrder = useOrdersStore((s) => s.upsert);
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  const [locating, setLocating] = useState(false);
+  /** Cupón: lo que escribe y el que quedó aplicado (si el gateway lo aceptó). */
+  const [couponDraft, setCouponDraft] = useState('');
+  const [couponCode, setCouponCode] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   const lines = Object.values(items);
   const request = useMemo<QuoteRequest>(
     () => ({
       items: Object.values(items).map((i) => ({ productId: i.product.id, quantity: i.quantity })),
-      address: { line: address.line.trim(), reference: address.reference.trim() },
+      address: { line: address.line.trim(), reference: address.reference.trim(), location: address.location ?? null },
+      tipCents,
+      ...(couponCode ? { couponCode } : {}),
     }),
-    [items, address],
+    [items, address, tipCents, couponCode],
   );
   const addressReady = request.address.line.length >= MIN_ADDRESS;
 
@@ -48,7 +58,16 @@ export function useCheckout() {
       http
         .post<OrderQuote>('/services/mercado/quote', request)
         .then((q) => alive && setQuote(q))
-        .catch((err) => alive && setQuoteError(errorMessage(err)))
+        .catch((err) => {
+          if (!alive) return;
+          // Un cupón que no vale no frena la compra: se avisa y se cotiza sin él.
+          if (request.couponCode && err instanceof ApiError && err.status === 422) {
+            setCouponError(err.message);
+            setCouponCode(null);
+            return;
+          }
+          setQuoteError(errorMessage(err));
+        })
         .finally(() => alive && setQuoting(false));
     }, QUOTE_DEBOUNCE_MS);
     return () => {
@@ -71,7 +90,57 @@ export function useCheckout() {
     subtract: (product: Product) => change(product, -1),
     remove,
     onAddressChange: (line: string) => setAddress({ ...address, line }),
+    /** Elegir una dirección guardada. */
+    pickAddress: setAddress,
+    couponDraft,
+    couponCode,
+    couponError,
+    onCouponDraft: (value: string) => {
+      setCouponDraft(value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20));
+      setCouponError(null);
+    },
+    applyCoupon: () => {
+      if (couponDraft.length < 3) return setCouponError('Escribe el código del cupón');
+      setCouponError(null);
+      setCouponCode(couponDraft);
+    },
+    removeCoupon: () => {
+      setCouponCode(null);
+      setCouponDraft('');
+      setCouponError(null);
+    },
     onReferenceChange: (reference: string) => setAddress({ ...address, reference }),
+    /** Propina como en Rappi: montos rápidos u «Otro». Va completa al repartidor. */
+    tipCents,
+    tipOptions: [0, 100, 200, 300, 500],
+    customTip,
+    selectTip: (cents: number) => {
+      setCustomTip('');
+      setTip(cents);
+    },
+    onCustomTip: (value: string) => {
+      const clean = value.replace(',', '.').replace(/[^\d.]/g, '');
+      setCustomTip(clean);
+      setTip(Math.round(Number(clean || '0') * 100));
+    },
+    /** El punto de entrega en el mapa (para que el repartidor llegue y el cliente lo siga). */
+    onPickLocation: (location: GeoPoint) => setAddress({ ...address, location }),
+    locating,
+    useMyLocation: () => {
+      if (!navigator.geolocation) return toast('Tu navegador no comparte la ubicación. Marca el punto en el mapa.', 'error');
+      setLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setAddress({ ...address, location: { lat: pos.coords.latitude, lng: pos.coords.longitude } });
+          setLocating(false);
+        },
+        () => {
+          toast('No pudimos obtener tu ubicación. Marca el punto en el mapa.', 'error');
+          setLocating(false);
+        },
+        { enableHighAccuracy: true, timeout: 10_000 },
+      );
+    },
     pay: async () => {
       if (!quote) return;
       setPlacing(true);

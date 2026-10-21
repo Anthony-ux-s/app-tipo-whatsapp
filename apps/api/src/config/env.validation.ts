@@ -1,6 +1,8 @@
 import type { CallIceConfig } from '@parla/types';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { parseDispatch, type DispatchConfig } from '../kernel/dispatch';
+import { parseDriverPay, type DriverPayConfig } from '../kernel/driver-earnings';
 
 export interface AppEnv {
   production: boolean;
@@ -23,6 +25,23 @@ export interface AppEnv {
   internalToken: string;
   /** Códigos por SMS y correo: OneSignal si está configurado; si no (solo desarrollo), modo de prueba. */
   oneSignal: { appId: string; apiKey: string; smsFrom: string | null } | null;
+  /** Vigilancia de los deliveries (pedidos sin repartidor, repartidores que no avanzan). */
+  deliveryWatch: DeliveryWatchConfig;
+  /** Cuánto gana el repartidor (porcentaje de la tarifa) y mínimos para depositarle. */
+  driverPay: DriverPayConfig;
+  /** Ofertas por cercanía (radios por oleada). */
+  dispatch: DispatchConfig;
+}
+
+export interface DeliveryWatchConfig {
+  /** Cada cuánto se revisan los pedidos en curso (0 = apagado). */
+  intervalMs: number;
+  /** Sin repartidor tras estos minutos: se vuelve a ofrecer y se avisa a la tienda. */
+  untakenMinutes: number;
+  /** Con repartidor pero sin recoger tras estos minutos: se reasigna. */
+  pickupMinutes: number;
+  /** Sin ubicación del repartidor (antes de recoger) durante estos minutos: se reasigna. */
+  silentMinutes: number;
 }
 
 export const DEV_JWT_SECRET = 'parla-dev-secret-cambiar-en-produccion';
@@ -91,6 +110,14 @@ export function loadEnv(): AppEnv {
     realtimeUrl: (env.REALTIME_URL ?? 'http://localhost:4102').replace(/\/$/, ''),
     internalToken,
     oneSignal,
+    driverPay: parseDriverPay(env),
+    dispatch: parseDispatch(env),
+    deliveryWatch: {
+      intervalMs: Number(env.DELIVERY_WATCH_INTERVAL_MS ?? 60_000),
+      untakenMinutes: Number(env.DELIVERY_UNTAKEN_MINUTES ?? 5),
+      pickupMinutes: Number(env.DELIVERY_PICKUP_MINUTES ?? 25),
+      silentMinutes: Number(env.DELIVERY_SILENT_MINUTES ?? 8),
+    },
   };
 }
 

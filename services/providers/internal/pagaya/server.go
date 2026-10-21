@@ -5,6 +5,15 @@
 //	GET  /pagaya/cobros/{id}  → {"id_cobro","estado","monto","pagado_en"}
 //	GET  /pagaya/pagar/{id}   → página para pagar (simula la app del banco)
 //	POST /pagaya/pagar/{id}   → confirma el pago (idempotente) y avisa a notificar_a
+//	POST /pagaya/cobros/{id}/anular     → PENDIENTE → ANULADO (idempotente); 409 {"error":"YA_PAGADO"} si ya se pagó
+//	POST /pagaya/cobros/{id}/devolucion → sin cuerpo: devuelve todo lo que queda, PAGADO → DEVUELTO (idempotente)
+//	                                    {"id_cobro","estado","devuelto_en","devuelto_total"}; 409 {"error":"NO_PAGADO"}
+//	                                    con {"monto","referencia"}: devolución parcial (p. ej. un reclamo), idempotente
+//	                                    por referencia; agrega "id_devolucion". Queda DEVUELTO solo si se devolvió todo;
+//	                                    409 {"error":"EXCEDE_COBRO"} si pasa lo cobrado
+//	POST /pagaya/transferencias {"destino":"9XXXXXXXX","monto","concepto","referencia"} con la clave en x-pagaya-clave
+//	                            → 201 {"id_transferencia","estado":"COMPLETADA","referencia","monto"} (idempotente por referencia)
+//	                            → 400 DESTINO_INVALIDO | MONTO_INVALIDO | SOLICITUD_INVALIDA · 401 CLAVE_INVALIDA
 //
 // Avisos: {"id_cobro","referencia","estado":"PAGADO"|"EXPIRADO","pagado_en"} con la firma en
 // x-pagaya-firma = hex(HMAC-SHA256(secreto, cuerpo)).
@@ -13,10 +22,12 @@ package pagaya
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"math"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +40,8 @@ const (
 	pendiente = "PENDIENTE"
 	pagado    = "PAGADO"
 	expirado  = "EXPIRADO"
+	anulado   = "ANULADO"
+	devuelto  = "DEVUELTO"
 )
 
 type cobro struct {
@@ -40,21 +53,50 @@ type cobro struct {
 	Estado     string
 	ExpiraEn   time.Time
 	PagadoEn   *time.Time
+	DevueltoEn *time.Time
+	// DevueltoCents: lo devuelto hasta ahora (devoluciones parciales y la total).
+	DevueltoCents int
+	// devoluciones parciales por referencia del comercio: repetir una no devuelve dos veces.
+	devoluciones map[string]*devolucion
 }
 
-// Service guarda los cobros en memoria.
+type devolucion struct {
+	ID    string
+	Cents int
+}
+
+// transferencia: un envío de dinero a otra billetera (p. ej. las ganancias de un repartidor).
+type transferencia struct {
+	ID         string
+	Destino    string
+	Cents      int
+	Concepto   string
+	Referencia string
+}
+
+// DevAPIKey: clave de la API de transferencias fuera de producción.
+const DevAPIKey = "pagaya-dev-clave"
+
+// Service guarda los cobros y las transferencias en memoria.
 type Service struct {
 	PublicURL string
 	Expiry    time.Duration
 	Notifier  notify.Notifier
 	Now       func() time.Time
+	// APIKey protege las transferencias (salida de dinero de la cuenta del comercio).
+	APIKey string
 
 	mu     sync.Mutex
 	cobros map[string]*cobro
+	// transferencias por referencia del comercio: repetir una no paga dos veces.
+	transferencias map[string]*transferencia
 }
 
 func New(publicURL string, expiry time.Duration, notifier notify.Notifier) *Service {
-	return &Service{PublicURL: strings.TrimRight(publicURL, "/"), Expiry: expiry, Notifier: notifier, Now: time.Now, cobros: map[string]*cobro{}}
+	return &Service{
+		PublicURL: strings.TrimRight(publicURL, "/"), Expiry: expiry, Notifier: notifier, Now: time.Now, APIKey: DevAPIKey,
+		cobros: map[string]*cobro{}, transferencias: map[string]*transferencia{},
+	}
 }
 
 func (s *Service) Routes(mux *http.ServeMux) {
@@ -62,6 +104,9 @@ func (s *Service) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /pagaya/cobros/{id}", s.consultar)
 	mux.HandleFunc("GET /pagaya/pagar/{id}", s.pagina)
 	mux.HandleFunc("POST /pagaya/pagar/{id}", s.pagar)
+	mux.HandleFunc("POST /pagaya/cobros/{id}/anular", s.anular)
+	mux.HandleFunc("POST /pagaya/cobros/{id}/devolucion", s.devolver)
+	mux.HandleFunc("POST /pagaya/transferencias", s.transferir)
 }
 
 type crearRequest struct {
@@ -131,6 +176,18 @@ func (s *Service) pagar(w http.ResponseWriter, r *http.Request) {
 		renderPage(w, http.StatusNotFound, pageView{Estado: "NO_EXISTE"})
 		return
 	}
+	if c.Estado == anulado || c.Estado == devuelto {
+		// Anulado o ya devuelto: no se puede pagar (otra vez).
+		view := viewOf(c)
+		estado := c.Estado
+		s.mu.Unlock()
+		if strings.Contains(r.Header.Get("Accept"), "application/json") {
+			notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": estado})
+			return
+		}
+		renderPage(w, http.StatusConflict, view)
+		return
+	}
 	changed := false
 	if c.Estado == pendiente && s.Now().Before(c.ExpiraEn) {
 		now := s.Now()
@@ -151,6 +208,160 @@ func (s *Service) pagar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	renderPage(w, http.StatusOK, view)
+}
+
+// anular: el comercio cancela un cobro que aún no se pagó; ya no se puede pagar.
+func (s *Service) anular(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.cobros[r.PathValue("id")]
+	switch {
+	case !ok:
+		notify.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "NO_EXISTE"})
+	case c.Estado == pagado || c.Estado == devuelto:
+		notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": "YA_PAGADO"})
+	default:
+		// Pendiente o vencido: queda anulado (repetirlo no cambia nada).
+		c.Estado = anulado
+		notify.WriteJSON(w, http.StatusOK, map[string]any{"id_cobro": c.ID, "estado": c.Estado})
+	}
+}
+
+// devolver: el comercio devuelve un cobro pagado (idempotente: devolver dos veces no duplica).
+type devolverRequest struct {
+	Monto      *float64 `json:"monto"`
+	Referencia string   `json:"referencia"`
+}
+
+// devolver: sin cuerpo devuelve todo lo que queda del cobro (cancelar o rechazar un pedido); con
+// monto y referencia, una devolución parcial (un reclamo). Ambas son idempotentes.
+func (s *Service) devolver(w http.ResponseWriter, r *http.Request) {
+	var req devolverRequest
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil && err.Error() != "EOF" {
+			notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "SOLICITUD_INVALIDA"})
+			return
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.cobros[r.PathValue("id")]
+	if !ok {
+		notify.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "NO_EXISTE"})
+		return
+	}
+	if req.Monto != nil {
+		s.devolverParcial(w, c, *req.Monto, strings.TrimSpace(req.Referencia))
+		return
+	}
+	switch c.Estado {
+	case pagado:
+		now := s.Now()
+		c.Estado = devuelto
+		c.DevueltoEn = &now
+		c.DevueltoCents = c.Cents
+		fallthrough
+	case devuelto:
+		notify.WriteJSON(w, http.StatusOK, devolucionBody(c, nil))
+	default:
+		notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": "NO_PAGADO"})
+	}
+}
+
+func (s *Service) devolverParcial(w http.ResponseWriter, c *cobro, monto float64, referencia string) {
+	cents := int(math.Round(monto * 100))
+	switch {
+	case referencia == "" || utf8.RuneCountInString(referencia) > 64:
+		notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "SOLICITUD_INVALIDA"})
+		return
+	case cents <= 0 || math.IsNaN(monto):
+		notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "MONTO_INVALIDO"})
+		return
+	}
+	if d, ok := c.devoluciones[referencia]; ok {
+		notify.WriteJSON(w, http.StatusOK, devolucionBody(c, d))
+		return
+	}
+	if c.Estado != pagado && c.Estado != devuelto {
+		notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": "NO_PAGADO"})
+		return
+	}
+	if c.DevueltoCents+cents > c.Cents {
+		notify.WriteJSON(w, http.StatusConflict, map[string]string{"error": "EXCEDE_COBRO"})
+		return
+	}
+	if c.devoluciones == nil {
+		c.devoluciones = map[string]*devolucion{}
+	}
+	d := &devolucion{ID: "dv_" + randomHex(8), Cents: cents}
+	c.devoluciones[referencia] = d
+	c.DevueltoCents += cents
+	now := s.Now()
+	c.DevueltoEn = &now
+	if c.DevueltoCents == c.Cents {
+		c.Estado = devuelto
+	}
+	notify.WriteJSON(w, http.StatusOK, devolucionBody(c, d))
+}
+
+func devolucionBody(c *cobro, d *devolucion) map[string]any {
+	body := map[string]any{
+		"id_cobro":       c.ID,
+		"estado":         c.Estado,
+		"devuelto_en":    formatTime(c.DevueltoEn),
+		"devuelto_total": float64(c.DevueltoCents) / 100,
+	}
+	if d != nil {
+		body["id_devolucion"] = d.ID
+		body["monto"] = float64(d.Cents) / 100
+	}
+	return body
+}
+
+// Celular peruano de una billetera: 9 dígitos que empiezan en 9.
+var destinoValido = regexp.MustCompile(`^9\d{8}$`)
+
+type transferirRequest struct {
+	Destino    string  `json:"destino"`
+	Monto      float64 `json:"monto"`
+	Concepto   string  `json:"concepto"`
+	Referencia string  `json:"referencia"`
+}
+
+// transferir envía dinero de la cuenta del comercio a una billetera. Idempotente por referencia:
+// repetir la misma referencia devuelve la misma transferencia y no vuelve a pagar.
+func (s *Service) transferir(w http.ResponseWriter, r *http.Request) {
+	if s.APIKey == "" || subtle.ConstantTimeCompare([]byte(r.Header.Get("x-pagaya-clave")), []byte(s.APIKey)) != 1 {
+		notify.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "CLAVE_INVALIDA"})
+		return
+	}
+	var req transferirRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil || strings.TrimSpace(req.Referencia) == "" || utf8.RuneCountInString(req.Concepto) > 140 {
+		notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "SOLICITUD_INVALIDA"})
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if t, ok := s.transferencias[req.Referencia]; ok {
+		notify.WriteJSON(w, http.StatusCreated, transferenciaJSON(t))
+		return
+	}
+	if !destinoValido.MatchString(req.Destino) {
+		notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "DESTINO_INVALIDO"})
+		return
+	}
+	cents := int(math.Round(req.Monto * 100))
+	if cents <= 0 || cents > 10_000_000 {
+		notify.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "MONTO_INVALIDO"})
+		return
+	}
+	t := &transferencia{ID: "tr_" + randomHex(8), Destino: req.Destino, Cents: cents, Concepto: req.Concepto, Referencia: req.Referencia}
+	s.transferencias[req.Referencia] = t
+	notify.WriteJSON(w, http.StatusCreated, transferenciaJSON(t))
+}
+
+func transferenciaJSON(t *transferencia) map[string]any {
+	return map[string]any{"id_transferencia": t.ID, "estado": "COMPLETADA", "referencia": t.Referencia, "monto": float64(t.Cents) / 100}
 }
 
 func (s *Service) expirar(id string) {

@@ -2,6 +2,7 @@ package pagaya
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -63,5 +64,96 @@ func TestAvisosPagadoYExpirado(t *testing.T) {
 	tampered := []byte(strings.Replace(string(paid), "ord_1", "ord_2", 1))
 	if _, err := ParseWebhook(tampered, webhook.Sign(secret, paid), secret); !errors.Is(err, webhook.ErrSignature) {
 		t.Fatalf("un aviso alterado debe rechazarse, obtuve %v", err)
+	}
+}
+
+func TestAnularYDevolver(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/pagaya/cobros/cob_1/anular":
+			_, _ = io.WriteString(w, `{"id_cobro":"cob_1","estado":"ANULADO"}`)
+		case "/pagaya/cobros/cob_pagado/anular":
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `{"error":"YA_PAGADO"}`)
+		case "/pagaya/cobros/cob_pagado/devolucion":
+			_, _ = io.WriteString(w, `{"id_cobro":"cob_pagado","estado":"DEVUELTO","devuelto_en":"2026-10-17T12:30:00Z"}`)
+		case "/pagaya/cobros/cob_1/devolucion":
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `{"error":"NO_PAGADO"}`)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := Client{BaseURL: srv.URL, HTTP: srv.Client()}
+	ctx := context.Background()
+	if err := c.Cancel(ctx, "cob_1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Cancel(ctx, "cob_pagado"); !errors.Is(err, ErrAlreadyPaid) {
+		t.Fatalf("esperaba ErrAlreadyPaid, obtuve %v", err)
+	}
+	if at, err := c.Refund(ctx, "cob_pagado"); err != nil || at.Minute() != 30 {
+		t.Fatalf("devolución: %v %v", at, err)
+	}
+	if _, err := c.Refund(ctx, "cob_1"); err == nil {
+		t.Fatal("devolver un cobro sin pagar debe fallar")
+	}
+	if err := c.Cancel(ctx, "cob_caido"); err == nil {
+		t.Fatal("la billetera caída debe fallar")
+	}
+}
+
+func TestTransferEnviaConClaveYTraduceErrores(t *testing.T) {
+	var gotKey, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		gotKey, gotBody = r.Header.Get("x-pagaya-clave"), string(body)
+		switch {
+		case strings.Contains(gotBody, `"destino":"123"`):
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"error":"DESTINO_INVALIDO"}`)
+		case strings.Contains(gotBody, `"referencia":"po_caido"`):
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"id_transferencia":"tr_1","estado":"COMPLETADA","referencia":"po_1","monto":12.34}`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := Client{BaseURL: srv.URL, HTTP: srv.Client(), APIKey: "clave"}
+	ctx := context.Background()
+	id, err := c.Transfer(ctx, "po_1", "987654321", 1234, "Rapidito · tus ganancias")
+	if err != nil || id != "tr_1" || gotKey != "clave" || !strings.Contains(gotBody, `"monto":12.34`) {
+		t.Fatalf("transferencia: %q %v (clave %q, cuerpo %s)", id, err, gotKey, gotBody)
+	}
+	if _, err := c.Transfer(ctx, "po_2", "123", 100, "x"); !errors.Is(err, ErrInvalidDestination) {
+		t.Fatalf("esperaba ErrInvalidDestination, obtuve %v", err)
+	}
+	if _, err := c.Transfer(ctx, "po_caido", "987654321", 100, "x"); err == nil || errors.Is(err, ErrInvalidDestination) {
+		t.Fatalf("la billetera caída debe fallar como no disponible, obtuve %v", err)
+	}
+}
+
+func TestDevolucionParcialTraduceMontoReferenciaYExcedente(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = nil
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		if got["referencia"] == "rf_mucho" {
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `{"error":"EXCEDE_COBRO"}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"id_cobro":"cob_1","estado":"PAGADO","devuelto_total":5.5,"id_devolucion":"dv_1"}`)
+	}))
+	t.Cleanup(srv.Close)
+	c := Client{BaseURL: srv.URL, HTTP: srv.Client()}
+	id, err := c.RefundPartial(context.Background(), "cob_1", "rf_1", 550)
+	if err != nil || id != "dv_1" || got["monto"] != 5.5 || got["referencia"] != "rf_1" {
+		t.Fatalf("devolución parcial: %q %v %v", id, err, got)
+	}
+	if _, err := c.RefundPartial(context.Background(), "cob_1", "rf_mucho", 99999); !errors.Is(err, ErrExceedsCharge) {
+		t.Fatalf("debía avisar que excede el cobro: %v", err)
 	}
 }

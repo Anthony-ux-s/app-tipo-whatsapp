@@ -23,6 +23,8 @@ export function parseShoppingQuery(query: string): string[] {
 export function orderStepIndex(status: OrderStatus): number {
   // Pagado: el negocio ya lo tiene, falta que lo acepte y lo prepare.
   if (status === 'paid') return 1;
+  // Listo: se está buscando al repartidor.
+  if (status === 'searching_driver') return 2;
   const index = ORDER_STEPS.findIndex((step) => step.status === status);
   return index === -1 ? 0 : index;
 }

@@ -1,7 +1,7 @@
 // Simuladores de los sistemas externos con los que se integra Parla, para desarrollo y pruebas:
 //
 //	/mercaya/*  tienda en línea (catálogo y reservas)
-//	/rapidito/*   delivery en moto (cotización, despacho y avisos)
+//	/rapidito/* tarifa del delivery en moto (cotización)
 //	/pagaya/*   billetera con cobros por QR al estilo Yape
 //
 // Cada uno tiene su propio formato de API; el gateway los traduce a los contratos de Parla.
@@ -42,6 +42,7 @@ func millis(key string, fallback int) time.Duration {
 }
 
 func main() {
+	production := os.Getenv("NODE_ENV") == "production" || os.Getenv("APP_ENV") == "production"
 	port := env("PROVIDERS_PORT", "4103")
 	publicURL := env("PROVIDERS_PUBLIC_URL", "http://localhost:"+port)
 
@@ -49,13 +50,24 @@ func main() {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		notify.WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "parla-providers", "systems": []string{"mercaya", "rapidito", "pagaya"}})
 	})
-	mercaya.NewStore().Routes(mux)
-	rapidito.New(millis("RAPIDITO_STEP_MS", 4000), notify.Notifier{
-		Secret: env("RAPIDITO_WEBHOOK_SECRET", "rapidito-dev-secret"), Header: "x-rapidito-signature", Retries: 4, Backoff: time.Second,
-	}).Routes(mux)
-	pagaya.New(publicURL, millis("PAGAYA_EXPIRY_MS", 15*60*1000), notify.Notifier{
+	store := mercaya.NewStore()
+	store.AdminKey = env("MERCAYA_ADMIN_KEY", mercaya.DevAdminKey)
+	if production && (store.AdminKey == mercaya.DevAdminKey || len(store.AdminKey) < 24) {
+		slog.Error("en producción MERCAYA_ADMIN_KEY debe ser una clave propia de al menos 24 caracteres")
+		os.Exit(1)
+	}
+	store.Routes(mux)
+	rapidito.New().Routes(mux)
+	wallet := pagaya.New(publicURL, millis("PAGAYA_EXPIRY_MS", 15*60*1000), notify.Notifier{
 		Secret: env("PAGAYA_WEBHOOK_SECRET", "pagaya-dev-secret"), Header: "x-pagaya-firma", Retries: 4, Backoff: time.Second,
-	}).Routes(mux)
+	})
+	// Las transferencias sacan dinero de la cuenta del comercio: se protegen con su propia clave.
+	wallet.APIKey = env("PAGAYA_API_KEY", pagaya.DevAPIKey)
+	if production && (wallet.APIKey == pagaya.DevAPIKey || len(wallet.APIKey) < 24) {
+		slog.Error("en producción PAGAYA_API_KEY debe ser una clave propia de al menos 24 caracteres")
+		os.Exit(1)
+	}
+	wallet.Routes(mux)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

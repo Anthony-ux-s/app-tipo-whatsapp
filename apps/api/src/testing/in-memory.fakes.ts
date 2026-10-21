@@ -15,8 +15,17 @@ import type {
 import type { PushResult, PushSender, PushTarget } from '../infra/push/push-sender.port';
 import type { PushSubscriptionsRepository, StoredSubscription } from '../modules/platform/messaging/push/push-subscriptions.repository';
 import type { PushPayload } from '@parla/types';
+import type { UpdateBusinessRequest } from '@parla/types';
 import type { BusinessesRepository, BusinessRecord } from '../modules/platform/services/businesses.repository';
-import type { NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
+import type { ClaimStatus, GeoPoint, OrderRating } from '@parla/types';
+import type { ClaimChanges, ClaimRecord, ClaimsRepository, NewClaim } from '../modules/platform/services/claims.repository';
+import type { DriverLedgerRepository, LedgerEntryRecord } from '../modules/platform/services/driver-ledger.repository';
+import type { PhotosRepository } from '../modules/platform/services/photos.repository';
+import type { DriverChanges, DriverRecord, DriverRegistration, DriversRepository } from '../modules/platform/services/drivers.repository';
+import type { AdminOrderFilter, NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
+import type { CouponRecord, CouponsRepository, NewCoupon } from '../modules/platform/services/coupons.repository';
+import type { AddressesRepository } from '../modules/platform/services/addresses.repository';
+import type { DeliveryAddress as AddressInput, SavedAddress } from '@parla/types';
 import type { AppEnv } from '../config/env.validation';
 import type { VerificationSender } from '../infra/messaging/verification-sender.port';
 import type { NewVerification, VerificationCodesRepository, VerificationRecord } from '../modules/platform/identity/verification/verification-codes.repository';
@@ -46,6 +55,7 @@ export function makeUser(overrides: Partial<UserRecord> = {}): UserRecord {
     createdAt: new Date(),
     termsVersion: null,
     termsAcceptedAt: null,
+    isAdmin: false,
     deletedAt: null,
     ...overrides,
   };
@@ -283,34 +293,157 @@ export class InMemoryBusinessesRepository implements BusinessesRepository {
   async findByOwner(ownerId: string) {
     return this.businesses.find((b) => b.ownerId === ownerId) ?? null;
   }
+  async update(id: string, changes: UpdateBusinessRequest) {
+    const business = this.businesses.find((b) => b.id === id)!;
+    Object.assign(business, changes);
+    return { ...business };
+  }
+}
+
+export class InMemoryDriversRepository implements DriversRepository {
+  drivers: DriverRecord[] = [];
+  async findByUser(userId: string) {
+    const d = this.drivers.find((x) => x.userId === userId);
+    return d ? structuredClone(d) : null;
+  }
+  async listOnline() {
+    return this.drivers.filter((d) => d.active && d.online && d.status === 'approved').map((d) => structuredClone(d));
+  }
+  async register(userId: string, r: DriverRegistration) {
+    const existing = this.drivers.find((d) => d.userId === userId);
+    const status = existing?.status === 'approved' ? 'approved' : 'pending';
+    if (existing) Object.assign(existing, r, { active: true, online: false, status, reviewNote: null });
+    else
+      this.drivers.push({
+        userId, ...r, active: true, online: false, status, reviewNote: null, documentPhotoId: null, location: null, payoutPhone: null, createdAt: new Date(),
+      });
+    return (await this.findByUser(userId))!;
+  }
+  async update(userId: string, changes: DriverChanges) {
+    Object.assign(this.drivers.find((d) => d.userId === userId)!, changes);
+    return (await this.findByUser(userId))!;
+  }
+  async saveLocation(userId: string, point: GeoPoint, at: Date) {
+    this.drivers.find((d) => d.userId === userId)!.location = { ...point, at };
+  }
+  async listByStatus(status: DriverRecord['status'], limit: number) {
+    return this.drivers.filter((d) => d.status === status && d.active).slice(0, limit).map((d) => structuredClone(d));
+  }
+}
+
+/** Repartidor aprobado y conectado para las pruebas. */
+export function makeDriver(userId: string, overrides: Partial<DriverRecord> = {}): DriverRecord {
+  return {
+    userId, vehicle: 'Moto', plate: 'B7K-482', online: true, active: true, status: 'approved', dniNumber: '12345678', licenseNumber: 'Q12345678',
+    documentPhotoId: null, reviewNote: null, location: null, payoutPhone: null, createdAt: new Date(), ...overrides,
+  };
 }
 
 export class InMemoryOrdersRepository implements OrdersRepository {
   orders: OrderRecord[] = [];
-  constructor(private readonly businesses = new InMemoryBusinessesRepository()) {}
+  constructor(
+    private readonly businesses = new InMemoryBusinessesRepository(),
+    private readonly drivers?: InMemoryDriversRepository,
+  ) {}
   async create({ businessId, ...order }: NewOrder) {
     const found = this.businesses.businesses.find((b) => b.id === businessId);
-    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId } : null;
-    const record: OrderRecord = { ...order, business, delivery: null, createdAt: new Date(), updatedAt: new Date() };
+    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId, address: found.address, location: found.location ?? null } : null;
+    const now = new Date();
+    const record: OrderRecord = {
+      ...order,
+      business,
+      delivery: null,
+      driverId: null,
+      driverLocation: null,
+      deliveryCodeAttempts: 0,
+      rating: null,
+      offerRadiusKm: null,
+      offerWaveAt: null,
+      deliveryPhotoId: null,
+      deliveredWithoutCode: false,
+      claims: [],
+      timeline: [{ status: order.status, at: now.toISOString() }],
+      createdAt: now,
+      updatedAt: now,
+    };
     this.orders.push(record);
-    return { ...record };
+    return structuredClone(record);
   }
   async findById(id: string) {
     const order = this.orders.find((o) => o.id === id);
-    return order ? { ...order } : null;
+    return order ? this.withLocation(order) : null;
   }
   async listForUser(userId: string, limit: number) {
-    return this.orders.filter((o) => o.userId === userId).slice(0, limit);
+    return this.orders.filter((o) => o.userId === userId).slice(0, limit).map((o) => structuredClone(o));
   }
   async listForBusiness(businessId: string, limit: number) {
     const hidden: OrderStatus[] = ['pending_payment', 'payment_expired'];
-    return this.orders.filter((o) => o.business?.id === businessId && !hidden.includes(o.status)).slice(0, limit);
+    return this.orders.filter((o) => o.business?.id === businessId && !hidden.includes(o.status)).slice(0, limit).map((o) => structuredClone(o));
   }
-  async updateIfStatus(id: string, expected: OrderStatus, changes: OrderChanges) {
+  async listAvailableForDrivers(limit: number) {
+    return this.orders.filter((o) => o.status === 'searching_driver' && !o.driverId).slice(0, limit).map((o) => structuredClone(o));
+  }
+  async listForDriver(driverId: string, limit: number) {
+    return this.orders.filter((o) => o.driverId === driverId).slice(0, limit).map((o) => structuredClone(o));
+  }
+  async countActiveForDriver(driverId: string) {
+    return (await this.listActiveForDriver(driverId)).length;
+  }
+  async listActiveForDriver(driverId: string) {
+    return this.orders.filter((o) => o.driverId === driverId && (o.status === 'driver_assigned' || o.status === 'on_the_way')).map((o) => this.withLocation(o));
+  }
+  async listByStatus(statuses: OrderStatus[], limit: number) {
+    return this.orders.filter((o) => statuses.includes(o.status)).slice(0, limit).map((o) => this.withLocation(o));
+  }
+  async search({ statuses, query, limit }: AdminOrderFilter) {
+    const q = query?.trim();
+    return [...this.orders]
+      .reverse()
+      .filter((o) => (!statuses?.length || statuses.includes(o.status)) && (!q || o.id.includes(q)))
+      .slice(0, limit)
+      .map((o) => this.withLocation(o));
+  }
+  async rate(id: string, rating: Omit<OrderRating, 'at'>, at: Date) {
+    const order = this.orders.find((o) => o.id === id);
+    if (!order || order.rating) return null;
+    order.rating = { ...rating, at: at.toISOString() };
+    return this.withLocation(order);
+  }
+  async ratingSummary(of: { driverId: string } | { businessId: string }) {
+    const stars = this.orders
+      .filter((o) => ('driverId' in of ? o.driverId === of.driverId : o.business?.id === of.businessId))
+      .map((o) => ('driverId' in of ? o.rating?.driverStars : o.rating?.storeStars))
+      .filter((n): n is number => typeof n === 'number');
+    return { average: stars.length ? Math.round((stars.reduce((a, b) => a + b, 0) / stars.length) * 10) / 10 : null, count: stars.length };
+  }
+  /** Como el include de Prisma: la última ubicación del repartidor viene con el pedido. */
+  private withLocation(o: OrderRecord): OrderRecord {
+    const copy = structuredClone(o);
+    copy.driverLocation = (o.driverId && this.drivers?.drivers.find((d) => d.userId === o.driverId)?.location) || null;
+    return copy;
+  }
+  async widenOffer(id: string, radiusKm: number | null, at: Date) {
+    const order = this.orders.find((o) => o.id === id && o.status === 'searching_driver' && !o.driverId);
+    if (!order) return null;
+    Object.assign(order, { offerRadiusKm: radiusKm, offerWaveAt: at });
+    return this.withLocation(order);
+  }
+  async updateIfStatus(id: string, expected: OrderStatus, { note, offer, ...changes }: OrderChanges) {
     const order = this.orders.find((o) => o.id === id);
     if (!order || order.status !== expected) return null;
-    Object.assign(order, changes, { updatedAt: new Date() });
-    return { ...order };
+    if (changes.status !== expected || note) order.timeline.push({ status: changes.status, at: new Date().toISOString(), ...(note ? { note } : {}) });
+    Object.assign(order, changes, { updatedAt: new Date() }, offer ? { offerRadiusKm: offer.radiusKm, offerWaveAt: offer.at } : {});
+    return this.withLocation(order);
+  }
+  async resetDeliveryCode(id: string, code: string) {
+    const order = this.orders.find((o) => o.id === id)!;
+    Object.assign(order, { deliveryCode: code, deliveryCodeAttempts: 0, updatedAt: new Date() });
+    return structuredClone(order);
+  }
+  async addFailedCodeAttempt(id: string) {
+    const order = this.orders.find((o) => o.id === id)!;
+    order.deliveryCodeAttempts += 1;
+    return order.deliveryCodeAttempts;
   }
 }
 
@@ -379,5 +512,165 @@ export class RecordingVerificationSender implements VerificationSender {
   }
   lastEmailCode() {
     return this.emails.at(-1)!.subject.match(/(\d{6})/)![1];
+  }
+}
+
+export class InMemoryDriverLedger implements DriverLedgerRepository {
+  entries: LedgerEntryRecord[] = [];
+  constructor(private readonly drivers?: InMemoryDriversRepository) {}
+  private counts = (e: LedgerEntryRecord) => e.status !== 'failed';
+  async recordDelivery(e: { driverId: string; orderId: string; feeCents: number; commissionCents: number; tipCents: number }) {
+    if (this.entries.some((x) => x.orderId === e.orderId && x.kind === 'delivery_fee')) return false;
+    const base = { driverId: e.driverId, orderId: e.orderId, status: 'posted' as const, transferId: null, failureReason: null, reason: null, createdAt: new Date() };
+    this.entries.push({ ...base, id: nextId('le'), kind: 'delivery_fee', amountCents: e.feeCents });
+    this.entries.push({ ...base, id: nextId('le'), kind: 'commission', amountCents: -e.commissionCents });
+    if (e.tipCents > 0) this.entries.push({ ...base, id: nextId('le'), kind: 'tip', amountCents: e.tipCents });
+    return true;
+  }
+  async balance(driverId: string) {
+    const mine = this.entries.filter((e) => e.driverId === driverId);
+    return {
+      availableCents: mine.filter(this.counts).reduce((s, e) => s + e.amountCents, 0),
+      pendingPayoutCents: 0 - mine.filter((e) => e.kind === 'payout' && e.status === 'pending').reduce((s, e) => s + e.amountCents, 0),
+    };
+  }
+  async totals(driverId: string, since?: Date) {
+    const mine = this.entries.filter((e) => e.driverId === driverId && e.kind !== 'payout' && (!since || e.createdAt >= since));
+    const sum = (kind: string) => mine.filter((e) => e.kind === kind).reduce((s, e) => s + e.amountCents, 0);
+    return { netCents: sum('delivery_fee') + sum('commission') + sum('tip'), deliveries: mine.filter((e) => e.kind === 'delivery_fee').length, tipsCents: sum('tip'), commissionCents: -sum('commission') };
+  }
+  async list(driverId: string, limit: number) {
+    return this.entries.filter((e) => e.driverId === driverId).reverse().slice(0, limit);
+  }
+  async reservePayout(driverId: string, minCents: number, reason: 'manual' | 'auto') {
+    if (this.entries.some((e) => e.driverId === driverId && e.kind === 'payout' && e.status === 'pending')) return 'pending' as const;
+    const { availableCents } = await this.balance(driverId);
+    if (availableCents < minCents) return 'no_balance' as const;
+    const entry: LedgerEntryRecord = { id: nextId('po'), driverId, orderId: null, kind: 'payout', amountCents: -availableCents, status: 'pending', transferId: null, failureReason: null, reason, createdAt: new Date() };
+    this.entries.push(entry);
+    return { ...entry };
+  }
+  async findPayout(id: string) {
+    const e = this.entries.find((x) => x.id === id && x.kind === 'payout');
+    return e ? { ...e } : null;
+  }
+  async settlePayout(id: string, status: 'paid' | 'failed', transferId: string | null, failureReason: string | null) {
+    const e = this.entries.find((x) => x.id === id && x.kind === 'payout' && x.status === 'pending');
+    if (!e) return null;
+    Object.assign(e, { status, transferId, failureReason });
+    return { ...e };
+  }
+  async stuckPayouts(before: Date) {
+    return this.entries.filter((e) => e.kind === 'payout' && e.status === 'pending' && e.createdAt < before).map((e) => ({ ...e }));
+  }
+  async duePayouts(minCents: number) {
+    const ids = (this.drivers?.drivers ?? []).filter((d) => d.active && d.payoutPhone).map((d) => d.userId);
+    const due: string[] = [];
+    for (const id of ids) {
+      if (this.entries.some((e) => e.driverId === id && e.kind === 'payout' && e.status === 'pending')) continue;
+      if ((await this.balance(id)).availableCents >= minCents) due.push(id);
+    }
+    return due;
+  }
+}
+
+/** Los reclamos también se ven dentro del pedido (como el include de Prisma). */
+export class InMemoryClaims implements ClaimsRepository {
+  claims: ClaimRecord[] = [];
+  constructor(private readonly orders: InMemoryOrdersRepository) {}
+  private sync(orderId: string) {
+    const order = this.orders.orders.find((o) => o.id === orderId);
+    if (order) order.claims = this.claims.filter((c) => c.orderId === orderId).map((c) => ({ ...c })).reverse();
+  }
+  async create(claim: NewClaim) {
+    const record: ClaimRecord = { ...claim, id: nextId('cl'), status: 'open', refundCents: null, refundRef: null, providerRefundId: null, resolutionNote: '', resolvedById: null, createdAt: new Date(), resolvedAt: null };
+    this.claims.push(record);
+    this.sync(claim.orderId);
+    return { ...record };
+  }
+  async findById(id: string) {
+    const c = this.claims.find((x) => x.id === id);
+    return c ? { ...c } : null;
+  }
+  async listByStatus(statuses: ClaimStatus[], limit: number) {
+    return this.claims.filter((c) => statuses.includes(c.status)).slice(0, limit).map((c) => ({ ...c }));
+  }
+  async updateIfStatus(id: string, expected: ClaimStatus, changes: ClaimChanges) {
+    const c = this.claims.find((x) => x.id === id && x.status === expected);
+    if (!c) return null;
+    Object.assign(c, changes);
+    this.sync(c.orderId);
+    return { ...c };
+  }
+}
+
+export class InMemoryPhotos implements PhotosRepository {
+  owners = new Map<string, string>();
+  async create(id: string, uploaderId: string) {
+    this.owners.set(id, uploaderId);
+  }
+  async uploaderOf(id: string) {
+    return this.owners.get(id) ?? null;
+  }
+}
+
+/** Cupones: los usos salen de los pedidos con ese cupón que siguen vivos (como el join de Prisma). */
+export class InMemoryCoupons implements CouponsRepository {
+  coupons: CouponRecord[] = [];
+  constructor(private readonly orders: InMemoryOrdersRepository) {}
+  private static readonly FREED: OrderStatus[] = ['cancelled', 'rejected', 'payment_expired'];
+  async findByCode(code: string) {
+    const c = this.coupons.find((x) => x.code === code);
+    return c ? { ...c } : null;
+  }
+  async create(c: NewCoupon) {
+    const record: CouponRecord = { ...c, active: true, startsAt: null, createdAt: new Date() };
+    this.coupons.push(record);
+    return { ...record };
+  }
+  async setActive(code: string, active: boolean) {
+    const c = this.coupons.find((x) => x.code === code);
+    if (!c) return null;
+    c.active = active;
+    return { ...c };
+  }
+  async list(limit: number) {
+    return [...this.coupons].reverse().slice(0, limit).map((c) => ({ ...c }));
+  }
+  async countUses(code: string, userId?: string) {
+    return this.orders.orders.filter((o) => o.couponCode === code && (!userId || o.userId === userId) && !InMemoryCoupons.FREED.includes(o.status)).length;
+  }
+  async countLiveOrders(userId: string) {
+    return this.orders.orders.filter((o) => o.userId === userId && !InMemoryCoupons.FREED.includes(o.status)).length;
+  }
+}
+
+export class InMemoryAddresses implements AddressesRepository {
+  addresses: (SavedAddress & { userId: string })[] = [];
+  async list(userId: string, limit: number) {
+    return this.addresses
+      .filter((a) => a.userId === userId)
+      .sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt))
+      .slice(0, limit)
+      .map(({ userId: _, ...a }) => a);
+  }
+  async remember(userId: string, address: AddressInput, at: Date, keep: number) {
+    const found = this.addresses.find((a) => a.userId === userId && a.line === address.line);
+    if (found) Object.assign(found, { reference: address.reference, lastUsedAt: at.toISOString(), ...(address.location ? { location: address.location } : {}) });
+    else this.addresses.push({ id: nextId('ad'), userId, label: '', line: address.line, reference: address.reference, location: address.location ?? null, lastUsedAt: at.toISOString() });
+    const mine = (await this.list(userId, 1000)).map((a) => a.id);
+    this.addresses = this.addresses.filter((a) => a.userId !== userId || mine.indexOf(a.id) < keep);
+  }
+  async setLabel(userId: string, id: string, label: string) {
+    const a = this.addresses.find((x) => x.id === id && x.userId === userId);
+    if (!a) return null;
+    a.label = label;
+    const { userId: _, ...rest } = a;
+    return rest;
+  }
+  async delete(userId: string, id: string) {
+    const before = this.addresses.length;
+    this.addresses = this.addresses.filter((a) => !(a.id === id && a.userId === userId));
+    return this.addresses.length < before;
   }
 }

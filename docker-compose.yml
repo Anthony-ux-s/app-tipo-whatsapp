@@ -34,12 +34,15 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET (32+ caracteres)}
       WEB_ORIGIN: ${PUBLIC_URL}
       PROVIDERS_URL: http://providers:4103
-      # Los avisos de pago y delivery viajan por la red interna de Docker
+      # Los avisos de pago viajan por la red interna de Docker
       GATEWAY_PUBLIC_URL: http://gateway:4100
       PAGAYA_WEBHOOK_SECRET: ${PAGAYA_WEBHOOK_SECRET:?Define PAGAYA_WEBHOOK_SECRET (24+ caracteres)}
-      RAPIDITO_WEBHOOK_SECRET: ${RAPIDITO_WEBHOOK_SECRET:?Define RAPIDITO_WEBHOOK_SECRET (24+ caracteres)}
+      MERCAYA_ADMIN_KEY: ${MERCAYA_ADMIN_KEY:?Define MERCAYA_ADMIN_KEY (24+ caracteres)}
+      PAGAYA_API_KEY: ${PAGAYA_API_KEY:?Define PAGAYA_API_KEY (24+ caracteres)}
+      # Retiro automático diario de las ganancias de los repartidores (hora de Lima; vacío = apagado)
+      RAPIDITO_PAYOUT_AT: ${RAPIDITO_PAYOUT_AT:-23:00}
 
-  # Simuladores de tienda (MercaYa), delivery (Rapidito) y billetera con QR (PagaYa). Para producción
+  # Simuladores de tienda (MercaYa), tarifa del delivery (Rapidito) y billetera con QR (PagaYa). Para producción
   # real se reemplazan por los proveedores verdaderos y solo cambian los traductores del gateway.
   providers:
     build: services/providers
@@ -49,7 +52,8 @@ services:
     environment:
       PROVIDERS_PUBLIC_URL: ${PROVIDERS_PUBLIC_URL:?Define PROVIDERS_PUBLIC_URL}
       PAGAYA_WEBHOOK_SECRET: ${PAGAYA_WEBHOOK_SECRET}
-      RAPIDITO_WEBHOOK_SECRET: ${RAPIDITO_WEBHOOK_SECRET}
+      MERCAYA_ADMIN_KEY: ${MERCAYA_ADMIN_KEY}
+      PAGAYA_API_KEY: ${PAGAYA_API_KEY}
 
   realtime:
     build: services/realtime
@@ -80,6 +84,13 @@ services:
       TURN_URL: ${TURN_URL:-}
       TURN_USERNAME: ${TURN_USERNAME:-}
       TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+      # Ganancias del repartidor: % de la tarifa de delivery (Rapidito se queda con el resto) y mínimos
+      DRIVER_SHARE_PERCENT: ${DRIVER_SHARE_PERCENT:-95}
+      DRIVER_MIN_AUTO_PAYOUT_SOLES: ${DRIVER_MIN_AUTO_PAYOUT_SOLES:-5}
+      DRIVER_MIN_MANUAL_PAYOUT_SOLES: ${DRIVER_MIN_MANUAL_PAYOUT_SOLES:-1}
+      # Ofertas por cercanía: radios de cada oleada (km) y minutos entre oleadas
+      DISPATCH_RADII_KM: ${DISPATCH_RADII_KM:-3,6,12}
+      DISPATCH_WAVE_MINUTES: ${DISPATCH_WAVE_MINUTES:-2}
     volumes:
       - app-storage:/data/storage
 

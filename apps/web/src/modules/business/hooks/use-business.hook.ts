@@ -42,9 +42,9 @@ export function useBusinessOrders() {
   };
 }
 
-type Action = 'accept' | 'reject' | 'ready';
+type Action = 'accept' | 'reject' | 'ready' | 'handoff' | 'cancel' | 'reassign';
 
-/** Un pedido del negocio: aceptarlo, rechazarlo o avisar que está listo para Rapidito. */
+/** Un pedido del negocio: aceptarlo o rechazarlo, avisar que está listo y entregarlo al repartidor. */
 export function useBusinessOrderDetail() {
   const { orderId = '' } = useParams();
   const navigate = useNavigate();
@@ -53,6 +53,7 @@ export function useBusinessOrderDetail() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Action | null>(null);
   const [confirmReject, setConfirmReject] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const retry = () => {
     setError(null);
@@ -70,6 +71,7 @@ export function useBusinessOrderDetail() {
     } finally {
       setBusy(null);
       setConfirmReject(false);
+      setConfirmCancel(false);
     }
   };
 
@@ -79,11 +81,19 @@ export function useBusinessOrderDetail() {
     busy,
     retry,
     accept: () => run('accept', 'Pedido aceptado. ¡A prepararlo!'),
-    ready: () => run('ready', 'Listo. Rapidito está asignando un motorizado.'),
+    ready: () => run('ready', 'Listo. Avisamos a los repartidores de Rapidito.'),
+    handoff: () => run('handoff', 'Entregado al repartidor. Va en camino al cliente.'),
     confirmReject,
     askReject: () => setConfirmReject(true),
     cancelReject: () => setConfirmReject(false),
-    reject: () => run('reject', 'Pedido rechazado. Avísale al cliente por el chat.'),
+    reject: () => run('reject', 'Pedido rechazado. Le devolvimos el pago al cliente.'),
+    /** Ya aceptado y antes de que vaya en camino: se cancela y se devuelve el pago. */
+    canCancel: !!order && ['preparing', 'searching_driver', 'driver_assigned'].includes(order.status),
+    confirmCancel,
+    askCancel: () => setConfirmCancel(true),
+    closeCancel: () => setConfirmCancel(false),
+    cancel: () => run('cancel', 'Pedido cancelado. Le devolvimos el pago al cliente.'),
+    reassign: () => run('reassign', 'Listo: lo ofrecimos a otros repartidores.'),
     back: () => navigate('/app/negocio'),
   };
 }
