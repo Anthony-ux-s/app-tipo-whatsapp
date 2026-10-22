@@ -27,3 +27,6 @@ services/realtime/deps/
 signing-key-info.txt
 .vercel
 .env*
+
+# Variables listas para pegar en Railway (con secretos)
+railway.env
