@@ -1,0 +1,9 @@
+services/realtime
+services/gateway
+services/providers
+apps/api/dist
+apps/web/dist
+apps/web/dev-dist
+**/node_modules
+.env
+*.keystore

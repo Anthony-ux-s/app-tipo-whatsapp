@@ -79,8 +79,10 @@ export class ParlaSocket {
   }
 
   private open(): void {
+    // Con la web en Vercel (que no reenvía WebSockets) el tiempo real va directo al backend: VITE_WS_URL=wss://api.tudominio.com
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${scheme}://${location.host}/ws?token=${encodeURIComponent(this.token)}`);
+    const base = (import.meta.env.VITE_WS_URL as string | undefined)?.replace(/\/$/, '') || `${scheme}://${location.host}`;
+    const ws = new WebSocket(`${base}/ws?token=${encodeURIComponent(this.token)}`);
     this.ws = ws;
     ws.onopen = () => {
       this.attempts = 0;

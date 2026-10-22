@@ -25,3 +25,5 @@ services/realtime/deps/
 *.keystore
 *.jks
 signing-key-info.txt
+.vercel
+.env*
