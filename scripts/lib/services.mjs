@@ -29,6 +29,13 @@ const DEV_PAGAYA_SECRET = 'pagaya-dev-secret';
 const DEV_MERCAYA_KEY = 'mercaya-dev-clave';
 const DEV_PAGAYA_API_KEY = 'pagaya-dev-clave';
 
+/** Orígenes permitidos: los del .env (p. ej. la web en Vercel) y siempre la web local. */
+function webOrigins() {
+  const local = `http://localhost:${ports.web}`;
+  const configured = (process.env.WEB_ORIGIN ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+  return [...new Set([...configured, local])].join(',');
+}
+
 export const step = (title) => console.log(`\n\x1b[36m▸ ${title}\x1b[0m`);
 
 /** Carpetas de instalación habituales, por si Go o Elixir no quedaron en el PATH de esta terminal. */
@@ -130,7 +137,7 @@ export function startServices({ core = 'start' } = {}) {
       cwd: root,
       stdio: 'inherit',
       shell: isWindows,
-      env: { ...env, PORT: String(ports.core), WEB_ORIGIN: `http://localhost:${ports.web}` },
+      env: { ...env, PORT: String(ports.core), WEB_ORIGIN: webOrigins() },
     }),
     spawn(mix, ['run', '--no-halt'], {
       cwd: realtimeDir,
@@ -145,7 +152,7 @@ export function startServices({ core = 'start' } = {}) {
         ...env,
         GATEWAY_PORT: String(ports.gateway),
         REALTIME_LINK_URL: `ws://localhost:${ports.realtime}/link`,
-        WEB_ORIGIN: `http://localhost:${ports.web}`,
+        WEB_ORIGIN: webOrigins(),
       },
     }),
     spawnProviders(env),

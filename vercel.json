@@ -6,7 +6,6 @@
   "outputDirectory": "apps/web/dist",
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://api.kronito.com/api/:path*" },
-    { "source": "/.well-known/assetlinks.json", "destination": "https://api.kronito.com/.well-known/assetlinks.json" },
     { "source": "/((?!assets/|icons/|products/|services/|sw\\.js|manifest\\.webmanifest|workbox-.*|favicon\\.svg|theme-init\\.js).*)", "destination": "/index.html" }
   ],
   "headers": [

@@ -5,10 +5,27 @@ misma PWA empaquetada como app de Android con *Trusted Web Activity* (TWA): se a
 sin barra del navegador, y **se actualiza sola** cada vez que despliegas la web (no hay que subir un APK
 nuevo por cada cambio).
 
-> **Estado:** en este repositorio todavía **no hay un `.apk` generado**. Un APK necesita tu dominio
-> publicado con HTTPS (queda atado a él) y una clave de firma tuya, así que se genera una vez que la web
-> está en línea. Los pasos de abajo toman ~10 minutos. Cuando lo tengas, guárdalo aquí como
-> `docs/apk/parla.apk`.
+> **Estado:** el APK ya está generado: **[`parla.apk`](parla.apk)** (en esta carpeta). Es la PWA de
+> `https://www.kronito.com` empaquetada con PWABuilder (id `com.kronito.parla`), firmada con una clave propia.
+
+## Instalarlo en el celular (Android)
+1. Pasa `parla.apk` al teléfono (WhatsApp, Drive, USB o descargándolo desde GitHub: *docs/apk/parla.apk → Download*).
+2. Ábrelo y acepta «instalar apps de origen desconocido» cuando Android lo pida.
+3. Abre **Parla** e inicia sesión como siempre.
+
+La app carga lo que hay en `www.kronito.com`: cuando despliegues cambios en la web, **la app se actualiza sola**
+(no hace falta generar otro APK). Se abre a pantalla completa porque `www.kronito.com/.well-known/assetlinks.json`
+(en `apps/web/public/.well-known/`) lleva la huella de la firma.
+
+## Archivos importantes (¡guárdalos!)
+En `mobile/signing/` (fuera de git, **respáldalo**): `signing.keystore` y `signing-key-info.txt` (claves de la firma)
+y `parla.aab` (el paquete para subir a Google Play). Sin la clave de firma no podrás publicar actualizaciones en
+Play Store. Las contraseñas también están en tu `.env` (`APK_KEYSTORE_PASSWORD`, `APK_KEY_PASSWORD`).
+
+## Cómo se generó (por si hay que repetirlo)
+Con la API de PWABuilder (`pwabuilder-cloudapk.azurewebsites.net/generateAppPackage`), con host
+`https://www.kronito.com`, id `com.kronito.parla`, colores `#009d71` y `#f0f2f5`. Si cambias el dominio, hay que
+generar otro APK y actualizar `assetlinks.json` con su nueva huella.
 
 ## Antes de empezar
 

@@ -30,3 +30,6 @@ signing-key-info.txt
 
 # Variables listas para pegar en Railway (con secretos)
 railway.env
+
+# Firma y paquete de Play Store de la app Android (secretos)
+mobile/signing/

@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.kronito.parla",
+        "sha256_cert_fingerprints": ["A4:BC:CC:B2:F5:D3:53:99:DA:F8:F3:33:6A:7D:0C:33:07:93:F8:69:F9:87:F4:A3:E2:D5:2C:2F:2E:2C:19:B7"]
+      }
+    }]
