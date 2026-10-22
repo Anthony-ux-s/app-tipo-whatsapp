@@ -10,7 +10,6 @@ import type {
   RatingSummary,
   OrderStatus,
   OrderTimelineEntry,
-  ServiceId,
 } from '@parla/types';
 import type { ClaimRecord } from './claims.repository';
 
@@ -18,7 +17,8 @@ import type { ClaimRecord } from './claims.repository';
 export interface OrderRecord {
   id: string;
   userId: string;
-  service: ServiceId;
+  /** Clave de la tienda que lo prepara (el id de la tienda). */
+  service: string;
   /** Negocio que prepara el pedido (con su dueño y dirección); null en pedidos sin negocio. */
   business: OrderBusiness | null;
   /** Dónde se recogió: la ubicación de la tienda cuando se creó el pedido (null en pedidos viejos). */

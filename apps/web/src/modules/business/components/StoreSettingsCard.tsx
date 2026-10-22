@@ -1,14 +1,14 @@
-import { ChevronRight, Clock, Tags } from 'lucide-react';
-import { Link } from 'react-router';
+import { Clock } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { Stars } from '@shared/ui/Stars';
 import { Toggle } from '@shared/ui/Toggle';
 import { useStoreSettings } from '../hooks/use-store-settings.hook';
+import { StoreLinks } from './StoreLinks';
 
 const timeInput =
   'h-10 rounded-xl border border-line bg-surface px-3 text-[15px] text-ink outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/15';
 
-/** «Mi tienda»: abierta o cerrada ahora, pausar los pedidos, horario y acceso al catálogo. */
+/** «Mi tienda»: abierta o cerrada ahora, pausar los pedidos, horario y accesos a sus datos y productos. */
 export function StoreSettingsCard() {
   const s = useStoreSettings();
   if (!s.business) return null;
@@ -60,20 +60,9 @@ export function StoreSettingsCard() {
         <span className="w-full text-xs text-ink-faint">{s.allDay ? 'Misma hora de apertura y cierre: atiendes las 24 horas.' : 'Si cierra antes de abrir, el horario cruza la medianoche.'}</span>
       </div>
 
-      <Link
-        to="/app/negocio/catalogo"
-        data-testid="open-catalog"
-        className="group -mx-1 flex items-center gap-3 rounded-xl px-1 py-2 transition-colors duration-200 hover:bg-surface-2"
-      >
-        <span className="flex size-9 items-center justify-center rounded-xl bg-teal-50 text-brand dark:bg-teal-950/60 dark:text-teal-300">
-          <Tags className="size-[18px]" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-semibold text-ink">Catálogo y precios</span>
-          <span className="block text-sm text-ink-soft">Precios, ofertas y stock de tus productos</span>
-        </span>
-        <ChevronRight className="size-5 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5" />
-      </Link>
+      <div className="border-t border-line pt-2">
+        <StoreLinks business={s.business} />
+      </div>
     </section>
   );
 }

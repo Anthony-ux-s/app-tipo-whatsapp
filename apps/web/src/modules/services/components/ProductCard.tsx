@@ -7,11 +7,13 @@ import { ProductImage } from './ProductImage';
 interface ProductCardProps {
   product: Product;
   quantity: number;
+  /** Nombre de la tienda (en Ofertas, donde hay productos de varias). */
+  storeName?: string;
   onAdd: () => void;
   onSubtract: () => void;
 }
 
-export function ProductCard({ product, quantity, onAdd, onSubtract }: ProductCardProps) {
+export function ProductCard({ product, quantity, storeName, onAdd, onSubtract }: ProductCardProps) {
   const soldOut = product.stock === 0;
   const discount = discountPercent(product.priceCents, product.listPriceCents);
   return (
@@ -24,6 +26,7 @@ export function ProductCard({ product, quantity, onAdd, onSubtract }: ProductCar
         )}
       </div>
       <div className="min-w-0 flex-1 px-0.5">
+        {storeName && <p className="truncate text-[11px] font-semibold text-brand dark:text-teal-300">{storeName}</p>}
         <h3 className="line-clamp-2 text-sm leading-tight font-semibold text-ink">{product.name}</h3>
         <p className="text-xs text-ink-soft">{product.unit}</p>
         <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">

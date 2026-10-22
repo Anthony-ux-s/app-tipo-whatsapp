@@ -265,28 +265,90 @@ model Order {
 }
 
 /**
- * Negocio que atiende los pedidos de un servicio (hoy, la tienda del Mercado) y su dueño en Parla.
- * El dueño acepta cada pedido, lo prepara, avisa cuando está listo y se lo entrega al repartidor.
+ * Tienda de Parla (marketplace): la registra su dueño desde la app y soporte la aprueba. Vende desde el
+ * catálogo propio de Parla (source = native, tabla Product) o desde su propia API (source = api). El
+ * dueño acepta cada pedido, lo prepara, avisa cuando está listo y se lo entrega al repartidor.
  */
 model Business {
   id              String   @id @default(cuid())
   name            String
-  /// ServiceId que atiende: mercado | salud (uno por servicio).
-  service         String   @unique
+  /// Categoría: mercado | tecnologia | ferreteria | salud (varias tiendas por categoría).
+  service         String
+  description     String   @default("")
   ownerId         String   @unique
   /// Dirección donde el repartidor recoge los pedidos, y su punto en el mapa.
   address         String
   lat             Float?
   lng             Float?
+  /// StoreStatus: pending | approved | rejected | suspended. Solo las aprobadas venden.
+  status          String   @default("pending")
+  /// Motivo del rechazo o la suspensión (lo escribe soporte).
+  reviewNote      String   @default("")
+  reviewedAt      DateTime?
+  reviewedById    String?
+  /// De dónde sale su catálogo: native (tabla Product) | api (su propio sistema).
+  source          String   @default("native")
+  /// API propia (source = api): idioma (parla | redwiiil), URL, ruta y claves. Nunca se devuelven completas.
+  apiFormat       String   @default("parla")
+  apiBaseUrl      String   @default("")
+  apiPrefix       String   @default("")
+  apiKey          String   @default("")
+  apiAdminKey     String   @default("")
   /// El dueño puede pausar los pedidos aunque esté en horario («Recibir pedidos»).
   acceptingOrders Boolean  @default(true)
   /// Horario de atención (hora de Lima, «HH:MM»); si cierra antes de abrir, cruza la medianoche.
   opensAt         String   @default("08:00")
   closesAt        String   @default("22:00")
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  owner  User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  orders Order[]
+  owner        User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  orders       Order[]
+  products     Product[]
+  reservations StockReservation[]
+
+  @@index([service, status])
+  @@index([status, createdAt])
+}
+
+/// Producto del catálogo propio de una tienda (source = native). Precios en céntimos.
+model Product {
+  id             String   @id @default(cuid())
+  businessId     String
+  /// Código propio de la tienda (único dentro de la tienda).
+  sku            String
+  name           String
+  /// Presentación: «1 kg», «750 ml»…
+  unit           String   @default("")
+  priceCents     Int
+  /// Precio normal cuando está en oferta (priceCents es el rebajado).
+  listPriceCents Int?
+  stock          Int      @default(0)
+  category       String   @default("")
+  imageUrl       String?
+  /// Los inactivos no se muestran a los clientes.
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, sku])
+  @@index([businessId, category])
+}
+
+/// Stock apartado para un pedido (referencia = id del pedido): hace la reserva idempotente y permite devolverla.
+model StockReservation {
+  businessId String
+  reference  String
+  /// JSON [{ sku, quantity }]
+  lines      String
+  released   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, reference])
 }
 
 /// Repartidor de Rapidito: una cuenta de Parla con su vehículo. Toma los pedidos listos, los recoge
@@ -505,27 +567,6 @@ model UserActivityDay {
   @@id([userId, day])
   @@index([day])
 }
-
-/// API de tienda que soporte conecta a un servicio (p. ej. Tecnología): la URL, el prefijo y las
-/// claves con las que el gateway consulta su catálogo y reserva. El servicio aparece disponible solo
-/// si está encendida.
-model ServiceIntegration {
-  /// ServiceId: tecnologia | salud
-  service     String   @id
-  name        String   @default("")
-  /// Idioma de la API: parla (el de MercaYa) | redwiiil (la API v1 de RED WIIIL)
-  format      String   @default("parla")
-  enabled     Boolean  @default(false)
-  baseUrl     String   @default("")
-  prefix      String   @default("")
-  /// Credencial de Parla ante la tienda (cabecera x-api-key). No se devuelve completa al navegador.
-  apiKey      String   @default("")
-  /// Clave de administración del catálogo (opcional: para que la dueña cambie precios y stock).
-  adminKey    String   @default("")
-  updatedById String?
-  updatedAt   DateTime @updatedAt
-}
-
 /// Ruleta de descuentos: a quién le sale (segment), cada cuánto puede girar y los premios (JSON RoulettePrize[]).
 model RouletteCampaign {
   id           String   @id @default(cuid())

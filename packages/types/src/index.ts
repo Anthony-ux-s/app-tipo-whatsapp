@@ -6,6 +6,7 @@ export * from './contracts/services.types';
 export * from './contracts/calls.types';
 export * from './contracts/logistics.types';
 export * from './contracts/growth.types';
+export * from './contracts/stores.types';
 
 export interface ApiErrorBody {
   statusCode: number;

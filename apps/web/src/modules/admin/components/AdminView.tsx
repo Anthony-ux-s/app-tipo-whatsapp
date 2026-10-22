@@ -1,5 +1,5 @@
 import type { AdminClaim, AdminDriver, DriverStatus } from '@parla/types';
-import { BarChart3, Bike, Dices, Check, FileImage, HandCoins, LifeBuoy, Package, Plug, RefreshCw, Route, ShieldCheck, Ticket, Users, X, type LucideIcon } from 'lucide-react';
+import { BarChart3, Bike, Dices, Check, FileImage, HandCoins, LifeBuoy, Package, RefreshCw, Route, ShieldCheck, Store, Ticket, Users, X, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router';
 import { Button, IconButton } from '@shared/ui/Button';
@@ -15,7 +15,7 @@ import { useAdmin, type ClaimsView } from '../hooks/use-admin.hook';
 import { AdminCoupons } from './AdminCoupons';
 import { AdminDeliverySettings } from './AdminDeliverySettings';
 import { AdminMarketing } from './AdminMarketing';
-import { AdminIntegrations } from './AdminIntegrations';
+import { AdminStores } from './AdminStores';
 import { AdminPeople } from './AdminPeople';
 import { AdminTraffic } from './AdminTraffic';
 import { AdminOrders } from './AdminOrders';
@@ -35,7 +35,7 @@ const SECTIONS = [
   ['personas', 'Personas', 'Usuarios, negocios y roles', Users],
   ['trafico', 'Tráfico', 'Actividad y números del día', BarChart3],
   ['tarifas', 'Tarifas', 'Precios y reparto del delivery', Route],
-  ['integraciones', 'Integrar', 'Conexión con tiendas externas', Plug],
+  ['tiendas', 'Tiendas', 'Revisar y aprobar tiendas', Store],
   ['repartidores', 'Repartidores', 'Revisar y aprobar altas', Bike],
   ['reclamos', 'Reclamos', 'Devoluciones y casos abiertos', LifeBuoy],
   ['cupones', 'Cupones', 'Descuentos y promociones', Ticket],
@@ -86,7 +86,7 @@ export function AdminView() {
             {current && (
               <div className="hidden items-center justify-between gap-3 lg:flex">
                 <div className="min-w-0">
-                  <h2 className="text-2xl font-extrabold text-ink">{current[1] === 'Integrar' ? 'Integraciones' : current[1]}</h2>
+                  <h2 className="text-2xl font-extrabold text-ink">{current[1]}</h2>
                   <p className="text-sm text-ink-soft">{current[2]}</p>
                 </div>
                 {ownList && (
@@ -116,7 +116,15 @@ export function AdminView() {
       {a.tab === 'cupones' && <AdminCoupons />}
       {a.tab === 'marketing' && <AdminMarketing />}
       {a.tab === 'tarifas' && <AdminDeliverySettings />}
-      {a.tab === 'integraciones' && <AdminIntegrations />}
+      {a.tab === 'tiendas' && (
+        <AdminStores
+          chip={(on, onClick, label) => (
+            <Chip key={label} small on={on} onClick={onClick}>
+              {label}
+            </Chip>
+          )}
+        />
+      )}
       {a.tab === 'trafico' && <AdminTraffic />}
       {a.tab === 'personas' && (
         <AdminPeople

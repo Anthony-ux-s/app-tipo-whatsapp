@@ -17,7 +17,7 @@ export function useReorder() {
     setLoading(true);
     try {
       const ids = order.lines.map((l) => l.productId).join(',');
-      const products = await http.get<Product[]>(`/services/${order.service}/products?ids=${encodeURIComponent(ids)}`);
+      const products = await http.get<Product[]>(`/services/${encodeURIComponent(order.service)}/products?ids=${encodeURIComponent(ids)}`);
       const byId = new Map(products.map((p) => [p.id, p]));
       const lines = order.lines.flatMap((l) => {
         const product = byId.get(l.productId);

@@ -654,9 +654,11 @@ func TestSoloLaDuenaVeYCambiaElCatalogo(t *testing.T) {
 	if err != nil || len(list) != 2 || list[0].ID != "ARR-EXT-1K" {
 		t.Fatalf("catálogo ordenado esperado: %+v %v", list, err)
 	}
-	w.core.business.Service = services.Salud
+	// Una tienda cuya integración no está encendida (aprobada y conectada) no tiene catálogo.
+	w.orch.Stores = fakeStores{on: false}
+	w.core.business.ID = "biz_sin_conexion"
 	if _, err := w.orch.StoreCatalog(ctx, owner); status(err) != http.StatusNotFound {
-		t.Fatalf("un negocio de otro servicio no tiene catálogo de MercaYa, obtuve %v", err)
+		t.Fatalf("una tienda sin integración no tiene catálogo, obtuve %v", err)
 	}
 }
 

@@ -1,32 +1,18 @@
 import type { ClaimReason, ClaimStatus, OrderStatus, ServiceId } from '@parla/types';
-import type { ServiceIconName } from '../components/ServiceIcons';
 
-/** Cada servicio: su ícono 3D (en /public/services) y su tienda (se abre si el servicio está disponible). */
-export const SERVICE_VISUALS: Record<ServiceId, { art: string; to: string | null }> = {
-  mercado: { art: 'mercado', to: '/app/servicios/mercado' },
-  tecnologia: { art: 'tecnologia', to: '/app/servicios/tecnologia' },
-  ferreteria: { art: 'ferreteria', to: '/app/servicios/ferreteria' },
-  salud: { art: 'salud', to: '/app/servicios/salud' },
+/** Cada categoría: su ícono 3D (en /public/services) y los textos de sus tiendas. */
+export const SERVICE_VISUALS: Record<ServiceId, { art: string; title: string; placeholder: string; empty: string }> = {
+  mercado: { art: 'mercado', title: 'Mercado', placeholder: '¿Qué necesitas? ej. un kilo de azúcar, arroz', empty: 'Busca lo que necesitas y agrégalo.' },
+  tecnologia: { art: 'tecnologia', title: 'Tecnología', placeholder: '¿Qué buscas? ej. celular, audífonos', empty: 'Busca celulares, laptops o accesorios y agrégalos.' },
+  ferreteria: { art: 'ferreteria', title: 'Ferretería', placeholder: '¿Qué buscas? ej. martillo, pintura', empty: 'Busca herramientas o materiales y agrégalos.' },
+  salud: { art: 'salud', title: 'Salud', placeholder: '¿Qué buscas? ej. vitamina C', empty: 'Busca lo que necesitas en la farmacia y agrégalo.' },
 };
 
-/** Textos de la tienda de cada servicio. */
-export const STORE_TEXTS: Record<ServiceId, { title: string; subtitle: string; placeholder: string; empty: string }> = {
-  mercado: { title: 'Mercado', subtitle: 'Tienda MercaYa · delivery Rapidito · pago con QR', placeholder: '¿Qué necesitas? ej. un kilo de azúcar, arroz', empty: 'Busca lo que necesitas en el Mercado y agrégalo.' },
-  tecnologia: { title: 'Tecnología', subtitle: 'Tienda conectada · delivery Rapidito · pago con QR', placeholder: '¿Qué buscas? ej. celular, audífonos', empty: 'Busca celulares, laptops o accesorios y agrégalos.' },
-  ferreteria: { title: 'Ferretería', subtitle: 'Ferretería conectada · delivery Rapidito · pago con QR', placeholder: '¿Qué buscas? ej. martillo, pintura', empty: 'Busca herramientas o materiales y agrégalos.' },
-  salud: { title: 'Salud', subtitle: 'Farmacia conectada · delivery Rapidito · pago con QR', placeholder: '¿Qué buscas? ej. vitamina C', empty: 'Busca lo que necesitas en la farmacia y agrégalo.' },
-};
+export const SERVICE_IDS = Object.keys(SERVICE_VISUALS) as ServiceId[];
 
 export function isServiceId(value: string | undefined): value is ServiceId {
-  return value === 'mercado' || value === 'tecnologia' || value === 'ferreteria' || value === 'salud';
+  return !!value && value in SERVICE_VISUALS;
 }
-
-/** Sistemas externos que atienden el mercado (cada uno por su API, a través del gateway). */
-export const MARKET_PARTNERS: { icon: ServiceIconName; name: string; role: string }[] = [
-  { icon: 'mercaya', name: 'MercaYa', role: 'Tienda' },
-  { icon: 'rapidito', name: 'Rapidito', role: 'Delivery' },
-  { icon: 'pagaya', name: 'PagaYa', role: 'Pago con QR' },
-];
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending_payment: 'Esperando tu pago',

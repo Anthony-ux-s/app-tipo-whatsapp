@@ -1,4 +1,4 @@
-import type { Product, ServiceId } from '@parla/types';
+import type { Product } from '@parla/types';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { cartCount, cartEstimateCents, useCartStore } from '@shared/stores/cart.store';
@@ -15,15 +15,15 @@ export interface ProductGroup {
 
 
 /**
- * Mercado: se escribe la lista como se habla («un kilo de azúcar, arroz»), se busca cada cosa y
+ * Tienda: se escribe la lista como se habla («un kilo de azúcar, arroz»), se busca cada cosa y
  * se arma el carrito.
  */
-export function useMarket(service: ServiceId) {
+export function useMarket(storeId: string) {
   const navigate = useNavigate();
   const cartService = useCartStore((s) => s.service);
   const allItems = useCartStore((s) => s.items);
   // El carrito de otra tienda no cuenta aquí (al agregar algo, se empieza uno nuevo).
-  const items = cartService === service ? allItems : EMPTY;
+  const items = cartService === storeId ? allItems : EMPTY;
   const change = useCartStore((s) => s.change);
   const [query, setQuery] = useState('');
   const [terms, setTerms] = useState<string[]>([]);
@@ -33,7 +33,7 @@ export function useMarket(service: ServiceId) {
 
   useEffect(() => {
     let alive = true;
-    const searchProducts = (q: string) => http.get<Product[]>(`/services/${service}/products?q=${encodeURIComponent(q)}`);
+    const searchProducts = (q: string) => http.get<Product[]>(`/services/${encodeURIComponent(storeId)}/products?q=${encodeURIComponent(q)}`);
     setGroups(null);
     setError(null);
     const requests = terms.length
@@ -45,7 +45,7 @@ export function useMarket(service: ServiceId) {
     return () => {
       alive = false;
     };
-  }, [terms, attempt, service]);
+  }, [terms, attempt, storeId]);
 
   const count = cartCount(items);
   const estimate = useMemo(() => cartEstimateCents(items), [items]);
@@ -64,16 +64,16 @@ export function useMarket(service: ServiceId) {
       const found = parseShoppingQuery(query);
       setTerms(found);
       // Lo que busca sirve para mostrarle primero las ofertas que le interesan (no frena la búsqueda).
-      for (const term of found) void http.post('/interests/search', { service, term }).catch(() => undefined);
+      for (const term of found) void http.post('/interests/search', { service: storeId, term }).catch(() => undefined);
     },
     clearSearch: () => {
       setQuery('');
       setTerms([]);
     },
-    add: (product: Product) => change(product, 1, service),
-    subtract: (product: Product) => change(product, -1, service),
+    add: (product: Product) => change(product, 1, storeId),
+    subtract: (product: Product) => change(product, -1, storeId),
     retry: () => setAttempt((n) => n + 1),
-    goToCart: () => navigate(`/app/servicios/${service}/carrito`),
-    back: () => navigate('/app/servicios'),
+    goToCart: () => navigate(`/app/servicios/${storeId}/carrito`),
+    back: (category?: string) => navigate(category ? `/app/servicios/c/${category}` : '/app/servicios'),
   };
 }

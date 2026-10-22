@@ -15,9 +15,10 @@ import { GetInternalBusinessUseCase, type InternalBusiness } from './use-cases/b
 export class InternalBusinessesController {
   constructor(private readonly business: GetInternalBusinessUseCase) {}
 
-  @Get('by-service/:service')
-  byService(@Param('service') service: string): Promise<InternalBusiness> {
-    return this.business.execute('service', service);
+  /** La clave de tienda es su id (la ruta se llama by-service por compatibilidad con el gateway). */
+  @Get('by-service/:storeId')
+  byStore(@Param('storeId') storeId: string): Promise<InternalBusiness> {
+    return this.business.execute('store', storeId);
   }
 
   @Get('by-owner/:userId')

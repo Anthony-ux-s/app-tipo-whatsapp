@@ -5,7 +5,7 @@ import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
 import { errorMessage, http } from '@shared/utils/http';
 
-export type AdminTab = 'pedidos' | 'personas' | 'trafico' | 'tarifas' | 'integraciones' | 'repartidores' | 'reclamos' | 'cupones' | 'marketing';
+export type AdminTab = 'pedidos' | 'personas' | 'trafico' | 'tarifas' | 'tiendas' | 'repartidores' | 'reclamos' | 'cupones' | 'marketing';
 export type ClaimsView = 'open' | 'resolved';
 
 /** Datos del panel de soporte que se vuelven a pedir al cambiar el filtro (o tras una acción). */

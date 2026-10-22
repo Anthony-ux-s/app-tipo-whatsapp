@@ -1,13 +1,11 @@
 /**
- * Arranque de producción de Parla. NO carga datos de ejemplo: crea solo lo mínimo para poder entrar y
- * operar, a partir de variables de entorno, y se puede repetir sin duplicar nada.
+ * Arranque de producción de Parla. NO carga datos de ejemplo: crea solo la cuenta de administrador, a partir de variables de entorno, y se puede repetir sin duplicar nada.
  *
  *   npm run db:seed
  *
  * 1) Cuenta de administrador (soporte): ADMIN_USERNAME + ADMIN_PASSWORD (y opcional ADMIN_NAME, ADMIN_PHONE).
  *    Si la cuenta ya existe, solo se asegura de que sea administradora (no se toca su contraseña).
- * 2) Primera tienda (opcional): STORE_OWNER (usuario o teléfono de una persona ya registrada) + STORE_NAME
- *    + STORE_ADDRESS. Si STORE_OWNER aún no se registró, se omite y se avisa.
+ * Las tiendas NO se crean aquí: cada tienda se registra desde la app y soporte la aprueba.
  *
  * La cuenta de administrador guarda su clave de cifrado de extremo a extremo protegida con su contraseña,
  * igual que cualquier cuenta creada desde la app.
@@ -57,33 +55,9 @@ async function ensureAdmin(): Promise<void> {
   console.log(`• Administrador «${username}» creado. Entra a la app con ese usuario y la contraseña de ADMIN_PASSWORD.`);
 }
 
-async function ensureStore(): Promise<void> {
-  const owner = env.STORE_OWNER?.trim();
-  const name = env.STORE_NAME?.trim();
-  const address = env.STORE_ADDRESS?.trim();
-  if (!owner || !name || !address) return;
-  const service = env.STORE_SERVICE?.trim() || 'mercado';
-  if (await prisma.business.findFirst({ where: { service } })) {
-    console.log(`• Tienda: ya hay una para «${service}».`);
-    return;
-  }
-  const user = await prisma.user.findFirst({ where: { OR: [{ username: owner.toLowerCase() }, { phone: owner }] }, select: { id: true } });
-  if (!user) {
-    console.log(`• Tienda: «${owner}» todavía no se registró en la app. Pídele que cree su cuenta y vuelve a ejecutar npm run db:seed.`);
-    return;
-  }
-  const lat = env.STORE_LAT ? Number(env.STORE_LAT) : null;
-  const lng = env.STORE_LNG ? Number(env.STORE_LNG) : null;
-  await prisma.business.create({
-    data: { name, service, address, lat, lng, opensAt: env.STORE_OPENS_AT || '08:00', closesAt: env.STORE_CLOSES_AT || '22:00', ownerId: user.id },
-  });
-  console.log(`• Tienda «${name}» creada para «${owner}» (servicio ${service}).`);
-}
-
 async function main(): Promise<void> {
   console.log('Arranque de Parla (producción, sin datos de ejemplo):');
   await ensureAdmin();
-  await ensureStore();
 }
 
 main()

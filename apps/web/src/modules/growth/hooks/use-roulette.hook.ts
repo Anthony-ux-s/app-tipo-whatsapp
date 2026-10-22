@@ -115,7 +115,7 @@ export function useRoulette() {
     close,
     useNow: () => {
       setPhase('hidden');
-      navigate('/app/servicios/mercado');
+      navigate('/app/ofertas');
     },
   };
 }

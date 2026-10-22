@@ -15,8 +15,9 @@ import type {
 import type { PushResult, PushSender, PushTarget } from '../infra/push/push-sender.port';
 import type { PushSubscriptionsRepository, StoredSubscription } from '../modules/platform/messaging/push/push-subscriptions.repository';
 import type { PushPayload } from '@parla/types';
-import type { UpdateBusinessRequest } from '@parla/types';
-import type { BusinessesRepository, BusinessRecord } from '../modules/platform/services/businesses.repository';
+import type { CatalogSource, StoreProduct, StoreStatus, UpdateBusinessRequest } from '@parla/types';
+import { NO_API, type BusinessesRepository, type BusinessRecord, type NewBusiness, type StoreApiConfig, type StoreFilter } from '../modules/platform/services/businesses.repository';
+import type { ProductsRepository, ReservationLine, ReserveOutcome } from '../modules/platform/stores/products.repository';
 import type { ClaimStatus, GeoPoint, OrderRating } from '@parla/types';
 import type { ClaimChanges, ClaimRecord, ClaimsRepository, NewClaim } from '../modules/platform/services/claims.repository';
 import type { DriverLedgerRepository, LedgerEntryRecord } from '../modules/platform/services/driver-ledger.repository';
@@ -286,18 +287,141 @@ export class RecordingPushSender implements PushSender {
   }
 }
 
+/** Una tienda de prueba aprobada y abierta; `over` cambia lo que haga falta. */
+export function makeBusiness(over: Partial<BusinessRecord> = {}): BusinessRecord {
+  return {
+    id: 'biz_1',
+    name: 'Bodega MercaYa',
+    service: 'mercado',
+    description: '',
+    ownerId: 'owner_1',
+    address: 'Av. Benavides 1180',
+    location: null,
+    status: 'approved',
+    reviewNote: '',
+    source: 'native',
+    acceptingOrders: true,
+    opensAt: '08:00',
+    closesAt: '22:00',
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+    api: NO_API,
+    ...over,
+  };
+}
+
 export class InMemoryBusinessesRepository implements BusinessesRepository {
   businesses: BusinessRecord[] = [];
-  async findByService(service: string) {
-    return this.businesses.find((b) => b.service === service) ?? null;
+  private seq = 0;
+  async findById(id: string) {
+    const b = this.businesses.find((x) => x.id === id);
+    return b ? { ...b } : null;
   }
   async findByOwner(ownerId: string) {
     return this.businesses.find((b) => b.ownerId === ownerId) ?? null;
+  }
+  async create(input: NewBusiness) {
+    const record = makeBusiness({ id: `biz_new_${++this.seq}`, ...input, status: 'pending', source: 'native', createdAt: new Date() });
+    this.businesses.push(record);
+    return { ...record };
   }
   async update(id: string, changes: UpdateBusinessRequest) {
     const business = this.businesses.find((b) => b.id === id)!;
     Object.assign(business, changes);
     return { ...business };
+  }
+  async setReview(id: string, review: { status: StoreStatus; reviewNote: string; reviewedById: string }) {
+    const business = this.businesses.find((b) => b.id === id)!;
+    business.status = review.status;
+    business.reviewNote = review.reviewNote;
+    return { ...business };
+  }
+  async setSource(id: string, source: CatalogSource, api: StoreApiConfig) {
+    const business = this.businesses.find((b) => b.id === id)!;
+    business.source = source;
+    business.api = api;
+    return { ...business };
+  }
+  async list(filter: StoreFilter) {
+    return this.businesses.filter((b) => (!filter.service || b.service === filter.service) && (!filter.status || b.status === filter.status)).map((b) => ({ ...b }));
+  }
+  async countApprovedByService() {
+    const counts: Record<string, number> = {};
+    for (const b of this.businesses) if (b.status === 'approved') counts[b.service] = (counts[b.service] ?? 0) + 1;
+    return counts;
+  }
+}
+
+/** Catálogo propio de las tiendas en memoria (con reservas de stock todo-o-nada e idempotentes). */
+export class InMemoryProductsRepository implements ProductsRepository {
+  rows = new Map<string, StoreProduct>();
+  reservations = new Map<string, { lines: ReservationLine[]; released: boolean }>();
+  private key = (businessId: string, sku: string) => `${businessId}::${sku}`;
+  async list(businessId: string, opts: { query?: string; category?: string; onlyActive: boolean; limit: number }) {
+    const q = opts.query?.trim().toLowerCase();
+    return [...this.rows.entries()]
+      .filter(([k]) => k.startsWith(`${businessId}::`))
+      .map(([, p]) => ({ ...p }))
+      .filter((p) => (!opts.onlyActive || p.active) && (!opts.category || p.category === opts.category) && (!q || p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)))
+      .slice(0, opts.limit);
+  }
+  async find(businessId: string, sku: string) {
+    const p = this.rows.get(this.key(businessId, sku));
+    return p ? { ...p } : null;
+  }
+  async create(businessId: string, product: StoreProduct) {
+    if (this.rows.has(this.key(businessId, product.sku))) return false;
+    this.rows.set(this.key(businessId, product.sku), { ...product });
+    return true;
+  }
+  async update(businessId: string, sku: string, product: StoreProduct) {
+    if (!this.rows.has(this.key(businessId, sku))) return null;
+    this.rows.set(this.key(businessId, sku), { ...product, sku });
+    return { ...product, sku };
+  }
+  async delete(businessId: string, sku: string) {
+    return this.rows.delete(this.key(businessId, sku));
+  }
+  async count(businessId: string) {
+    return [...this.rows.keys()].filter((k) => k.startsWith(`${businessId}::`)).length;
+  }
+  async upsertMany(businessId: string, products: StoreProduct[]) {
+    let created = 0;
+    let updated = 0;
+    for (const p of products) {
+      if (this.rows.has(this.key(businessId, p.sku))) updated += 1;
+      else created += 1;
+      this.rows.set(this.key(businessId, p.sku), { ...p });
+    }
+    return { created, updated };
+  }
+  async patch(businessId: string, sku: string, changes: { priceCents?: number; listPriceCents?: number | null; stock?: number }) {
+    const p = this.rows.get(this.key(businessId, sku));
+    if (!p) return null;
+    Object.assign(p, changes);
+    return { ...p };
+  }
+  async reserve(businessId: string, reference: string, lines: ReservationLine[]): Promise<ReserveOutcome> {
+    const rKey = `${businessId}::${reference}`;
+    const existing = this.reservations.get(rKey);
+    if (existing && !existing.released) return { ok: true };
+    for (const l of lines) {
+      const p = this.rows.get(this.key(businessId, l.sku));
+      if (!p || !p.active) return { ok: false, reason: 'UNKNOWN_PRODUCT', sku: l.sku };
+      if (p.stock < l.quantity) return { ok: false, reason: 'OUT_OF_STOCK', sku: l.sku };
+    }
+    for (const l of lines) this.rows.get(this.key(businessId, l.sku))!.stock -= l.quantity;
+    this.reservations.set(rKey, { lines, released: false });
+    return { ok: true };
+  }
+  async release(businessId: string, reference: string) {
+    const r = this.reservations.get(`${businessId}::${reference}`);
+    if (!r || r.released) return false;
+    for (const l of r.lines) {
+      const p = this.rows.get(this.key(businessId, l.sku));
+      if (p) p.stock += l.quantity;
+    }
+    r.released = true;
+    return true;
   }
 }
 

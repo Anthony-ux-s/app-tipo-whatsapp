@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Currency, OrderRating, OrderStatus, OrderTimelineEntry, RatingSummary, ServiceId } from '@parla/types';
+import type { Currency, OrderRating, OrderStatus, OrderTimelineEntry, RatingSummary } from '@parla/types';
 import type { Business as BusinessRow, Claim as ClaimRow, Order as OrderRow } from '@prisma/client';
 import { toClaimRecord } from './prisma-claims.repository';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
@@ -27,7 +27,7 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
   return {
     id: row.id,
     userId: row.userId,
-    service: row.service as ServiceId,
+    service: row.service,
     business: row.business
       ? {
           id: row.business.id,

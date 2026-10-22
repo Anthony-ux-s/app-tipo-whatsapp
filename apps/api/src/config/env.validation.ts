@@ -27,6 +27,8 @@ export interface AppEnv {
   /** Servicio de tiempo real (Elixir) y token compartido entre servicios internos. */
   realtimeUrl: string;
   internalToken: string;
+  /** Dirección con la que el gateway llega al core (las tiendas con catálogo de Parla se sirven desde ahí). */
+  coreInternalUrl: string;
   /** Códigos por SMS y correo: OneSignal si está configurado; si no (solo desarrollo), modo de prueba. */
   oneSignal: { appId: string; apiKey: string; smsFrom: string | null } | null;
   /** Vigilancia de los deliveries (pedidos sin repartidor, repartidores que no avanzan). */
@@ -123,6 +125,7 @@ export function loadEnv(): AppEnv {
     ice: { iceServers },
     realtimeUrl: (env.REALTIME_URL ?? 'http://localhost:4102').replace(/\/$/, ''),
     internalToken,
+    coreInternalUrl: (env.CORE_INTERNAL_URL || `http://localhost:${port}`).replace(/\/$/, ''),
     oneSignal,
     driverPay: parseDriverPay(env),
     dispatch: parseDispatch(env),

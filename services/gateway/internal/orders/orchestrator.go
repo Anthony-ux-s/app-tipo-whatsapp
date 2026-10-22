@@ -132,9 +132,11 @@ func (o *Orchestrator) newID() string {
 	return "ord_" + hex.EncodeToString(b)
 }
 
-// store: la tienda que atiende un servicio (el Mercado, la fija; los demás, la que conectó soporte).
+// store: la tienda de una clave de tienda (el id de la tienda en Parla). Cada tienda se atiende con su
+// API: la de Parla (catálogo propio, servido por el core) o la que su dueño conectó. Commerce, si está,
+// es una tienda fija para el servicio «mercado» (o para cualquiera si no hay Stores): solo pruebas.
 func (o *Orchestrator) store(ctx context.Context, service services.ServiceID) (Commerce, error) {
-	if service == "" || service == services.Mercado {
+	if o.Commerce != nil && (service == "" || service == services.Mercado || o.Stores == nil) {
 		return o.Commerce, nil
 	}
 	if o.Stores == nil {
@@ -717,7 +719,7 @@ func (o *Orchestrator) ownStore(ctx context.Context, userID string) (Commerce, e
 		slog.Error("no se pudo consultar el negocio", "error", err)
 		return nil, unavailable("Parla")
 	}
-	return o.store(ctx, business.Service)
+	return o.store(ctx, services.ServiceID(business.ID))
 }
 
 // StoreCatalog: todo el catálogo de la tienda, también lo agotado, por categoría y nombre.

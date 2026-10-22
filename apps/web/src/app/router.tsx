@@ -12,6 +12,9 @@ import { RegisterView } from '../modules/auth/components/RegisterView';
 import { BusinessCatalogView } from '../modules/business/components/BusinessCatalogView';
 import { BusinessOrderDetailView } from '../modules/business/components/BusinessOrderDetailView';
 import { BusinessOrdersView } from '../modules/business/components/BusinessOrdersView';
+import { ConnectSystemView } from '../modules/business/components/ConnectSystemView';
+import { OpenStoreView } from '../modules/business/components/OpenStoreView';
+import { StoreEditView } from '../modules/business/components/StoreEditView';
 import { ConversationView } from '../modules/chats/components/ConversationView';
 import { NoChatSelected } from '../modules/chats/components/NoChatSelected';
 import { LegalView } from '../modules/legal/components/LegalView';
@@ -21,6 +24,7 @@ import { OffersView } from '../modules/services/components/OffersView';
 import { OrderDetailView } from '../modules/services/components/OrderDetailView';
 import { OrdersView } from '../modules/services/components/OrdersView';
 import { ServicesHomeView } from '../modules/services/components/ServicesHomeView';
+import { StoresListView } from '../modules/services/components/StoresListView';
 import { SettingsSectionView } from '../modules/settings/components/SettingsSectionView';
 import { SettingsView } from '../modules/settings/components/SettingsView';
 import { AppShellView } from '../modules/shell/components/AppShellView';
@@ -50,13 +54,18 @@ export const router = createBrowserRouter([
           { index: true, element: <NoChatSelected /> },
           { path: 'c/:conversationId', element: <ConversationView /> },
           { path: 'servicios', element: <ServicesHomeView /> },
-          { path: 'servicios/:service', element: <MarketView /> },
-          { path: 'servicios/:service/carrito', element: <CheckoutView /> },
+          // «c/:category» va antes de «:storeId» para que «c» no se tome como el id de una tienda.
+          { path: 'servicios/c/:category', element: <StoresListView /> },
+          { path: 'servicios/:storeId', element: <MarketView /> },
+          { path: 'servicios/:storeId/carrito', element: <CheckoutView /> },
           { path: 'ofertas', element: <OffersView /> },
           { path: 'pedidos', element: <OrdersView /> },
           { path: 'pedidos/:orderId', element: <OrderDetailView /> },
           { path: 'negocio', element: <BusinessOrdersView /> },
+          { path: 'negocio/abrir', element: <OpenStoreView /> },
+          { path: 'negocio/tienda', element: <StoreEditView /> },
           { path: 'negocio/catalogo', element: <BusinessCatalogView /> },
+          { path: 'negocio/conectar', element: <ConnectSystemView /> },
           { path: 'negocio/pedidos/:orderId', element: <BusinessOrderDetailView /> },
           { path: 'rapidito', element: <DriverOrdersView /> },
           { path: 'rapidito/registro', element: <DriverRegisterView /> },

@@ -76,7 +76,7 @@ export function useCheckout() {
     setQuoting(true);
     const timer = window.setTimeout(() => {
       http
-        .post<OrderQuote>(`/services/${service}/quote`, request)
+        .post<OrderQuote>(`/services/${encodeURIComponent(service)}/quote`, request)
         .then((q) => alive && setQuote(q))
         .catch((err) => {
           if (!alive) return;
@@ -106,8 +106,8 @@ export function useCheckout() {
     quoteError,
     placing,
     canPay: Boolean(quote) && !quoting && !placing,
-    add: (product: Product) => change(product, 1),
-    subtract: (product: Product) => change(product, -1),
+    add: (product: Product) => change(product, 1, service),
+    subtract: (product: Product) => change(product, -1, service),
     remove,
     onAddressChange: (line: string) => setAddress({ ...address, line }),
     /** Elegir una dirección guardada. */
@@ -171,7 +171,7 @@ export function useCheckout() {
       if (!quote) return;
       setPlacing(true);
       try {
-        const order = await http.post<Order>(`/services/${service}/orders`, request);
+        const order = await http.post<Order>(`/services/${encodeURIComponent(service)}/orders`, request);
         upsertOrder(order);
         clear();
         navigate(`/app/pedidos/${order.id}`, { replace: true });
@@ -181,6 +181,6 @@ export function useCheckout() {
       }
     },
     service,
-    keepShopping: () => navigate(`/app/servicios/${service}`),
+    keepShopping: () => navigate(service ? `/app/servicios/${service}` : '/app/servicios'),
   };
 }

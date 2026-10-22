@@ -1,5 +1,6 @@
-import type { DeliveryAddress, Product, ServiceId } from '@parla/types';
+import type { DeliveryAddress, Product } from '@parla/types';
 import { create } from 'zustand';
+import { toast } from './toast.store';
 
 export interface CartItem {
   product: Product;
@@ -20,12 +21,12 @@ function savedAddress(): DeliveryAddress {
 }
 
 interface CartState {
-  /** De qué servicio es el carrito: un pedido es de una sola tienda. */
-  service: ServiceId;
+  /** Clave de la tienda (su id) del carrito: un pedido es de una sola tienda. Vacío = carrito sin estrenar. */
+  service: string;
   items: Record<string, CartItem>;
   address: DeliveryAddress;
-  /** Suma o resta unidades; en 0 sale del carrito. Si es de otro servicio, empieza un carrito nuevo. */
-  change: (product: Product, delta: number, service?: ServiceId) => void;
+  /** Suma o resta unidades; en 0 sale del carrito. Si es de otra tienda, empieza un carrito nuevo. */
+  change: (product: Product, delta: number, service: string) => void;
   remove: (productId: string) => void;
   setAddress: (address: DeliveryAddress) => void;
   /** Propina para el repartidor (se cobra con el pedido). */
@@ -33,21 +34,22 @@ interface CartState {
   setTip: (cents: number) => void;
   clear: () => void;
   /** «Volver a pedir»: el carrito queda con estos productos (hasta el stock de ahora). */
-  refill: (lines: { product: Product; quantity: number }[], service?: ServiceId) => number;
+  refill: (lines: { product: Product; quantity: number }[], service: string) => number;
 }
 
 /**
- * Carrito del Mercado. Los precios que guarda son solo para mostrar: el total que se cobra lo calcula
+ * Carrito de la tienda. Los precios que guarda son solo para mostrar: el total que se cobra lo calcula
  * el gateway con los precios de la tienda.
  */
 export const useCartStore = create<CartState>((set, get) => ({
-  service: 'mercado',
+  service: '',
   items: {},
   address: savedAddress(),
 
-  change: (product, delta, service = 'mercado') => {
+  change: (product, delta, service) => {
     // Otra tienda: el carrito anterior no se mezcla con este.
     const fresh = service !== get().service;
+    if (fresh && Object.keys(get().items).length > 0) toast('Tu carrito era de otra tienda; empezamos uno nuevo.', 'info');
     const current = fresh ? 0 : (get().items[product.id]?.quantity ?? 0);
     const quantity = Math.min(MAX_QUANTITY, Math.min(product.stock, Math.max(0, current + delta)));
     const items = fresh ? {} : { ...get().items };
@@ -74,7 +76,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   tipCents: 0,
   setTip: (cents) => set({ tipCents: Math.max(0, Math.min(10_000, Math.round(cents))) }),
   clear: () => set({ items: {}, tipCents: 0 }),
-  refill: (lines, service = 'mercado') => {
+  refill: (lines, service) => {
     const items: Record<string, CartItem> = {};
     for (const { product, quantity } of lines) {
       const q = Math.min(MAX_QUANTITY, product.stock, quantity);

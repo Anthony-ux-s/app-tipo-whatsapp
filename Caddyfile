@@ -1,0 +1,7 @@
+# Proxy HTTPS de Parla (Caddy): pide y renueva solo el certificado de tu dominio (Let's Encrypt).
+# Reenvía todo al gateway, que reparte a la web, la API (/api), el tiempo real (/ws) y los avisos (/hooks).
+# SITE_ADDRESS viene del .env (p. ej. kronito.com). Los WebSockets pasan sin configuración extra.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	reverse_proxy gateway:4100
+}

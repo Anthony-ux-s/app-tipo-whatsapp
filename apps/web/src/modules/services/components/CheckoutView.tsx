@@ -10,14 +10,17 @@ import { useCheckout } from '../hooks/use-checkout.hook';
 import { useStoreStatus } from '../hooks/use-store-status.hook';
 import { AmountRow, PageHeader, ServicePage, StoreClosedBanner } from './ServicesUi';
 import { ProductImage } from './ProductImage';
-import { STORE_TEXTS } from '../const/services.const';
+import { SERVICE_VISUALS } from '../const/services.const';
+import { useStore } from '../hooks/use-stores.hook';
 import { SavedAddresses } from './SavedAddresses';
 
 /** Carrito → dirección → total (productos + delivery) → pagar con QR. */
 export function CheckoutView() {
   const c = useCheckout();
   const store = useStoreStatus(c.service);
-  const text = STORE_TEXTS[c.service];
+  const { store: info } = useStore(c.service);
+  const storeName = info?.name ?? 'la tienda';
+  const emptyText = info ? SERVICE_VISUALS[info.service].empty : 'Busca lo que necesitas y agrégalo.';
 
   if (c.count === 0) {
     return (
@@ -26,8 +29,8 @@ export function CheckoutView() {
         <EmptyState
           illustration={<EmptyChatsIllustration />}
           title="Tu carrito está vacío"
-          description={text.empty}
-          action={<Button icon={<ShoppingBasket className="size-4" />} onClick={c.keepShopping}>Ir a {text.title}</Button>}
+          description={emptyText}
+          action={<Button icon={<ShoppingBasket className="size-4" />} onClick={c.keepShopping}>{c.service ? `Ir a ${storeName}` : 'Ver tiendas'}</Button>}
         />
       </ServicePage>
     );
@@ -35,7 +38,7 @@ export function CheckoutView() {
 
   return (
     <ServicePage>
-      <PageHeader title="Tu carrito" subtitle={`${c.count} productos de ${text.title}`} onBack={c.keepShopping} />
+      <PageHeader title="Tu carrito" subtitle={`${c.count} productos de ${storeName}`} onBack={c.keepShopping} />
 
       <section className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-float" aria-label="Productos">
         {c.lines.map(({ product, quantity }) => (

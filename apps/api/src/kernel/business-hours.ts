@@ -1,3 +1,4 @@
+import type { StoreStatus } from '@parla/types';
 import { ValidationError } from './domain-error';
 
 /** Los horarios de los negocios son de Lima (la tienda del Mercado está en Perú). */
@@ -23,6 +24,8 @@ export interface BusinessHours {
   acceptingOrders: boolean;
   opensAt: string;
   closesAt: string;
+  /** Solo las tiendas aprobadas reciben pedidos (si falta, se da por aprobada). */
+  status?: StoreStatus;
 }
 
 /**
@@ -31,6 +34,8 @@ export interface BusinessHours {
  * atender las 24 horas.
  */
 export function businessStatus(b: BusinessHours, now = new Date()): { open: boolean; closedMessage: string | null } {
+  if (b.status === 'pending') return { open: false, closedMessage: `${b.name} todavía está en revisión.` };
+  if (b.status === 'rejected' || b.status === 'suspended') return { open: false, closedMessage: `${b.name} no está disponible por ahora.` };
   if (!b.acceptingOrders) return { open: false, closedMessage: `${b.name} pausó los pedidos por ahora. Vuelve en un rato.` };
   const at = minutesInZone(now);
   const from = minutes(b.opensAt);

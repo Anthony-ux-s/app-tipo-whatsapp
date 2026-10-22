@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
-import type { BusinessInfo, BusinessOrder, BusinessStatus, ServiceId, UpdateBusinessRequest } from '@parla/types';
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import type { BusinessInfo, BusinessOrder, BusinessStatus, GeoPoint, UpdateBusinessRequest } from '@parla/types';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsLatitude, IsLongitude, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../../../http/current-user.decorator';
 import {
   DecideBusinessOrderUseCase,
@@ -11,10 +12,19 @@ import {
   UpdateMyBusinessUseCase,
 } from '../../platform/services/use-cases/business-orders.use-cases';
 
+class PointDto {
+  @IsLatitude() lat: number;
+  @IsLongitude() lng: number;
+}
+
 class UpdateBusinessDto implements UpdateBusinessRequest {
   @IsOptional() @IsBoolean() acceptingOrders?: boolean;
   @IsOptional() @IsString() opensAt?: string;
   @IsOptional() @IsString() closesAt?: string;
+  @IsOptional() @IsString() @MaxLength(80) name?: string;
+  @IsOptional() @IsString() @MaxLength(400) description?: string;
+  @IsOptional() @IsString() @MaxLength(250) address?: string;
+  @IsOptional() @ValidateNested() @Type(() => PointDto) location?: GeoPoint | null;
 }
 
 /**
@@ -45,11 +55,10 @@ export class BusinessController {
     return this.updateMine.execute(user.userId, body);
   }
 
-  /** Para cualquier cliente: si la tienda de un servicio recibe pedidos ahora. */
-  @Get('status/:service')
-  async statusOf(@Param('service') service: string): Promise<{ status: BusinessStatus | null }> {
-    if (!['mercado', 'tecnologia', 'ferreteria', 'salud'].includes(service)) return { status: null };
-    return { status: await this.status.execute(service as ServiceId) };
+  /** Para cualquier cliente: si una tienda recibe pedidos ahora. */
+  @Get('status/:storeId')
+  async statusOf(@Param('storeId') storeId: string): Promise<{ status: BusinessStatus | null }> {
+    return { status: await this.status.execute(storeId) };
   }
 
   @Get('orders')

@@ -17,7 +17,7 @@ func fake(t *testing.T, handler http.HandlerFunc) Client {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	return Client{BaseURL: srv.URL, HTTP: srv.Client()}
+	return Client{BaseURL: srv.URL, HTTP: srv.Client(), AdminKey: "clave-admin-de-prueba"}
 }
 
 func TestBuscarTraduceYDescartaProductosMalFormados(t *testing.T) {

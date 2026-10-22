@@ -31,14 +31,15 @@ func (h *HTTP) Catalog(w http.ResponseWriter, r *http.Request, _ string) {
 	WriteJSON(w, http.StatusOK, h.Orch.CatalogFor(r.Context()))
 }
 
-// serviceOf: el servicio de la ruta (/api/services/{service}/…); false si no existe (ya respondió 404).
+// serviceOf: la clave de tienda de la ruta (/api/services/{service}/…: el id de la tienda); false si no
+// tiene forma de id (ya respondió 404). Que la tienda exista y esté aprobada lo comprueba después el orquestador.
 func serviceOf(w http.ResponseWriter, r *http.Request) (services.ServiceID, bool) {
 	id := services.ServiceID(r.PathValue("service"))
 	if id == "" {
 		return services.Mercado, true
 	}
-	if !services.KnownService(id) {
-		writeError(w, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Servicio no encontrado"})
+	if !services.ValidID.MatchString(string(id)) {
+		writeError(w, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Tienda no encontrada"})
 		return "", false
 	}
 	return id, true

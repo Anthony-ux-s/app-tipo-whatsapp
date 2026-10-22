@@ -9,6 +9,7 @@ import { CallsModule } from './modules/members/calls/calls.module';
 import { ChatsModule } from './modules/members/chats/chats.module';
 import { AdminModule } from './modules/members/admin/admin.module';
 import { GrowthModule } from './modules/members/growth/growth.module';
+import { StoresModule } from './modules/members/stores/stores.module';
 import { BusinessModule } from './modules/members/business/business.module';
 import { DriverModule } from './modules/members/driver/driver.module';
 import { OrdersModule } from './modules/members/orders/orders.module';
@@ -34,6 +35,7 @@ import { HealthController } from './health.controller';
     DriverModule,
     AdminModule,
     GrowthModule,
+    StoresModule,
     RealtimeBridgeModule,
     ServicesBridgeModule,
     CallsModule,

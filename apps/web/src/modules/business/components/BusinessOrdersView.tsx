@@ -1,4 +1,5 @@
 import { ChevronRight, Store } from 'lucide-react';
+import { Navigate } from 'react-router';
 import { Avatar } from '@shared/ui/Avatar';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
 import { EmptyChatsIllustration } from '@shared/ui/illustrations';
@@ -7,11 +8,27 @@ import { formatSoles } from '@shared/utils/money';
 import { OrderStatusBadge, PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { BUSINESS_TABS } from '../const/business.const';
 import { useBusinessOrders } from '../hooks/use-business.hook';
+import { StoreLinks } from './StoreLinks';
 import { StoreSettingsCard } from './StoreSettingsCard';
+import { StoreStatusNotice } from './StoreStatusNotice';
 
 /** «Mi negocio»: los pedidos que recibe el dueño, para aceptarlos, prepararlos y entregarlos a Rapidito. */
 export function BusinessOrdersView() {
   const b = useBusinessOrders();
+  // Sin tienda registrada: el camino es «Abrir mi tienda».
+  if (b.business === null) return <Navigate to="/app/negocio/abrir" replace />;
+  // En revisión, rechazada o suspendida: no recibe pedidos todavía; solo puede completar sus datos.
+  if (b.business && b.business.status !== 'approved') {
+    return (
+      <ServicePage>
+        <PageHeader title="Mi negocio" subtitle={b.business.name} onBack={b.back} />
+        <StoreStatusNotice business={b.business} />
+        <section className="rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Mi tienda">
+          <StoreLinks business={b.business} />
+        </section>
+      </ServicePage>
+    );
+  }
   return (
     <ServicePage>
       <PageHeader title="Mi negocio" subtitle={b.business ? `${b.business.name} · pedidos con delivery Rapidito` : 'Pedidos con delivery Rapidito'} onBack={b.back} />

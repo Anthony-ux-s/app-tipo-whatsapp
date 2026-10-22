@@ -110,6 +110,6 @@ export function useOrderDetail() {
       loadOrder(orderId).catch((err) => setError(errorMessage(err)));
     },
     back: () => navigate('/app/pedidos'),
-    shopAgain: () => navigate('/app/servicios/mercado'),
+    shopAgain: () => navigate('/app/servicios'),
   };
 }

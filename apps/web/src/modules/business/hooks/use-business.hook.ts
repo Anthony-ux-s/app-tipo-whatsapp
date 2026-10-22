@@ -19,7 +19,11 @@ export function useBusinessOrders() {
     setError(null);
     loadOrders().catch((err) => setError(errorMessage(err)));
   };
-  useEffect(reload, [loadOrders]);
+  // Mientras la tienda está en revisión (o rechazada) no hay pedidos que pedir.
+  const approved = business?.status === 'approved';
+  useEffect(() => {
+    if (approved) reload();
+  }, [loadOrders, approved]);
 
   const sorted = useMemo(() => sortBusinessOrders(orders), [orders]);
   const counts = useMemo(

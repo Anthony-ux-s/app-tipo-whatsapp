@@ -1,3 +1,4 @@
+import type { CatalogSource, StoreStatus } from './stores.types';
 /**
  * Servicios dentro de Parla (estilo WeChat): el cliente compra en sistemas externos (tienda,
  * delivery, pagos) sin salir del chat. El gateway traduce cada API externa a estos contratos.
@@ -128,11 +129,21 @@ export interface OrderTimelineEntry {
   note?: string;
 }
 
-/** Negocio que atiende un servicio (p. ej. la tienda del Mercado) y su dueño en Parla. */
+/** La tienda de una persona en Parla (la ve su dueño en «Mi negocio»). */
 export interface BusinessInfo {
   id: string;
   name: string;
+  /** Categoría: mercado, tecnologia, ferreteria o salud. */
   service: ServiceId;
+  description: string;
+  address: string;
+  location: GeoPoint | null;
+  /** Mientras está en revisión o suspendida no recibe pedidos. */
+  status: StoreStatus;
+  /** Motivo del rechazo o la suspensión (lo escribe soporte). */
+  reviewNote: string;
+  /** De dónde sale su catálogo: el de Parla (native) o su propia API (api). */
+  source: CatalogSource;
   /** El dueño puede pausar los pedidos aunque esté en horario. */
   acceptingOrders: boolean;
   /** Horario de atención, hora de Lima («HH:MM»). */
@@ -155,6 +166,10 @@ export interface UpdateBusinessRequest {
   acceptingOrders?: boolean;
   opensAt?: string;
   closesAt?: string;
+  name?: string;
+  description?: string;
+  address?: string;
+  location?: GeoPoint | null;
 }
 
 /** Cambio de un producto del catálogo de la tienda (lo hace el dueño). */
@@ -177,7 +192,8 @@ export interface OrderBusiness {
 
 export interface Order {
   id: string;
-  service: ServiceId;
+  /** Clave de la tienda que lo prepara (el id de la tienda). */
+  service: string;
   /** Negocio que prepara el pedido; null en pedidos sin negocio asignado. */
   business: OrderBusiness | null;
   status: OrderStatus;
@@ -454,7 +470,8 @@ export type CreateOrderRequest = QuoteRequest;
 export interface InternalCreateOrder {
   id: string;
   userId: string;
-  service: ServiceId;
+  /** Clave de la tienda (su id). */
+  service: string;
   lines: OrderLine[];
   subtotalCents: number;
   deliveryFeeCents: number;

@@ -3,18 +3,16 @@ import type { BusinessInfo, BusinessOrder, BusinessStatus, GeoPoint, OrderContac
 import { PresenceRegistry } from '../../../../infra/realtime/presence.registry';
 import { assertHour, businessStatus } from '../../../../kernel/business-hours';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
+import { assertLocation } from '../../../../kernel/store-rules';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { toPublicUser } from '../../identity/user.mapper';
 import { BUSINESSES_REPOSITORY, type BusinessesRepository, type BusinessRecord } from '../businesses.repository';
 import { DispatchPolicy } from '../dispatch.policy';
 import { ORDERS_REPOSITORY, type OrderChanges, type OrderRecord, type OrdersRepository } from '../orders.repository';
+import { toBusinessInfo } from '../../stores/stores.use-cases';
 import { customersOf, OrderEvents, toBusinessOrder } from './orders.use-cases';
 
 const BUSINESS_HISTORY_LIMIT = 100;
-
-function toBusinessInfo(b: BusinessRecord): BusinessInfo {
-  return { id: b.id, name: b.name, service: b.service, acceptingOrders: b.acceptingOrders, opensAt: b.opensAt, closesAt: b.closesAt };
-}
 
 /** El negocio de quien consulta, o null si no es dueño de ninguno. */
 @Injectable()
@@ -41,12 +39,34 @@ export class UpdateMyBusinessUseCase {
     if (changes.acceptingOrders !== undefined) patch.acceptingOrders = changes.acceptingOrders;
     if (changes.opensAt !== undefined) patch.opensAt = changes.opensAt;
     if (changes.closesAt !== undefined) patch.closesAt = changes.closesAt;
+    if (changes.name !== undefined) {
+      const name = changes.name.trim();
+      if (name.length < 3 || name.length > 60) throw new ValidationError('El nombre de la tienda lleva de 3 a 60 letras');
+      patch.name = name;
+    }
+    if (changes.description !== undefined) {
+      if (changes.description.length > 300) throw new ValidationError('La descripción lleva hasta 300 letras');
+      patch.description = changes.description.trim();
+    }
+    if (changes.address !== undefined) {
+      const address = changes.address.trim();
+      if (address.length < 6 || address.length > 200) throw new ValidationError('Escribe la dirección de la tienda (donde el repartidor recoge los pedidos)');
+      patch.address = address;
+    }
+    if (changes.location !== undefined) {
+      assertLocation(changes.location);
+      patch.location = changes.location;
+    }
     if (Object.keys(patch).length === 0) throw new ValidationError('No hay cambios');
-    return toBusinessInfo(await this.businesses.update(business.id, patch));
+    const updated = await this.businesses.update(business.id, patch);
+    // Una tienda rechazada que corrige sus datos vuelve a revisión (soporte la ve de nuevo).
+    const profileChanged = patch.name !== undefined || patch.description !== undefined || patch.address !== undefined || patch.location !== undefined;
+    if (business.status === 'rejected' && profileChanged) return toBusinessInfo(await this.businesses.setReview(business.id, { status: 'pending', reviewNote: '', reviewedById: userId }));
+    return toBusinessInfo(updated);
   }
 }
 
-/** Si el negocio de un servicio recibe pedidos ahora (lo ve el cliente en el Mercado). Null si no hay negocio. */
+/** Si una tienda recibe pedidos ahora (lo ve el cliente antes de pagar). Null si la tienda no existe. */
 @Injectable()
 export class GetBusinessStatusUseCase {
   constructor(
@@ -54,8 +74,8 @@ export class GetBusinessStatusUseCase {
     @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
   ) {}
 
-  async execute(service: ServiceId, now = new Date()): Promise<BusinessStatus | null> {
-    const business = await this.businesses.findByService(service);
+  async execute(storeId: string, now = new Date()): Promise<BusinessStatus | null> {
+    const business = await this.businesses.findById(storeId);
     if (!business) return null;
     const rating = await this.orders.ratingSummary({ businessId: business.id });
     return { name: business.name, ...businessStatus(business, now), opensAt: business.opensAt, closesAt: business.closesAt, rating };
@@ -78,8 +98,8 @@ export interface InternalBusiness {
 export class GetInternalBusinessUseCase {
   constructor(@Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository) {}
 
-  async execute(by: 'service' | 'owner', key: string, now = new Date()): Promise<InternalBusiness> {
-    const business = by === 'service' ? await this.businesses.findByService(key as ServiceId) : await this.businesses.findByOwner(key);
+  async execute(by: 'store' | 'owner', key: string, now = new Date()): Promise<InternalBusiness> {
+    const business = by === 'store' ? await this.businesses.findById(key) : await this.businesses.findByOwner(key);
     if (!business) throw new NotFoundError('Negocio no encontrado');
     return { id: business.id, name: business.name, service: business.service, ownerId: business.ownerId, location: business.location, ...businessStatus(business, now) };
   }

@@ -7,13 +7,11 @@ import { NoResultsIllustration } from '@shared/ui/illustrations';
 import { OFFER_CATEGORY_INFO, type OfferCategory } from '../const/offers.const';
 import { useOffers } from '../hooks/use-offers.hook';
 import { ProductCard } from './ProductCard';
-import { useStoreStatus } from '../hooks/use-store-status.hook';
-import { CartBar, PageHeader, ServicePage, StoreClosedBanner } from './ServicesUi';
+import { CartBar, PageHeader, ServicePage } from './ServicesUi';
 
-/** Ofertas: los productos rebajados del Mercado, que se compran aquí mismo. */
+/** Ofertas: los productos rebajados de las tiendas de Mercado, que se compran aquí mismo. */
 export function OffersView() {
   const o = useOffers();
-  const store = useStoreStatus('mercado');
   const forYou = useForYou(o.catalog);
   return (
     <ServicePage footer={<CartBar count={o.count} estimateCents={o.estimate} onOpen={o.goToCart} />}>
@@ -21,25 +19,26 @@ export function OffersView() {
 
       <ForYouSection
         forYou={forYou}
-        render={(product) => <ProductCard key={product.id} product={product} quantity={o.quantityOf(product.id)} onAdd={() => o.add(product)} onSubtract={() => o.subtract(product)} />}
+        render={(product) => (
+          <ProductCard key={`${o.storeOf(product)?.id}-${product.id}`} product={product} storeName={o.storeOf(product)?.name} quantity={o.quantityOf(product)} onAdd={() => o.add(product)} onSubtract={() => o.subtract(product)} />
+        )}
       />
 
       <OfferSection category="mercado">
-        <StoreClosedBanner status={store.status} />
         {o.error ? (
           <ErrorState message={o.error} onRetry={o.retry} />
-        ) : o.marketLoading ? (
+        ) : o.loading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, i) => (
               <div key={i} className="h-60 animate-pulse rounded-2xl bg-surface-3" />
             ))}
           </div>
-        ) : o.marketOffers.length === 0 ? (
-          <EmptyState compact illustration={<NoResultsIllustration />} title="Sin ofertas por ahora" description="MercaYa no tiene productos rebajados hoy." />
+        ) : o.offers.length === 0 ? (
+          <EmptyState compact illustration={<NoResultsIllustration />} title="Sin ofertas por ahora" description="Las tiendas de Mercado no tienen productos rebajados hoy." />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {o.marketOffers.map((product) => (
-              <ProductCard key={product.id} product={product} quantity={o.quantityOf(product.id)} onAdd={() => o.add(product)} onSubtract={() => o.subtract(product)} />
+            {o.offers.map((product) => (
+              <ProductCard key={`${o.storeOf(product)?.id}-${product.id}`} product={product} storeName={o.storeOf(product)?.name} quantity={o.quantityOf(product)} onAdd={() => o.add(product)} onSubtract={() => o.subtract(product)} />
             ))}
           </div>
         )}

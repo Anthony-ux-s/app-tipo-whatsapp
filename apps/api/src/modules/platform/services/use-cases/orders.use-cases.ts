@@ -251,8 +251,8 @@ export class CreateOrderUseCase {
       throw new ValidationError('Un descuento necesita un cupón');
     }
 
-    // El negocio que atiende el servicio recibe el pedido cuando se pague.
-    const business = await this.businesses.findByService(input.service);
+    // La tienda del pedido (la clave de tienda es su id) lo recibe cuando se pague.
+    const business = await this.businesses.findById(input.service);
     const order = await this.orders.create({
       ...input,
       businessId: business?.id ?? null,

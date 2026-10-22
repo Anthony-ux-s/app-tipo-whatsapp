@@ -3,16 +3,31 @@
 # es PostgreSQL en Supabase (DATABASE_URL y DIRECT_URL del .env), no hay contenedor de base de datos.
 #   cp .env.example .env   (y completa los valores: DATABASE_URL y DIRECT_URL de Supabase, secretos…)
 #   docker compose up -d --build
-# Luego pon un proxy con HTTPS delante (Caddy, Nginx, Traefik): la cámara, el micrófono, las
+# Caddy (incluido) publica el sitio con HTTPS automático en SITE_ADDRESS: la cámara, el micrófono, las
 # notificaciones push y la PWA exigen HTTPS fuera de localhost.
 
 services:
+  # Puerta pública con HTTPS automático: abre 80 y 443 en el servidor y apunta tu dominio (DNS) a su IP.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [gateway]
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Define SITE_ADDRESS (tu dominio, p. ej. kronito.com)}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
   gateway:
     build: services/gateway
     restart: unless-stopped
     depends_on: [core, realtime, providers]
     ports:
-      - '8080:4100'
+      - '127.0.0.1:8080:4100' # solo local: lo público entra por Caddy (HTTPS)
     environment:
       APP_ENV: production
       CORE_URL: http://core:4101
@@ -36,9 +51,9 @@ services:
     build: services/providers
     restart: unless-stopped
     ports:
-      - '8081:4103' # la página de pago que abre el QR
+      - '127.0.0.1:8081:4103' # solo local (simulador de la billetera)
     environment:
-      PROVIDERS_PUBLIC_URL: ${PROVIDERS_PUBLIC_URL:?Define PROVIDERS_PUBLIC_URL}
+      PROVIDERS_PUBLIC_URL: ${PROVIDERS_PUBLIC_URL:-http://localhost:8081}
       PAGAYA_WEBHOOK_SECRET: ${PAGAYA_WEBHOOK_SECRET}
       MERCAYA_ADMIN_KEY: ${MERCAYA_ADMIN_KEY}
       PAGAYA_API_KEY: ${PAGAYA_API_KEY}
@@ -60,19 +75,11 @@ services:
       # Supabase: DATABASE_URL por el pooler (6543, ?pgbouncer=true); DIRECT_URL directa (5432) para las migraciones
       DATABASE_URL: ${DATABASE_URL:?Define DATABASE_URL (Supabase, pooler 6543)}
       DIRECT_URL: ${DIRECT_URL:?Define DIRECT_URL (Supabase, conexión directa 5432)}
-      # Primer administrador y primera tienda (se crean al arrancar si no existen)
+      # Primer administrador (se crea al arrancar si no existe)
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_NAME: ${ADMIN_NAME:-Soporte}
       ADMIN_PHONE: ${ADMIN_PHONE:-}
-      STORE_OWNER: ${STORE_OWNER:-}
-      STORE_NAME: ${STORE_NAME:-}
-      STORE_ADDRESS: ${STORE_ADDRESS:-}
-      STORE_SERVICE: ${STORE_SERVICE:-mercado}
-      STORE_LAT: ${STORE_LAT:-}
-      STORE_LNG: ${STORE_LNG:-}
-      STORE_OPENS_AT: ${STORE_OPENS_AT:-08:00}
-      STORE_CLOSES_AT: ${STORE_CLOSES_AT:-22:00}
       ROUTING_URL: ${ROUTING_URL:-https://router.project-osrm.org}
       APK_PACKAGE_ID: ${APK_PACKAGE_ID:-}
       APK_SHA256_CERT_FINGERPRINTS: ${APK_SHA256_CERT_FINGERPRINTS:-}
@@ -102,3 +109,5 @@ services:
 
 volumes:
   app-storage:
+  caddy-data:
+  caddy-config:

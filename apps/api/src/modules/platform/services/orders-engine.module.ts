@@ -14,9 +14,6 @@ import { PrismaDeliverySettingsRepository } from './prisma-delivery-settings.rep
 import { PrismaPeopleAdminRepository } from './prisma-people-admin.repository';
 import { GetTrafficUseCase, ListPeopleUseCase, SetPersonBlockedUseCase } from './use-cases/admin-people.use-cases';
 import { OptimalDispatchService, OptimalDispatchUseCase } from './use-cases/optimal-dispatch.use-cases';
-import { INTEGRATIONS_REPOSITORY } from './integrations.repository';
-import { PrismaIntegrationsRepository } from './prisma-integrations.repository';
-import { GetInternalIntegrationUseCase, ListIntegrationsUseCase, TestIntegrationUseCase, UpdateIntegrationUseCase } from './use-cases/integrations.use-cases';
 import {
   DriverRoutePlanUseCase,
   DriverRoutesHistoryUseCase,
@@ -165,10 +162,6 @@ const USE_CASES = [
   SetPersonBlockedUseCase,
   GetTrafficUseCase,
   OptimalDispatchUseCase,
-  ListIntegrationsUseCase,
-  UpdateIntegrationUseCase,
-  TestIntegrationUseCase,
-  GetInternalIntegrationUseCase,
 ];
 
 /** El MOTOR de pedidos de Servicios: lo comparten la puerta del gateway, la del cliente, la del negocio y la del repartidor. */
@@ -186,7 +179,6 @@ const USE_CASES = [
     { provide: DELIVERY_SETTINGS_REPOSITORY, useClass: PrismaDeliverySettingsRepository },
     { provide: PEOPLE_ADMIN_REPOSITORY, useClass: PrismaPeopleAdminRepository },
     { provide: STREET_ROUTER, useClass: OsrmStreetRouter },
-    { provide: INTEGRATIONS_REPOSITORY, useClass: PrismaIntegrationsRepository },
     DriverPayPolicy,
     DispatchPolicy,
     OrderEvents,
@@ -195,6 +187,6 @@ const USE_CASES = [
     OptimalDispatchService,
     ...USE_CASES,
   ],
-  exports: USE_CASES,
+  exports: [...USE_CASES, BUSINESSES_REPOSITORY, ORDERS_REPOSITORY],
 })
 export class OrdersEngineModule {}

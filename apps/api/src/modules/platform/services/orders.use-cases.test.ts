@@ -11,6 +11,7 @@ import {
   InMemoryCoupons,
   InMemoryDriverLedger,
   InMemoryPhotos,
+  makeBusiness,
   makeDriver,
   InMemoryDriversRepository,
   InMemoryOrdersRepository,
@@ -114,7 +115,7 @@ describe('pedidos de Servicios (core)', () => {
   const newOrder = (overrides: Partial<InternalCreateOrder> = {}): InternalCreateOrder => ({
     id: ID,
     userId: ana.id,
-    service: 'mercado',
+    service: 'biz_1',
     lines: [
       { productId: 'AZ-1KG', name: 'Azúcar rubia', unit: '1 kg', quantity: 2, unitPriceCents: 450, totalCents: 900 },
       { productId: 'AR-1KG', name: 'Arroz extra', unit: '1 kg', quantity: 1, unitPriceCents: 520, totalCents: 520 },
@@ -144,7 +145,7 @@ describe('pedidos de Servicios (core)', () => {
     users = new InMemoryAuthRepository();
     users.users.push(ana, beto, rosa, carlos, lucia, soporte);
     businesses = new InMemoryBusinessesRepository();
-    businesses.businesses.push({ id: 'biz_1', name: 'Bodega MercaYa', service: 'mercado', ownerId: rosa.id, address: 'Av. Benavides 1180', acceptingOrders: true, opensAt: '08:00', closesAt: '22:00', location: null });
+    businesses.businesses.push(makeBusiness({ id: 'biz_1', ownerId: rosa.id }));
     drivers = new InMemoryDriversRepository();
     drivers.drivers.push(makeDriver(carlos.id, { payoutPhone: '987654321' }), makeDriver(lucia.id, { plate: 'D5T-663' }));
     photos = new InMemoryPhotos();
@@ -275,15 +276,15 @@ describe('pedidos de Servicios (core)', () => {
     it('la dueña pausa los pedidos y cambia el horario; el cliente y el gateway lo ven', async () => {
       const update = new UpdateMyBusinessUseCase(businesses);
       const noon = new Date('2026-10-17T12:00:00-05:00');
-      expect((await new GetBusinessStatusUseCase(businesses, orders).execute('mercado', noon))?.open).toBe(true);
+      expect((await new GetBusinessStatusUseCase(businesses, orders).execute('biz_1', noon))?.open).toBe(true);
       await expect(update.execute(beto.id, { acceptingOrders: false })).rejects.toThrow(NotFoundError);
       await expect(update.execute(rosa.id, { opensAt: '9:00' })).rejects.toThrow(ValidationError);
       await expect(update.execute(rosa.id, {})).rejects.toThrow('No hay cambios');
       expect(await update.execute(rosa.id, { acceptingOrders: false })).toMatchObject({ acceptingOrders: false });
-      const internal = await new GetInternalBusinessUseCase(businesses).execute('service', 'mercado', noon);
+      const internal = await new GetInternalBusinessUseCase(businesses).execute('store', 'biz_1', noon);
       expect(internal).toMatchObject({ ownerId: rosa.id, open: false, closedMessage: expect.stringContaining('pausó') });
       await update.execute(rosa.id, { acceptingOrders: true, opensAt: '13:00', closesAt: '23:00' });
-      expect((await new GetBusinessStatusUseCase(businesses, orders).execute('mercado', noon))?.closedMessage).toBe('Bodega MercaYa está cerrada. Abre a las 13:00.');
+      expect((await new GetBusinessStatusUseCase(businesses, orders).execute('biz_1', noon))?.closedMessage).toBe('Bodega MercaYa está cerrada. Abre a las 13:00.');
       expect((await new GetInternalBusinessUseCase(businesses).execute('owner', rosa.id, noon)).service).toBe('mercado');
     });
 
@@ -480,7 +481,7 @@ describe('pedidos de Servicios (core)', () => {
     expect(rated.rating).toMatchObject({ driverStars: 5, storeStars: 4, comment: '¡Rapidísimo!' });
     await expect(rate.execute(ana.id, ID, { driverStars: 1 })).rejects.toThrow('Ya calificaste');
     expect((await new GetDriverEarningsUseCase(drivers, orders, ledger).execute(carlos.id)).rating).toEqual({ average: 5, count: 1 });
-    expect((await new GetBusinessStatusUseCase(businesses, orders).execute('mercado'))?.rating).toEqual({ average: 4, count: 1 });
+    expect((await new GetBusinessStatusUseCase(businesses, orders).execute('biz_1'))?.rating).toEqual({ average: 4, count: 1 });
     // La tienda ve la calificación en su pedido
     expect((realtime.events('business-order:updated').at(-1)!.payload as BusinessOrder).rating?.storeStars).toBe(4);
   });

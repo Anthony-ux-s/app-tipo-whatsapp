@@ -22,7 +22,6 @@ import (
 	"github.com/parla/gateway/internal/ratelimit"
 	"github.com/parla/gateway/internal/realtime"
 	"github.com/parla/gateway/internal/translators/chat"
-	"github.com/parla/gateway/internal/translators/mercaya"
 	"github.com/parla/gateway/internal/translators/pagaya"
 	"github.com/parla/gateway/internal/translators/rapidito"
 )
@@ -59,7 +58,6 @@ func main() {
 	core := orders.HTTPCore{BaseURL: cfg.CoreURL, Token: cfg.InternalToken, HTTP: client}
 	wallet := pagaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client, APIKey: cfg.PagayaAPIKey}
 	orch := &orders.Orchestrator{
-		Commerce:  mercaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client, AdminKey: cfg.MercayaAdminKey},
 		Stores:    &orders.CoreStores{Core: core, HTTP: client},
 		Delivery:  orders.CoreDelivery{Core: core, Fallback: rapidito.Client{BaseURL: cfg.ProvidersURL, HTTP: client}},
 		Payments:  wallet,

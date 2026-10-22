@@ -1,4 +1,4 @@
-import type { BusinessInfo, BusinessOrder, BusinessStatus, DriverLocation, Order, Product, UpdateBusinessRequest, UpdateCatalogProductRequest } from '@parla/types';
+import type { BusinessInfo, BusinessOrder, BusinessStatus, DriverLocation, Order, RegisterStoreRequest, UpdateBusinessRequest } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
 
@@ -9,15 +9,14 @@ interface BusinessState {
   status: 'idle' | 'loading' | 'ready' | 'error';
   /** Si recibe pedidos ahora (horario y pausa), como lo ve el cliente. */
   storeStatus: BusinessStatus | null;
-  /** Catálogo de la tienda (todos los productos, también los agotados). */
-  catalog: Product[] | null;
   loadBusiness: () => Promise<BusinessInfo | null>;
   loadStoreStatus: () => Promise<void>;
   /** Pausar o reanudar los pedidos y cambiar el horario. */
   updateBusiness: (changes: UpdateBusinessRequest) => Promise<void>;
-  loadCatalog: () => Promise<void>;
-  /** Precio, oferta o stock de un producto (se guarda en la tienda). */
-  updateProduct: (productId: string, changes: UpdateCatalogProductRequest) => Promise<void>;
+  /** Registra la tienda de la persona; queda «en revisión» hasta que soporte la apruebe. */
+  registerStore: (request: RegisterStoreRequest) => Promise<BusinessInfo>;
+  /** Cambia el origen del catálogo u otros datos ya guardados en el servidor (p. ej. tras conectar su API). */
+  setBusiness: (business: BusinessInfo) => void;
   loadOrders: () => Promise<void>;
   loadOrder: (id: string) => Promise<BusinessOrder>;
   /** Pedido nuevo o actualizado (respuesta de una acción o evento business-order:updated). */
@@ -46,7 +45,6 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   orders: {},
   status: 'idle',
   storeStatus: null,
-  catalog: null,
 
   loadBusiness: async () => {
     const { business } = await http.get<{ business: BusinessInfo | null }>('/business');
@@ -55,9 +53,9 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   },
 
   loadStoreStatus: async () => {
-    const service = get().business?.service;
-    if (!service) return;
-    const { status } = await http.get<{ status: BusinessStatus | null }>(`/business/status/${service}`);
+    const storeId = get().business?.id;
+    if (!storeId) return;
+    const { status } = await http.get<{ status: BusinessStatus | null }>(`/business/status/${encodeURIComponent(storeId)}`);
     set({ storeStatus: status });
   },
 
@@ -66,12 +64,13 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
     await get().loadStoreStatus();
   },
 
-  loadCatalog: async () => set({ catalog: await http.get<Product[]>('/business/catalog') }),
-
-  updateProduct: async (productId, changes) => {
-    const updated = await http.patch<Product>(`/business/catalog/${encodeURIComponent(productId)}`, changes);
-    set({ catalog: (get().catalog ?? []).map((p) => (p.id === updated.id ? updated : p)) });
+  registerStore: async (request) => {
+    const business = await http.post<BusinessInfo>('/stores', request);
+    set({ business });
+    return business;
   },
+
+  setBusiness: (business) => set({ business }),
 
   loadOrders: async () => {
     if (get().status !== 'ready') set({ status: 'loading' });
@@ -118,7 +117,7 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
     if (order) set({ orders: { ...get().orders, [order.id]: { ...order, driverLocation: location } } });
   },
 
-  reset: () => set({ business: undefined, orders: {}, status: 'idle', storeStatus: null, catalog: null }),
+  reset: () => set({ business: undefined, orders: {}, status: 'idle', storeStatus: null }),
 }));
 
 /** Pedidos del más nuevo al más viejo. */
