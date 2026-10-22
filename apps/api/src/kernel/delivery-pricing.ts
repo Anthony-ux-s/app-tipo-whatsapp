@@ -22,6 +22,8 @@ export const DEFAULT_DELIVERY_PRICING: DeliveryPricing = {
   streetFactor: 1.35,
   handlingMinutes: 10,
   maxActiveOrders: 3,
+  dispatchMode: 'optimal',
+  exclusiveOfferSeconds: 45,
 };
 
 const MAX_FEE_CENTS = 10_000;
@@ -42,6 +44,8 @@ export function assertDeliveryPricing(p: DeliveryPricing): void {
   assertRange(p.fuelMarginPercent, 0, 500, 'El margen del combustible debe estar entre 0 % y 500 %');
   assertRange(p.streetFactor, 1, 3, 'El factor de calles debe estar entre 1 y 3');
   assertRange(p.handlingMinutes, 0, 120, 'Los minutos fijos deben estar entre 0 y 120');
+  if (p.dispatchMode !== 'optimal' && p.dispatchMode !== 'waves') throw new ValidationError('Elige cómo se reparten los pedidos');
+  assertRange(p.exclusiveOfferSeconds, 15, 300, 'La oferta exclusiva debe durar entre 15 y 300 segundos');
   if (!Number.isInteger(p.maxActiveOrders) || p.maxActiveOrders < 1 || p.maxActiveOrders > 5) throw new ValidationError('Un repartidor puede llevar de 1 a 5 pedidos a la vez');
   if (!DRIVER_VEHICLES.includes(p.pricingVehicle)) throw new ValidationError('Elige un vehículo para cotizar');
   for (const v of DRIVER_VEHICLES) {

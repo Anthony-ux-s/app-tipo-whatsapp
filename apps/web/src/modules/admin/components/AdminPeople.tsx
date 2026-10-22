@@ -68,12 +68,12 @@ export function AdminPeople({ chip }: { chip: (on: boolean, onClick: () => void,
             setSearch(e.target.value);
             if (!e.target.value) setQuery('');
           }}
-          placeholder="Buscar por nombre, @usuario o teléfono (Enter)"
+          placeholder="Nombre, @usuario o teléfono"
           aria-label="Buscar personas"
           className="h-10 w-full rounded-[var(--radius-card)] bg-surface pr-3 pl-9 text-sm text-ink shadow-float outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-teal-500/30"
         />
       </form>
-      <div className="flex gap-1.5 overflow-x-auto pb-1" aria-label="Tipo de cuenta">
+      <div className="flex flex-wrap gap-1.5" aria-label="Tipo de cuenta">
         {FILTERS.map((f) => chip(filter === f.id, () => setFilter(f.id), f.label))}
       </div>
 

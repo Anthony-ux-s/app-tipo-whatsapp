@@ -10,7 +10,8 @@ import type { CouponsRepository } from '../coupons.repository';
 export async function evaluateCoupon(coupons: CouponsRepository, input: InternalCouponQuote, now = new Date()): Promise<AppliedCoupon> {
   const code = normalizeCouponCode(input.code);
   const coupon = code ? await coupons.findByCode(code) : null;
-  if (!coupon) throw new NotFoundError('Ese cupón no existe');
+  // Un cupón personal no existe para nadie más.
+  if (!coupon || (coupon.ownerUserId && coupon.ownerUserId !== input.userId)) throw new NotFoundError('Ese cupón no existe');
   const [uses, userUses, userOrders] = await Promise.all([
     coupon.maxUses !== null ? coupons.countUses(code) : Promise.resolve(0),
     coupons.countUses(code, input.userId),

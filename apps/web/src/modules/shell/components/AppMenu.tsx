@@ -1,12 +1,12 @@
-import { Bike, ChevronRight, Route, Settings, ShieldCheck, Store, Users, X, type LucideIcon } from 'lucide-react';
+import { Bike, ChevronRight, Download, Package, Route, Settings, ShieldCheck, Store, Users, X, type LucideIcon } from 'lucide-react';
 import { useEffect } from 'react';
 import { Link } from 'react-router';
 import { useBusinessStore } from '@shared/stores/business.store';
 import { useDriverStore } from '@shared/stores/driver.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { Avatar } from '@shared/ui/Avatar';
+import { useInstallApp } from '../hooks/use-install-app.hook';
 import { SETTINGS_SECTIONS, type SettingsSectionId } from '../../settings/const/settings.const';
-import { NAV_ITEMS } from '../const/navigation.const';
 
 interface AppMenuProps {
   open: boolean;
@@ -14,28 +14,69 @@ interface AppMenuProps {
   onNewGroup: () => void;
 }
 
-/** Ajustes que se ven en el menú, en orden: lo que más se cambia arriba. */
-const MENU_SETTINGS: SettingsSectionId[] = ['perfil', 'direcciones', 'chats', 'apariencia', 'notificaciones', 'privacidad', 'datos'];
+/** Solo los ajustes que más se cambian; el resto está en «Todos los ajustes». */
+const MENU_SETTINGS: SettingsSectionId[] = ['perfil', 'direcciones', 'chats', 'apariencia'];
+/** Nombres más claros en el menú (donde también está el botón «Chats»). */
+const MENU_LABELS: Partial<Record<SettingsSectionId, string>> = { chats: 'Letra y chats' };
 
-const rowClass = 'flex w-full items-center gap-3.5 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium text-ink transition-colors duration-200 hover:bg-surface-3';
+/** Color de cada botón grande (fondo del ícono y del botón): se reconocen sin leer. */
+const TONES = {
+  orange: 'bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-300',
+  rose: 'bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-300',
+  violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300',
+  amber: 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-300',
+  sky: 'bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300',
+  slate: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
+  green: 'bg-teal-50 text-brand dark:bg-teal-950/50 dark:text-teal-300',
+} as const;
+type Tone = keyof typeof TONES;
 
-function MenuRow({ to, icon: Icon, label, onClose }: { to: string; icon: LucideIcon; label: string; onClose: () => void }) {
+const tileClass = (tone: Tone) =>
+  `flex min-h-24 flex-col items-start justify-between gap-2 rounded-2xl p-3 text-left transition-transform duration-200 active:scale-95 md:min-h-0 md:flex-row md:items-center md:justify-start md:gap-2.5 md:rounded-xl md:p-2 ${TONES[tone]}`;
+
+function TileContent({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
-    <Link to={to} onClick={onClose} className={rowClass}>
-      <Icon className="size-5 shrink-0 text-brand dark:text-teal-300" />
+    <>
+      <span className="flex size-11 items-center justify-center rounded-xl bg-white/80 shadow-sm md:size-8 md:rounded-lg dark:bg-black/20">
+        <Icon className="size-6 md:size-[18px]" strokeWidth={2.25} />
+      </span>
+      <span className="text-[15px] leading-tight font-bold text-ink md:text-sm">{label}</span>
+    </>
+  );
+}
+
+/** Botón grande del menú (lo principal: pedidos, reparto, negocio…). */
+function Tile({ to, icon, label, tone, onClose, className = '' }: { to: string; icon: LucideIcon; label: string; tone: Tone; onClose: () => void; className?: string }) {
+  return (
+    <Link to={to} onClick={onClose} className={`${tileClass(tone)} ${className}`}>
+      <TileContent icon={icon} label={label} />
+    </Link>
+  );
+}
+
+/** Fila de ajustes: ícono de color, nombre y flecha. */
+function SettingRow({ to, icon: Icon, label, onClose }: { to: string; icon: LucideIcon; label: string; onClose: () => void }) {
+  return (
+    <Link to={to} onClick={onClose} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[15px] font-semibold text-ink transition-colors duration-200 hover:bg-surface-3">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-brand dark:bg-teal-950/60 dark:text-teal-300">
+        <Icon className="size-5" />
+      </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
+      <ChevronRight className="size-4 text-ink-faint" />
     </Link>
   );
 }
 
 /**
- * Menú lateral (las tres líneas del encabezado): todas las secciones, los pedidos y cada ajuste
- * en un solo lugar.
+ * Menú lateral (las tres líneas del encabezado): botones grandes con lo de cada cuenta y los ajustes
+ * más usados. En la computadora los botones son compactos y no repiten Chats, Servicios, Ofertas ni
+ * «Nuevo grupo».
  */
 export function AppMenu({ open, onClose, onNewGroup }: AppMenuProps) {
   const user = useSessionStore((s) => s.user);
   const business = useBusinessStore((s) => s.business);
   const driver = useDriverStore((s) => s.driver);
+  const installApp = useInstallApp();
 
   useEffect(() => {
     if (!open) return;
@@ -45,12 +86,11 @@ export function AppMenu({ open, onClose, onNewGroup }: AppMenuProps) {
   }, [open, onClose]);
 
   if (!open || !user) return null;
-  const sections = NAV_ITEMS.filter((item) => item.id !== 'ajustes');
 
   return (
     <div className="fixed inset-0 z-40 flex" role="dialog" aria-modal="true" aria-label="Menú">
       <button type="button" aria-label="Cerrar menú" onClick={onClose} className="absolute inset-0 animate-fade-in bg-black/40" />
-      <nav className="relative flex h-full w-[86%] max-w-80 animate-slide-in flex-col overflow-y-auto bg-surface shadow-pop">
+      <nav className="relative flex h-full w-[88%] max-w-84 animate-slide-in flex-col overflow-y-auto bg-surface shadow-pop">
         <div className="flex items-start gap-3 bg-brand px-4 pt-5 pb-4 text-white">
           <Link to="/app/ajustes/perfil" onClick={onClose} className="flex min-w-0 flex-1 items-center gap-3">
             <Avatar name={user.displayName} color={user.avatarColor} photo={user.avatarUrl} size="lg" />
@@ -59,43 +99,51 @@ export function AppMenu({ open, onClose, onNewGroup }: AppMenuProps) {
               <span className="block truncate text-sm text-white/80">{user.username ? `@${user.username}` : user.phone}</span>
             </span>
           </Link>
-          <button type="button" onClick={onClose} aria-label="Cerrar menú" className="flex size-9 shrink-0 items-center justify-center rounded-full hover:bg-white/15">
+          <button type="button" onClick={onClose} aria-label="Cerrar menú" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/15 hover:bg-white/25">
             <X className="size-5" />
           </button>
         </div>
 
-        <div className="flex flex-col gap-0.5 p-2">
-          {sections.map((item) => (
-            <MenuRow key={item.id} to={item.to} icon={item.icon} label={item.id === 'delivery' ? 'Mis pedidos' : item.label} onClose={onClose} />
-          ))}
-          {business && <MenuRow to="/app/negocio" icon={Store} label={`Mi negocio · ${business.name}`} onClose={onClose} />}
-          {driver && <MenuRow to="/app/rapidito" icon={Bike} label="Rapidito (repartidor)" onClose={onClose} />}
-          {driver && <MenuRow to="/app/rapidito/rutas" icon={Route} label="Mis rutas" onClose={onClose} />}
+        <div className="grid grid-cols-2 gap-2 p-3 md:grid-cols-1 md:gap-1.5" data-testid="menu-tiles">
+          <Tile to="/app/pedidos" icon={Package} label="Mis pedidos" tone="orange" onClose={onClose} />
+          {driver && <Tile to="/app/rapidito" icon={Bike} label="Rapidito" tone="rose" onClose={onClose} />}
+          {driver && <Tile to="/app/rapidito/rutas" icon={Route} label="Mis rutas" tone="violet" onClose={onClose} />}
+          {business && <Tile to="/app/negocio" icon={Store} label="Mi negocio" tone="amber" onClose={onClose} />}
           <button
             type="button"
             onClick={() => {
               onClose();
               onNewGroup();
             }}
-            className={rowClass}
+            className={`${tileClass('sky')} md:hidden`}
           >
-            <Users className="size-5 shrink-0 text-brand dark:text-teal-300" />
-            Nuevo grupo
+            <TileContent icon={Users} label="Nuevo grupo" />
           </button>
+          {user.isAdmin && <Tile to="/app/admin" icon={ShieldCheck} label="Administración" tone="slate" onClose={onClose} />}
         </div>
 
-        <div className="mx-4 border-t border-line" />
-        <p className="px-5 pt-3 pb-1 text-xs font-bold tracking-wider text-ink-faint uppercase">Configuración</p>
-        <div className="flex flex-col gap-0.5 p-2 pt-0">
+        <p className="px-5 pt-1 pb-1 text-xs font-bold tracking-wider text-ink-faint uppercase">Configuración</p>
+        <div className="flex flex-col gap-0.5 px-3 pb-4">
           {MENU_SETTINGS.map((id) => (
-            <MenuRow key={id} to={`/app/ajustes/${id}`} icon={SETTINGS_SECTIONS[id].icon} label={SETTINGS_SECTIONS[id].title} onClose={onClose} />
+            <SettingRow key={id} to={`/app/ajustes/${id}`} icon={SETTINGS_SECTIONS[id].icon} label={MENU_LABELS[id] ?? SETTINGS_SECTIONS[id].title} onClose={onClose} />
           ))}
-          {user.isAdmin && <MenuRow to="/app/admin" icon={ShieldCheck} label="Panel de administración" onClose={onClose} />}
-          <Link to="/app/ajustes" onClick={onClose} className={rowClass}>
-            <Settings className="size-5 shrink-0 text-brand dark:text-teal-300" />
-            <span className="flex-1">Todos los ajustes</span>
-            <ChevronRight className="size-4 text-ink-faint" />
-          </Link>
+          <SettingRow to="/app/ajustes" icon={Settings} label="Todos los ajustes" onClose={onClose} />
+          {installApp.available && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                void installApp.install();
+              }}
+              data-testid="install-app"
+              className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[15px] font-semibold text-ink transition-colors duration-200 hover:bg-surface-3"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-brand dark:bg-teal-950/60 dark:text-teal-300">
+                <Download className="size-5" />
+              </span>
+              <span className="min-w-0 flex-1 truncate">Instalar la app</span>
+            </button>
+          )}
         </div>
       </nav>
     </div>

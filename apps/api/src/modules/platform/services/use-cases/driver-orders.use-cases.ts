@@ -125,6 +125,7 @@ export class AcceptDeliveryUseCase {
       const updated = await this.orders.updateIfStatus(id, 'searching_driver', {
         status: 'driver_assigned',
         driverId: userId,
+        reservation: null,
         delivery: { provider: 'Rapidito', driverName: name, vehicle: driver.plate ? `${driver.vehicle} · ${driver.plate}` : driver.vehicle, etaMinutes: order.etaMinutes, updatedAt: new Date().toISOString() },
         note: `${name} · ${driver.vehicle}${driver.plate ? ` ${driver.plate}` : ''}`,
       });
@@ -161,7 +162,7 @@ export class ReleaseDeliveryUseCase {
       status: 'searching_driver',
       driverId: null,
       delivery: null,
-      offer: this.dispatch.firstOffer(),
+      ...(await this.dispatch.openOffer()),
       note: `${order.delivery?.driverName ?? 'El repartidor'} no pudo llevarlo · se ofrece a otro`,
     });
     if (!updated) throw new ConflictError('El pedido ya cambió de estado');

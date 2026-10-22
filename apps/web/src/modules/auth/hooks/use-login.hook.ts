@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useSessionStore } from '@shared/stores/session.store';
 import { errorMessage } from '@shared/utils/http';
-import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../const/auth.const';
 import { useAuthRedirect } from './use-auth-redirect.hook';
 
 export function useLogin() {
@@ -37,16 +36,10 @@ export function useLogin() {
     showPassword,
     error,
     loading,
-    demoAccounts: DEMO_ACCOUNTS,
     registerState: { from },
     onIdentifierChange: (value: string) => setIdentifier(value),
     onPasswordChange: (value: string) => setPassword(value),
     togglePassword: () => setShowPassword((v) => !v),
-    fillDemo: (value: string) => {
-      setIdentifier(value);
-      setPassword(DEMO_PASSWORD);
-      setError(null);
-    },
     submit,
   };
 }

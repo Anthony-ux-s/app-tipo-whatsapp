@@ -4,7 +4,7 @@
  * Montos siempre en céntimos (enteros) para no perder precisión.
  */
 
-export type ServiceId = 'mercado' | 'salud';
+export type ServiceId = 'mercado' | 'tecnologia' | 'ferreteria' | 'salud';
 
 export interface ServiceInfo {
   id: ServiceId;
@@ -420,6 +420,8 @@ export interface DriverOrder {
   earningsCents: number;
   /** Distancia del repartidor a la tienda (km), si se conoce su ubicación. */
   distanceToStoreKm: number | null;
+  /** Asignación óptima: oferta solo para este repartidor hasta esta hora (null = oferta abierta o ya es suyo). */
+  exclusiveUntil: string | null;
   hasDeliveryPhoto: boolean;
   /** Lo tiene este repartidor (si no, es una oferta disponible). */
   mine: boolean;

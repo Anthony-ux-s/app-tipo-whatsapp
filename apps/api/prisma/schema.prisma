@@ -1,5 +1,6 @@
-// Esquema de Parla. En desarrollo usa SQLite embebida; para producción
-// `npm run db:postgres-schema` genera la variante PostgreSQL de este mismo archivo.
+// Esquema de Parla (Prisma sobre PostgreSQL de Supabase).
+//  - DATABASE_URL: conexión de la app. En Supabase usa el «pooler» (puerto 6543) con `?pgbouncer=true`.
+//  - DIRECT_URL: conexión directa (puerto 5432), solo para aplicar las migraciones (`prisma migrate deploy`).
 // Los valores de tipo enum se guardan como texto y están tipados en @parla/types.
 
 generator client {
@@ -7,8 +8,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -58,6 +60,8 @@ model User {
   /// Perfil de repartidor de Rapidito; null si no reparte.
   driver            Driver?
   activity          UserActivityDay[]
+  rouletteSpins     RouletteSpin[]
+  searchEvents      SearchEvent[]
 }
 
 model Conversation {
@@ -217,6 +221,10 @@ model Order {
   delivery             String?
   /// Negocio que prepara el pedido; null en pedidos sin negocio asignado.
   businessId           String?
+  /// Dónde se recoge (la ubicación de la tienda al crear el pedido): si la tienda se muda, el
+  /// historial de entregas no cambia. null en pedidos viejos o sin ubicación.
+  pickupLat            Float?
+  pickupLng            Float?
   /// Repartidor de Rapidito que lo tomó; null mientras nadie lo toma.
   driverId             String?
   /// Código de entrega de 4 dígitos (solo lo ve el cliente); el repartidor lo pide al entregar.
@@ -227,6 +235,10 @@ model Order {
   /// desde cuándo, para ampliarlo por oleadas.
   offerRadiusKm        Float?
   offerWaveAt          DateTime?
+  /// Asignación óptima: el pedido se reserva un rato para el repartidor elegido (offerDriverId) hasta
+  /// offerUntil; con offerDriverId null y offerUntil puesto, se retiene mientras se calcula a quién darlo.
+  offerDriverId        String?
+  offerUntil           DateTime?
   /// Foto de la entrega (opcional con código; obligatoria si se dejó sin código, p. ej. en portería).
   deliveryPhotoId      String?
   deliveredWithoutCode Boolean   @default(false)
@@ -448,9 +460,13 @@ model Coupon {
   startsAt         DateTime?
   endsAt           DateTime?
   active           Boolean   @default(true)
+  /// Cupón personal (lo ganó en la ruleta): solo esa persona puede usarlo. null = lo puede usar cualquiera.
+  ownerUserId      String?
   createdAt        DateTime  @default(now())
 
   redemptions CouponRedemption[]
+
+  @@index([ownerUserId])
 }
 
 /// Un cupón usado en un pedido (uno por pedido).
@@ -488,4 +504,84 @@ model UserActivityDay {
 
   @@id([userId, day])
   @@index([day])
+}
+
+/// API de tienda que soporte conecta a un servicio (p. ej. Tecnología): la URL, el prefijo y las
+/// claves con las que el gateway consulta su catálogo y reserva. El servicio aparece disponible solo
+/// si está encendida.
+model ServiceIntegration {
+  /// ServiceId: tecnologia | salud
+  service     String   @id
+  name        String   @default("")
+  /// Idioma de la API: parla (el de MercaYa) | redwiiil (la API v1 de RED WIIIL)
+  format      String   @default("parla")
+  enabled     Boolean  @default(false)
+  baseUrl     String   @default("")
+  prefix      String   @default("")
+  /// Credencial de Parla ante la tienda (cabecera x-api-key). No se devuelve completa al navegador.
+  apiKey      String   @default("")
+  /// Clave de administración del catálogo (opcional: para que la dueña cambie precios y stock).
+  adminKey    String   @default("")
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+/// Ruleta de descuentos: a quién le sale (segment), cada cuánto puede girar y los premios (JSON RoulettePrize[]).
+model RouletteCampaign {
+  id           String   @id @default(cuid())
+  name         String
+  title        String
+  subtitle     String   @default("")
+  /// CustomerSegment: vip | loyal | lapsed | never_bought | new | all
+  segment      String
+  cooldownDays Int      @default(1)
+  prizes       String
+  enabled      Boolean  @default(false)
+  /// Estrategia: roulette | scratch | box | flash
+  kind         String   @default("roulette")
+  /// Ventana en la que está activa (null = sin límite). La oferta relámpago siempre lleva `endsAt`.
+  startsAt     DateTime?
+  endsAt       DateTime?
+  /// Modo de prueba: se muestra cada vez que la persona entra y los giros no gastan su turno.
+  testMode     Boolean  @default(false)
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  spins RouletteSpin[]
+
+  @@index([enabled, segment])
+}
+
+/// Un giro. El premio lo elige el servidor; `slot` (período de espera) impide girar dos veces a la vez.
+model RouletteSpin {
+  id         String   @id @default(cuid())
+  campaignId String
+  userId     String
+  slot       Int
+  prizeId    String
+  prizeLabel String
+  /// Cupón personal creado por el premio; null si no ganó nada.
+  couponCode String?
+  createdAt  DateTime @default(now())
+
+  campaign RouletteCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, campaignId, slot])
+  @@index([campaignId, createdAt])
+}
+
+/// Lo que buscó cada persona en las tiendas (para ordenar sus ofertas y ver tendencias en soporte).
+model SearchEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  service   String
+  term      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }

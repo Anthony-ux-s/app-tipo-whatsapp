@@ -117,7 +117,7 @@ export class WatchDeliveriesUseCase {
         status: 'searching_driver',
         driverId: null,
         delivery: null,
-        offer: this.dispatch.firstOffer(now),
+        ...(await this.dispatch.openOffer(now)),
         note: `Reasignado automáticamente: ${reason}`,
       });
       if (!updated) continue;

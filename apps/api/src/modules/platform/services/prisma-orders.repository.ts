@@ -3,7 +3,7 @@ import type { Currency, OrderRating, OrderStatus, OrderTimelineEntry, RatingSumm
 import type { Business as BusinessRow, Claim as ClaimRow, Order as OrderRow } from '@prisma/client';
 import { toClaimRecord } from './prisma-claims.repository';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
-import type { AdminOrderFilter, NewOrder, OrderChanges, OrderRecord, OrdersRepository } from './orders.repository';
+import type { AdminOrderFilter, NewOrder, OfferReservation, OrderChanges, OrderRecord, OrdersRepository } from './orders.repository';
 
 type OrderWithBusiness = OrderRow & {
   business: BusinessRow | null;
@@ -64,6 +64,8 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
       : null,
     offerRadiusKm: row.offerRadiusKm,
     offerWaveAt: row.offerWaveAt,
+    reservedFor: row.offerUntil ? { driverId: row.offerDriverId, until: row.offerUntil } : null,
+    pickup: row.pickupLat !== null && row.pickupLng !== null ? { lat: row.pickupLat, lng: row.pickupLng } : null,
     deliveryPhotoId: row.deliveryPhotoId,
     deliveredWithoutCode: row.deliveredWithoutCode,
     claims: row.claims.map(toClaimRecord),
@@ -76,11 +78,13 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
 export class PrismaOrdersRepository implements OrdersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(order: NewOrder): Promise<OrderRecord> {
+  async create({ pickup, ...order }: NewOrder): Promise<OrderRecord> {
     const timeline: OrderTimelineEntry[] = [{ status: order.status, at: new Date().toISOString() }];
     const row = await this.prisma.order.create({
       data: {
         ...order,
+        pickupLat: pickup?.lat ?? null,
+        pickupLng: pickup?.lng ?? null,
         lines: JSON.stringify(order.lines),
         address: JSON.stringify(order.address),
         payment: JSON.stringify(order.payment),
@@ -142,6 +146,14 @@ export class PrismaOrdersRepository implements OrdersRepository {
     return rows.map(toOrderRecord);
   }
 
+  async reserveOffer(id: string, reservation: OfferReservation | null): Promise<OrderRecord | null> {
+    const { count } = await this.prisma.order.updateMany({
+      where: { id, status: 'searching_driver', driverId: null },
+      data: { offerDriverId: reservation?.driverId ?? null, offerUntil: reservation?.until ?? null },
+    });
+    return count === 1 ? this.findById(id) : null;
+  }
+
   async widenOffer(id: string, radiusKm: number | null, at: Date): Promise<OrderRecord | null> {
     const { count } = await this.prisma.order.updateMany({ where: { id, status: 'searching_driver', driverId: null }, data: { offerRadiusKm: radiusKm, offerWaveAt: at } });
     return count === 1 ? this.findById(id) : null;
@@ -152,7 +164,7 @@ export class PrismaOrdersRepository implements OrdersRepository {
     const rows = await this.prisma.order.findMany({
       where: {
         ...(filter.statuses?.length ? { status: { in: filter.statuses } } : {}),
-        ...(q ? { OR: [{ id: { contains: q } }, { user: { displayName: { contains: q } } }, { user: { phone: { contains: q } } }] } : {}),
+        ...(q ? { OR: [{ id: { contains: q, mode: 'insensitive' } }, { user: { displayName: { contains: q, mode: 'insensitive' } } }, { user: { phone: { contains: q } } }] } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: filter.limit,
@@ -199,6 +211,7 @@ export class PrismaOrdersRepository implements OrdersRepository {
         ...(changes.delivery !== undefined ? { delivery: changes.delivery ? JSON.stringify(changes.delivery) : null } : {}),
         ...(changes.driverId !== undefined ? { driverId: changes.driverId } : {}),
         ...(changes.offer ? { offerRadiusKm: changes.offer.radiusKm, offerWaveAt: changes.offer.at } : {}),
+        ...(changes.reservation !== undefined ? { offerDriverId: changes.reservation?.driverId ?? null, offerUntil: changes.reservation?.until ?? null } : {}),
         ...(changes.deliveryPhotoId ? { deliveryPhotoId: changes.deliveryPhotoId } : {}),
         ...(changes.deliveredWithoutCode !== undefined ? { deliveredWithoutCode: changes.deliveredWithoutCode } : {}),
       },

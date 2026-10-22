@@ -75,7 +75,7 @@ export class PrismaPeopleAdminRepository implements PeopleAdminRepository {
   async list(filter: AdminPeopleFilter, query: string, visitsSinceDay: string, limit: number): Promise<PersonRow[]> {
     const q = query.trim();
     const search: Prisma.UserWhereInput = q
-      ? { OR: [{ displayName: { contains: q } }, { username: { contains: q.toLowerCase().replace(/^@/, '') } }, { phone: { contains: q.replace(/\D/g, '') || q } }] }
+      ? { OR: [{ displayName: { contains: q, mode: 'insensitive' } }, { username: { contains: q.toLowerCase().replace(/^@/, ''), mode: 'insensitive' } }, { phone: { contains: q.replace(/\D/g, '') || q } }] }
       : {};
     const users = await this.prisma.user.findMany({
       where: { deletedAt: null, AND: [FILTERS[filter], search] },

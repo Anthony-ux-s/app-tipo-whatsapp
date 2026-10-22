@@ -46,8 +46,17 @@ export function applySecurityHeaders(app: NestExpressApplication, env: AppEnv): 
 }
 
 /** Producción en un solo proceso: la API sirve la PWA compilada con fallback de rutas a index.html. */
-export function serveWebApp(app: NestExpressApplication, webDist: string): void {
+export function serveWebApp(app: NestExpressApplication, webDist: string, androidApp: { packageId: string; fingerprints: string[] } | null = null): void {
   const index = join(webDist, 'index.html');
+  // Digital Asset Links: Android comprueba aquí que el APK es de este dominio (y lo abre sin barra del navegador).
+  app.use('/.well-known/assetlinks.json', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.json(
+      androidApp
+        ? [{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: androidApp.packageId, sha256_cert_fingerprints: androidApp.fingerprints } }]
+        : [],
+    );
+  });
   app.use(
     express.static(webDist, {
       index: false,

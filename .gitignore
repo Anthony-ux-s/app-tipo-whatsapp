@@ -2,10 +2,7 @@ node_modules/
 dist/
 dev-dist/
 *.tsbuildinfo
-apps/api/prisma/*.db
-apps/api/prisma/*.db-journal
 apps/api/storage/
-apps/api/prisma/schema.postgres.prisma
 .env
 !.env.example
 test-results/
@@ -23,3 +20,8 @@ services/gateway/bin/
 services/providers/bin/
 services/realtime/_build/
 services/realtime/deps/
+
+# Firma de la app Android: nunca al repositorio
+*.keystore
+*.jks
+signing-key-info.txt

@@ -8,12 +8,13 @@ import type {
   DriverRoutesSummary,
   DriverVehicle,
   GeoPoint,
+  RoutePlanOrder,
   RouteStop,
 } from '@parla/types';
 import { assertDeliveryPricing, fuelGallons, priceDelivery, travelMinutes } from '../../../../kernel/delivery-pricing';
 import { NotFoundError } from '../../../../kernel/domain-error';
 import { assertPoint, distanceKm } from '../../../../kernel/geo';
-import { planRoute, routeKm, type PlanStop } from '../../../../kernel/route-planning';
+import { planRoute, routeKm, type DistanceFn, type PlanStop } from '../../../../kernel/route-planning';
 import { STREET_ROUTER, type StreetRouter } from '../../../../infra/routing/street-router.port';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { DELIVERY_SETTINGS_REPOSITORY, type DeliverySettingsRepository } from '../delivery-settings.repository';
@@ -21,6 +22,7 @@ import { DriverPayPolicy } from '../driver-pay.policy';
 import { DRIVERS_REPOSITORY, type DriversRepository } from '../drivers.repository';
 import { ORDERS_REPOSITORY, type OrderRecord, type OrdersRepository } from '../orders.repository';
 import { requireAdmin } from './claims.use-cases';
+import { customersOf } from './orders.use-cases';
 
 /** Lo que de verdad gasta el repartidor en combustible (sin el margen que se cobra al cliente). */
 function fuelSpendCents(p: DeliveryPricing, vehicle: DriverVehicle, km: number): number {
@@ -122,6 +124,9 @@ export class DriverRoutePlanUseCase {
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     @Inject(ORDERS_REPOSITORY) private readonly orders: OrdersRepository,
     @Inject(DELIVERY_SETTINGS_REPOSITORY) private readonly settings: DeliverySettingsRepository,
+    @Inject(STREET_ROUTER) private readonly router: StreetRouter,
+    @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
+    private readonly pay: DriverPayPolicy,
   ) {}
 
   async execute(userId: string): Promise<DriverRoutePlan> {
@@ -131,24 +136,66 @@ export class DriverRoutePlanUseCase {
     const active = (await this.orders.listActiveForDriver(userId)).filter((o) => o.status === 'driver_assigned' || o.status === 'on_the_way');
     const stops = active.flatMap(stopsOf);
     const start = driver.location ? { lat: driver.location.lat, lng: driver.location.lng } : null;
-    const plan = planRoute(start, stops);
-    const roadKm = (km: number) => km * pricing.streetFactor;
-    const totalKm = roadKm(plan.totalKm);
-    const planned: RouteStop[] = plan.stops.map((s, i) => ({ orderId: s.orderId, kind: s.kind, label: s.label, point: s.point, legKm: Math.round(roadKm(plan.legsKm[i]) * 100) / 100 }));
+    const table = await streetDistances(this.router, [...(start ? [start] : []), ...stops.map((s) => s.point)], pricing.streetFactor);
+    const plan = planRoute(start, stops, table.km);
+    const round = (km: number) => Math.round(km * 100) / 100;
+    const planned: RouteStop[] = plan.stops.map((s, i) => ({ orderId: s.orderId, kind: s.kind, label: s.label, point: s.point, legKm: round(plan.legsKm[i]) }));
+    const stopNumber = (orderId: string, kind: 'pickup' | 'dropoff') => {
+      const i = plan.stops.findIndex((s) => s.orderId === orderId && s.kind === kind);
+      return i >= 0 ? i + 1 : null;
+    };
+    const customers = await customersOf(this.users, active);
+    const orders: RoutePlanOrder[] = active
+      .map((o) => ({
+        orderId: o.id,
+        shortId: o.id.slice(-4).toUpperCase(),
+        businessName: o.business?.name ?? 'Tienda',
+        customerName: customers.get(o.userId)?.displayName ?? 'Cliente',
+        dropoffLine: o.address.line,
+        next: o.status === 'driver_assigned' ? ('pickup' as const) : ('dropoff' as const),
+        pickupStop: stopNumber(o.id, 'pickup'),
+        dropoffStop: stopNumber(o.id, 'dropoff'),
+        earningsCents: this.pay.split(o.deliveryFeeCents, o.tipCents).earningsCents,
+      }))
+      // En el orden en que aparecen en la ruta.
+      .sort((a, b) => (a.pickupStop ?? a.dropoffStop ?? 99) - (b.pickupStop ?? b.dropoffStop ?? 99));
     return {
+      method: table.streets ? 'streets' : 'straight_line',
+      orders,
       start,
       vehicle: driver.vehicle,
       stops: planned,
-      totalKm: Math.round(totalKm * 100) / 100,
-      etaMinutes: stops.length ? travelMinutes(pricing, driver.vehicle, totalKm) + pricing.handlingMinutes * Math.max(0, active.length - 1) : 0,
-      fuelCents: fuelSpendCents(pricing, driver.vehicle, totalKm),
+      totalKm: round(plan.totalKm),
+      etaMinutes: stops.length ? travelMinutes(pricing, driver.vehicle, plan.totalKm) + pricing.handlingMinutes * Math.max(0, active.length - 1) : 0,
+      fuelCents: fuelSpendCents(pricing, driver.vehicle, plan.totalKm),
       // Frente a hacer cada pedido completo, uno detrás de otro, en el orden en que se tomaron.
-      savedKm: Math.max(0, Math.round(roadKm(routeKm(start, stops) - plan.totalKm) * 100) / 100),
+      savedKm: Math.max(0, round(routeKm(start, stops, table.km) - plan.totalKm)),
     };
   }
 }
 
+/**
+ * Distancias por las calles entre todos los puntos con una sola consulta (tabla de OSRM: caminos
+ * más cortos con Dijkstra). Si no responde, línea recta × factor de calles.
+ */
+async function streetDistances(router: StreetRouter, points: GeoPoint[], streetFactor: number): Promise<{ km: DistanceFn; streets: boolean }> {
+  const straight: DistanceFn = (a, b) => distanceKm(a, b) * streetFactor;
+  if (points.length < 2) return { km: straight, streets: false };
+  const index = new Map(points.map((p, i) => [`${p.lat},${p.lng}`, i]));
+  const table = await router.matrix(points, points);
+  if (!table) return { km: straight, streets: false };
+  const km: DistanceFn = (a, b) => {
+    const i = index.get(`${a.lat},${a.lng}`);
+    const j = index.get(`${b.lat},${b.lng}`);
+    const v = i === undefined || j === undefined ? null : table.km[i][j];
+    return v ?? straight(a, b);
+  };
+  return { km, streets: true };
+}
+
 const HISTORY_LIMIT = 300;
+/** Más que esto, en un pedido sin punto de recojo guardado, no es una entrega real sino una tienda que se mudó. */
+const LEGACY_MAX_KM = 100;
 
 /** Historial de entregas del repartidor con su recorrido, lo que ganó y lo que gastó en combustible. */
 @Injectable()
@@ -169,9 +216,12 @@ export class DriverRoutesHistoryUseCase {
     const routes = delivered
       .map((o) => {
         const deliveredAt = [...o.timeline].reverse().find((t) => t.status === 'delivered')?.at ?? o.updatedAt.toISOString();
-        const pickup = o.business?.location ?? null;
+        // Desde donde se recogió de verdad (si la tienda se mudó después, el historial no cambia).
+        const pickup = o.pickup ?? o.business?.location ?? null;
         const dropoff = o.address.location ?? null;
-        const km = pickup && dropoff ? distanceKm(pickup, dropoff) * pricing.streetFactor : null;
+        const measured = pickup && dropoff ? distanceKm(pickup, dropoff) * pricing.streetFactor : null;
+        // Pedidos viejos sin el punto de recojo guardado: si la tienda se mudó, la cuenta saldría absurda.
+        const km = measured !== null && !o.pickup && measured > LEGACY_MAX_KM ? null : measured;
         return {
           orderId: o.id,
           businessName: o.business?.name ?? 'Tienda',

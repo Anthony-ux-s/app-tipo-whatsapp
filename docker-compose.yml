@@ -1,25 +1,12 @@
 # Parla en un servidor propio: gateway (Go, único puerto público de la app) → core (NestJS) + tiempo
-# real (Elixir) + APIs de servicios (simuladas en «providers»: tienda, delivery y billetera), con PostgreSQL.
-#   cp .env.production.example .env.production   (y completa los valores)
-#   docker compose --env-file .env.production up -d --build
+# real (Elixir) + APIs de servicios (simuladas en «providers»: tienda, delivery y billetera). La base de datos
+# es PostgreSQL en Supabase (DATABASE_URL y DIRECT_URL del .env), no hay contenedor de base de datos.
+#   cp .env.example .env   (y completa los valores: DATABASE_URL y DIRECT_URL de Supabase, secretos…)
+#   docker compose up -d --build
 # Luego pon un proxy con HTTPS delante (Caddy, Nginx, Traefik): la cámara, el micrófono, las
 # notificaciones push y la PWA exigen HTTPS fuera de localhost.
 
 services:
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: parla
-      POSTGRES_USER: parla
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD}
-    volumes:
-      - db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U parla -d parla']
-      interval: 10s
-      retries: 5
-
   gateway:
     build: services/gateway
     restart: unless-stopped
@@ -41,6 +28,7 @@ services:
       PAGAYA_API_KEY: ${PAGAYA_API_KEY:?Define PAGAYA_API_KEY (24+ caracteres)}
       # Retiro automático diario de las ganancias de los repartidores (hora de Lima; vacío = apagado)
       RAPIDITO_PAYOUT_AT: ${RAPIDITO_PAYOUT_AT:-23:00}
+      GATEWAY_RATE_PER_MINUTE: ${GATEWAY_RATE_PER_MINUTE:-600}
 
   # Simuladores de tienda (MercaYa), tarifa del delivery (Rapidito) y billetera con QR (PagaYa). Para producción
   # real se reemplazan por los proveedores verdaderos y solo cambian los traductores del gateway.
@@ -54,6 +42,7 @@ services:
       PAGAYA_WEBHOOK_SECRET: ${PAGAYA_WEBHOOK_SECRET}
       MERCAYA_ADMIN_KEY: ${MERCAYA_ADMIN_KEY}
       PAGAYA_API_KEY: ${PAGAYA_API_KEY}
+      TECNOYA_API_KEY: ${TECNOYA_API_KEY:-}
 
   realtime:
     build: services/realtime
@@ -65,13 +54,30 @@ services:
   core:
     build: .
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
     environment:
       REALTIME_URL: http://realtime:4102
       INTERNAL_TOKEN: ${INTERNAL_TOKEN}
-      DATABASE_URL: postgresql://parla:${POSTGRES_PASSWORD}@db:5432/parla
+      # Supabase: DATABASE_URL por el pooler (6543, ?pgbouncer=true); DIRECT_URL directa (5432) para las migraciones
+      DATABASE_URL: ${DATABASE_URL:?Define DATABASE_URL (Supabase, pooler 6543)}
+      DIRECT_URL: ${DIRECT_URL:?Define DIRECT_URL (Supabase, conexión directa 5432)}
+      # Primer administrador y primera tienda (se crean al arrancar si no existen)
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Soporte}
+      ADMIN_PHONE: ${ADMIN_PHONE:-}
+      STORE_OWNER: ${STORE_OWNER:-}
+      STORE_NAME: ${STORE_NAME:-}
+      STORE_ADDRESS: ${STORE_ADDRESS:-}
+      STORE_SERVICE: ${STORE_SERVICE:-mercado}
+      STORE_LAT: ${STORE_LAT:-}
+      STORE_LNG: ${STORE_LNG:-}
+      STORE_OPENS_AT: ${STORE_OPENS_AT:-08:00}
+      STORE_CLOSES_AT: ${STORE_CLOSES_AT:-22:00}
+      ROUTING_URL: ${ROUTING_URL:-https://router.project-osrm.org}
+      APK_PACKAGE_ID: ${APK_PACKAGE_ID:-}
+      APK_SHA256_CERT_FINGERPRINTS: ${APK_SHA256_CERT_FINGERPRINTS:-}
+      STUN_URLS: ${STUN_URLS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET (32+ caracteres)}
       PUBLIC_WEB_URL: ${PUBLIC_URL:?Define PUBLIC_URL, p. ej. https://chat.miempresa.com}
       WEB_ORIGIN: ${PUBLIC_URL}
@@ -95,5 +101,4 @@ services:
       - app-storage:/data/storage
 
 volumes:
-  db-data:
   app-storage:

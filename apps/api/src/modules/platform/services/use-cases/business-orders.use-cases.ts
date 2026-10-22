@@ -161,7 +161,7 @@ export class DecideBusinessOrderUseCase {
       const driverName = order.delivery?.driverName ?? 'el repartidor';
       const changes: OrderChanges = { status: step.to };
       // Listo (o de nuevo sin repartidor): se ofrece por cercanía desde la primera oleada.
-      if (step.to === 'searching_driver') changes.offer = this.dispatch.firstOffer();
+      if (step.to === 'searching_driver') Object.assign(changes, await this.dispatch.openOffer());
       if (action === 'handoff') {
         changes.note = `Entregado a ${driverName} en la tienda`;
         changes.delivery = order.delivery && {

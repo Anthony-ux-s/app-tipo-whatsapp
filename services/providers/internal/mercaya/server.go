@@ -27,10 +27,17 @@ import (
 	"github.com/parla/providers/internal/notify"
 )
 
-// Store guarda el catálogo y las reservas (en memoria, como un sistema de prueba).
+// Store guarda el catálogo y las reservas (en memoria, como un sistema de prueba). La misma API la
+// sirven MercaYa (abarrotes) y TecnoYa (tecnología), cada una con su ruta: es el formato de «API de
+// tienda» que Parla sabe usar para cualquier servicio.
 type Store struct {
+	// Prefix: dónde publica su API («/mercaya/v1», «/tecnoya/v1»).
+	Prefix string
 	// AdminKey protege la API de administración del catálogo.
 	AdminKey string
+	// APIKey: si no está vacía, toda la API la exige en x-api-key (la clave que el admin de Parla
+	// pone en Integraciones). MercaYa no la pide; TecnoYa sí.
+	APIKey string
 
 	mu       sync.Mutex
 	products []Producto
@@ -47,16 +54,38 @@ type pedido struct {
 }
 
 func NewStore() *Store {
-	return &Store{AdminKey: DevAdminKey, products: catalogoInicial(), orders: map[string]pedido{}}
+	return &Store{Prefix: "/mercaya/v1", AdminKey: DevAdminKey, products: catalogoInicial(), orders: map[string]pedido{}}
 }
 
-// Routes registra la API de MercaYa.
+// NewTecnoYa: la tienda de tecnología de prueba (celulares, laptops, audio…), con clave de API.
+func NewTecnoYa() *Store {
+	return &Store{Prefix: "/tecnoya/v1", AdminKey: DevTecnoYaAdminKey, APIKey: DevTecnoYaAPIKey, products: catalogoTecnologia(), orders: map[string]pedido{}}
+}
+
+// Claves de TecnoYa fuera de producción (las de prueba que se dan para configurar la integración).
+const (
+	DevTecnoYaAPIKey   = "tecnoya-demo-2026"
+	DevTecnoYaAdminKey = "tecnoya-admin-demo"
+)
+
+// Routes registra la API de la tienda en su prefijo.
 func (s *Store) Routes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /mercaya/v1/catalogo", s.catalogo)
-	mux.HandleFunc("GET /mercaya/v1/productos/{sku}", s.producto)
-	mux.HandleFunc("POST /mercaya/v1/pedidos", s.pedido)
-	mux.HandleFunc("DELETE /mercaya/v1/pedidos/{referencia}", s.anular)
-	mux.HandleFunc("PATCH /mercaya/v1/productos/{sku}", s.actualizar)
+	mux.HandleFunc("GET "+s.Prefix+"/catalogo", s.guard(s.catalogo))
+	mux.HandleFunc("GET "+s.Prefix+"/productos/{sku}", s.guard(s.producto))
+	mux.HandleFunc("POST "+s.Prefix+"/pedidos", s.guard(s.pedido))
+	mux.HandleFunc("DELETE "+s.Prefix+"/pedidos/{referencia}", s.guard(s.anular))
+	mux.HandleFunc("PATCH "+s.Prefix+"/productos/{sku}", s.guard(s.actualizar))
+}
+
+// guard exige la clave de API (si la tienda tiene una) antes de atender.
+func (s *Store) guard(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.APIKey != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("x-api-key")), []byte(s.APIKey)) != 1 {
+			notify.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "CLAVE_API_INVALIDA"})
+			return
+		}
+		next(w, r)
+	}
 }
 
 // DevAdminKey: clave de administración fuera de producción.

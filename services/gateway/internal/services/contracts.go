@@ -8,9 +8,29 @@ import "regexp"
 type ServiceID string
 
 const (
-	Mercado ServiceID = "mercado"
-	Salud   ServiceID = "salud"
+	Mercado    ServiceID = "mercado"
+	Salud      ServiceID = "salud"
+	Tecnologia ServiceID = "tecnologia"
+	Ferreteria ServiceID = "ferreteria"
 )
+
+// KnownService: los servicios que existen en Parla.
+func KnownService(id ServiceID) bool {
+	return id == Mercado || id == Salud || id == Tecnologia || id == Ferreteria
+}
+
+// Integration: la API de tienda que soporte conectó a un servicio (en Integraciones del panel).
+type Integration struct {
+	Service ServiceID `json:"service"`
+	Name    string    `json:"name"`
+	// Format: el idioma de la API («parla», el de MercaYa; «redwiiil», la API v1 de RED WIIIL).
+	Format   string `json:"format"`
+	Enabled  bool   `json:"enabled"`
+	BaseURL  string `json:"baseUrl"`
+	Prefix   string `json:"prefix"`
+	APIKey   string `json:"apiKey"`
+	AdminKey string `json:"adminKey"`
+}
 
 const Currency = "PEN"
 
@@ -57,6 +77,8 @@ type Address struct {
 }
 
 type QuoteRequest struct {
+	// Service: lo pone el gateway según la ruta (/api/services/{service}/…), nunca el navegador.
+	Service ServiceID  `json:"-"`
 	Items   []CartItem `json:"items"`
 	Address Address    `json:"address"`
 	// TipCents: propina para el repartidor (opcional, la elige el cliente).

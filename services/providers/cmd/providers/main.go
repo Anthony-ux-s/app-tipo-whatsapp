@@ -48,7 +48,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		notify.WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "parla-providers", "systems": []string{"mercaya", "rapidito", "pagaya"}})
+		notify.WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "service": "parla-providers", "systems": []string{"mercaya", "tecnoya", "rapidito", "pagaya"}})
 	})
 	store := mercaya.NewStore()
 	store.AdminKey = env("MERCAYA_ADMIN_KEY", mercaya.DevAdminKey)
@@ -57,6 +57,10 @@ func main() {
 		os.Exit(1)
 	}
 	store.Routes(mux)
+	// TecnoYa: tienda de tecnología de prueba; Parla la usa cuando el admin la conecta en Integraciones.
+	tecno := mercaya.NewTecnoYa()
+	tecno.APIKey = env("TECNOYA_API_KEY", mercaya.DevTecnoYaAPIKey)
+	tecno.Routes(mux)
 	rapidito.New().Routes(mux)
 	wallet := pagaya.New(publicURL, millis("PAGAYA_EXPIRY_MS", 15*60*1000), notify.Notifier{
 		Secret: env("PAGAYA_WEBHOOK_SECRET", "pagaya-dev-secret"), Header: "x-pagaya-firma", Retries: 4, Backoff: time.Second,

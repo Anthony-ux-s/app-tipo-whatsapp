@@ -154,7 +154,8 @@ func TestServiciosExigenSesion(t *testing.T) {
 	status, body := call(t, http.MethodGet, gw.URL+"/api/services", jwt("u_1"), "", nil)
 	var catalog []services.ServiceInfo
 	_ = json.Unmarshal([]byte(body), &catalog)
-	if status != 200 || len(catalog) != 2 || !catalog[0].Available || catalog[1].Available {
+	// Mercado disponible; Tecnología, Ferretería y Salud, próximamente (hasta que soporte las conecte).
+	if status != 200 || len(catalog) != 4 || !catalog[0].Available || catalog[1].Available || catalog[2].Available || catalog[3].Available {
 		t.Fatalf("catálogo inesperado: %d %s", status, body)
 	}
 }

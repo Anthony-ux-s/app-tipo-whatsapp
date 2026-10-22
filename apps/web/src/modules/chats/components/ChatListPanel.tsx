@@ -6,14 +6,23 @@ import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
 import { useChatList } from '../hooks/use-chat-list.hook';
 import { ChatListItem } from './ChatListItem';
 
-/** Barra lateral: menú, búsqueda, filtros, la lista de conversaciones y el botón flotante de nuevo chat. */
+/** Barra lateral: menú y nuevo chat arriba, búsqueda, filtros y la lista de conversaciones. */
 export function ChatListPanel() {
   const list = useChatList();
   return (
-    <section className="relative flex min-h-0 flex-1 flex-col bg-surface" aria-label="Chats">
-      <header className="flex items-center gap-2 px-3 pt-3 pb-2 md:px-4">
+    <section className="flex min-h-0 flex-1 flex-col bg-surface" aria-label="Chats">
+      <header className="flex items-center gap-2 px-3 pt-2 pb-1.5 md:px-4">
         <ProfileButton />
-        <h1 className="min-w-0 flex-1 truncate px-1 font-display text-2xl font-extrabold text-ink">Chats</h1>
+        <h1 className="min-w-0 flex-1 truncate px-1 font-display text-xl font-extrabold text-ink">Chats</h1>
+        <button
+          type="button"
+          onClick={() => list.openNewChat('direct')}
+          aria-label="Nuevo chat"
+          title="Nuevo chat"
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-b from-teal-400 to-brand text-white shadow-[0_2px_0_0_var(--color-brand-strong)] transition-all duration-150 hover:brightness-105 active:translate-y-0.5 active:shadow-none"
+        >
+          <MessageSquarePlus className="size-5" />
+        </button>
       </header>
 
       <div className="px-3 pb-2 md:px-4">
@@ -75,23 +84,13 @@ export function ChatListPanel() {
             description={list.search ? `No hay chats que coincidan con «${list.search}».` : 'No hay chats en este filtro.'}
           />
         ) : (
-          <ul className="pb-24" data-testid="chat-list">
+          <ul className="pb-2" data-testid="chat-list">
             {list.entries.map((entry) => (
               <ChatListItem key={entry.conversation.id} entry={entry} active={entry.conversation.id === list.activeId} onOpen={list.openConversation} />
             ))}
           </ul>
         )}
       </div>
-
-      <button
-        type="button"
-        onClick={() => list.openNewChat('direct')}
-        aria-label="Nuevo chat"
-        title="Nuevo chat"
-        className="absolute right-4 bottom-20 flex size-14 items-center justify-center rounded-2xl bg-brand text-white shadow-pop transition-colors duration-200 hover:bg-brand-strong md:bottom-5"
-      >
-        <MessageSquarePlus className="size-6" />
-      </button>
     </section>
   );
 }

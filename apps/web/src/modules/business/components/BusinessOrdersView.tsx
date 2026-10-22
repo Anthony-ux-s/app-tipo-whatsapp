@@ -18,7 +18,7 @@ export function BusinessOrdersView() {
 
       <StoreSettingsCard />
 
-      <div className="-mt-2 flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Filtrar pedidos del negocio">
+      <div className="-mt-2 flex flex-wrap gap-1.5" role="tablist" aria-label="Filtrar pedidos del negocio">
         {BUSINESS_TABS.map((t) => (
           <button
             key={t.id}

@@ -908,11 +908,11 @@ func TestSoporteCancelaUnPedidoTrabadoYDevuelve(t *testing.T) {
 
 func TestVolverAPedirTraeLosProductosDeAhora(t *testing.T) {
 	w := newWorld()
-	got, err := w.orch.ProductsByID(context.Background(), []string{"AZU-RUB-1K", "NO-EXISTE"})
+	got, err := w.orch.ProductsByID(context.Background(), services.Mercado, []string{"AZU-RUB-1K", "NO-EXISTE"})
 	if err != nil || len(got) != 1 || got[0].ID != "AZU-RUB-1K" {
 		t.Fatalf("solo los que existen: %+v %v", got, err)
 	}
-	if _, err := w.orch.ProductsByID(context.Background(), []string{"../x"}); status(err) != http.StatusBadRequest {
+	if _, err := w.orch.ProductsByID(context.Background(), services.Mercado, []string{"../x"}); status(err) != http.StatusBadRequest {
 		t.Fatalf("id raro: %v", err)
 	}
 }

@@ -17,7 +17,7 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api');
   app.enableCors({ origin: env.webOrigin, credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: false }));
-  if (env.webDist) serveWebApp(app, env.webDist);
+  if (env.webDist) serveWebApp(app, env.webDist, env.androidApp);
   app.enableShutdownHooks();
 
   await app.listen(env.port);

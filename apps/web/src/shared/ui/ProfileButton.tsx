@@ -10,9 +10,9 @@ export function ProfileButton() {
       onClick={openMenu}
       aria-label="Abrir menú"
       title="Menú"
-      className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-ink transition-colors duration-200 hover:bg-surface-3"
+      className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-ink transition-colors duration-200 hover:bg-surface-3"
     >
-      <Menu className="size-6" />
+      <Menu className="size-5" />
     </button>
   );
 }

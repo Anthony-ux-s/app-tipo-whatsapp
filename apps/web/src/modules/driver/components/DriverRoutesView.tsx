@@ -1,7 +1,7 @@
 import type { DriverRouteEntry, DriverRoutePlan, DriverRoutesSummary, GeoPoint } from '@parla/types';
-import { Fuel, Navigation, Route, Wallet } from 'lucide-react';
+import { Check, Fuel, MapPin, Navigation, Route, Store, Wallet } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { LazyRouteMap } from '@shared/ui/LazyDeliveryMap';
 import type { RouteMapStop } from '@shared/ui/RouteMap';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
@@ -98,15 +98,54 @@ function CurrentPlan() {
         <Fact icon={<Fuel className="size-4" />} label="Combustible" value={formatSoles(plan.fuelCents)} />
         <Fact icon={<Route className="size-4" />} label="Te ahorras" value={km(plan.savedKm)} />
       </div>
-      <ol className="flex flex-col gap-2">
-        {plan.stops.map((s, i) => (
-          <li key={`${s.orderId}-${s.kind}`} className="flex items-center gap-3 text-sm">
-            <span className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${s.kind === 'pickup' ? 'bg-amber-600' : 'bg-brand'}`}>{i + 1}</span>
-            <span className="min-w-0 flex-1 truncate text-ink">{s.label}</span>
-            <span className="text-xs text-ink-faint tabular-nums">{km(s.legKm)}</span>
+      <p className="text-xs text-ink-faint">
+        {plan.method === 'streets'
+          ? 'Distancias por las calles (caminos más cortos con Dijkstra en el servidor de rutas) y el orden óptimo para recoger antes de entregar.'
+          : 'Distancias aproximadas (el servidor de rutas no respondió): línea recta × factor de calles.'}
+      </p>
+
+      <h3 className="pt-1 text-sm font-bold text-ink">Paradas, en orden</h3>
+      <ol className="flex flex-col gap-2" data-testid="route-stops">
+        {plan.stops.map((s, i) => {
+          const order = plan.orders.find((o) => o.orderId === s.orderId);
+          return (
+            <li key={`${s.orderId}-${s.kind}`} className="flex items-center gap-3 text-sm">
+              <span className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${s.kind === 'pickup' ? 'bg-amber-600' : 'bg-brand'}`}>{i + 1}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-ink">
+                  <b>{s.kind === 'pickup' ? 'Recoger' : 'Entregar'}</b> · {s.kind === 'pickup' ? order?.businessName : `${order?.customerName ?? ''} · ${order?.dropoffLine ?? ''}`}
+                </span>
+                {order && <span className="block text-xs text-ink-faint">Pedido #{order.shortId}</span>}
+              </span>
+              <span className="text-xs text-ink-faint tabular-nums">{km(s.legKm)}</span>
+            </li>
+          );
+        })}
+      </ol>
+
+      <h3 className="pt-1 text-sm font-bold text-ink">Tus pedidos ({plan.orders.length})</h3>
+      <ul className="grid gap-2 sm:grid-cols-2" data-testid="route-orders">
+        {plan.orders.map((o) => (
+          <li key={o.orderId}>
+            <Link to={`/app/rapidito/pedidos/${o.orderId}`} className="flex h-full flex-col gap-2 rounded-xl border border-line p-3 transition-colors hover:bg-surface-2">
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-sm font-extrabold text-ink">Pedido #{o.shortId}</span>
+                <span className="text-sm font-bold text-ink tabular-nums">Ganas {formatSoles(o.earningsCents)}</span>
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-ink-soft">
+                <Store className="size-3.5 shrink-0 text-amber-600" /> <span className="truncate">{o.businessName}</span>
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-ink-soft">
+                <MapPin className="size-3.5 shrink-0 text-brand" /> <span className="truncate">{o.customerName} · {o.dropoffLine}</span>
+              </span>
+              <span className="flex flex-wrap gap-1.5 text-[11px] font-semibold">
+                <StepChip done={o.next === 'dropoff'} active={o.next === 'pickup'} label={o.next === 'dropoff' ? 'Recogido' : `Recoger · parada ${o.pickupStop ?? '–'}`} />
+                <StepChip done={false} active={o.next === 'dropoff'} label={`Entregar · parada ${o.dropoffStop ?? '–'}`} />
+              </span>
+            </Link>
           </li>
         ))}
-      </ol>
+      </ul>
       <a
         href={navigationUrl(plan.start, plan.stops.map((s) => s.point))}
         target="_blank"
@@ -229,5 +268,21 @@ export function DriverRoutesView() {
       <h2 className="px-1 pt-2 text-xs font-bold tracking-wider text-ink-faint uppercase">Historial</h2>
       <History />
     </ServicePage>
+  );
+}
+
+/** Un paso del pedido (recoger o entregar): hecho, el que toca ahora o pendiente. */
+function StepChip({ label, done, active }: { label: string; done: boolean; active: boolean }) {
+  const tone = done
+    ? 'bg-surface-3 text-ink-faint'
+    : active
+      ? 'bg-teal-100 text-teal-800 ring-1 ring-teal-500 dark:bg-teal-900/60 dark:text-teal-200'
+      : 'bg-surface-3 text-ink-soft';
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${tone}`}>
+      {done && <Check className="size-3" />}
+      {active && <span className="sr-only">Ahora: </span>}
+      {label}
+    </span>
   );
 }

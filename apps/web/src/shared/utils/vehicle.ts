@@ -2,5 +2,7 @@
 const GLYPHS: Record<string, string> = { Moto: '🛵', Auto: '🚗', Bicicleta: '🚲', 'A pie': '🚶' };
 
 export function vehicleGlyph(vehicle: string | null | undefined): string {
-  return (vehicle && GLYPHS[vehicle]) || GLYPHS.Moto;
+  // En el pedido viene con la placa («Auto · ABC-123»): cuenta el tipo, antes del «·».
+  const kind = vehicle?.split('·')[0].trim();
+  return (kind && GLYPHS[kind]) || GLYPHS.Moto;
 }

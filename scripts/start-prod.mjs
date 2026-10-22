@@ -5,8 +5,8 @@
 // (services/providers) hasta conectar proveedores reales.
 //   npm run start:prod            → http://localhost:4100
 //   PORT=8080 npm run start:prod
-// Para PostgreSQL usa Docker (ver Dockerfile y docker-compose.yml) o define DATABASE_URL y ejecuta
-// `npm run db:postgres-schema -w @parla/api` antes (ver README → Despliegue).
+// La base de datos es PostgreSQL (Supabase): define DATABASE_URL y DIRECT_URL en el .env de la raíz.
+// Con Docker, ver Dockerfile y docker-compose.yml (README → Despliegue).
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -49,7 +49,11 @@ if (!existsSync(join(root, 'node_modules', '.package-lock.json'))) {
   step('Instalando dependencias');
   run(npm, ['install']);
 }
-if (!existsSync(join(apiDir, '.env'))) copyFileSync(join(apiDir, '.env.example'), join(apiDir, '.env'));
+if (!existsSync(join(root, '.env'))) {
+  copyFileSync(join(root, '.env.example'), join(root, '.env'));
+  console.error('\n✖ Creé el archivo .env a partir de .env.example. Complétalo (DATABASE_URL y DIRECT_URL de Supabase, secretos…) y vuelve a ejecutar.');
+  process.exit(1);
+}
 
 step('Compilando contratos, cifrado, core y web');
 run(npm, ['run', 'build']);
@@ -57,7 +61,7 @@ step('Preparando la base de datos');
 run(npm, ['run', 'db:setup', '-w', '@parla/api']);
 buildServices({ mixEnv: 'prod' });
 
-const port = process.env.PORT ?? String(ports.gateway);
+const port = process.env.PARLA_GATEWAY_PORT ?? process.env.PORT ?? String(ports.gateway);
 const origin = process.env.PUBLIC_WEB_URL ?? `http://localhost:${port}`;
 const env = {
   ...process.env,

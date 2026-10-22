@@ -80,7 +80,7 @@ class DeliveryDto implements OrderDelivery {
 class CreateOrderDto implements InternalCreateOrder {
   @Matches(/^ord_[A-Za-z0-9]{8,40}$/) id: string;
   @IsString() @IsNotEmpty() @MaxLength(64) userId: string;
-  @IsIn(['mercado', 'salud']) service: ServiceId;
+  @IsIn(['mercado', 'tecnologia', 'ferreteria', 'salud']) service: ServiceId;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(30) @ValidateNested({ each: true }) @Type(() => OrderLineDto) lines: OrderLineDto[];
   @IsInt() @Min(0) @Max(MAX_CENTS) subtotalCents: number;
   @IsInt() @Min(0) @Max(MAX_CENTS) deliveryFeeCents: number;

@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router';
 import { CallOverlay } from '../../calls/components/CallOverlay';
+import { RouletteGate } from '../../growth/components/RouletteGate';
 import { EffectsLayer } from '../../stickers/components/EffectsLayer';
 import { ChatListPanel } from '../../chats/components/ChatListPanel';
 import { NewChatModal } from '../../chats/components/NewChatModal';
@@ -45,6 +46,7 @@ export function AppShellView() {
       <NewChatModal mode={menu.newChat} onClose={menu.closeNewChat} />
       <CallOverlay />
       <EffectsLayer />
+      <RouletteGate />
     </div>
   );
 }

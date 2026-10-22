@@ -27,8 +27,21 @@ type HTTP struct {
 // UserHandler recibe la persona autenticada (el id sale del JWT, nunca del cuerpo).
 type UserHandler func(w http.ResponseWriter, r *http.Request, userID string)
 
-func (h *HTTP) Catalog(w http.ResponseWriter, _ *http.Request, _ string) {
-	WriteJSON(w, http.StatusOK, Catalog())
+func (h *HTTP) Catalog(w http.ResponseWriter, r *http.Request, _ string) {
+	WriteJSON(w, http.StatusOK, h.Orch.CatalogFor(r.Context()))
+}
+
+// serviceOf: el servicio de la ruta (/api/services/{service}/…); false si no existe (ya respondió 404).
+func serviceOf(w http.ResponseWriter, r *http.Request) (services.ServiceID, bool) {
+	id := services.ServiceID(r.PathValue("service"))
+	if id == "" {
+		return services.Mercado, true
+	}
+	if !services.KnownService(id) {
+		writeError(w, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Servicio no encontrado"})
+		return "", false
+	}
+	return id, true
 }
 
 func (h *HTTP) Products(w http.ResponseWriter, r *http.Request, _ string) {
@@ -36,11 +49,15 @@ func (h *HTTP) Products(w http.ResponseWriter, r *http.Request, _ string) {
 		products []services.Product
 		err      error
 	)
+	service, ok := serviceOf(w, r)
+	if !ok {
+		return
+	}
 	// ?ids=A,B trae esos productos (para «Volver a pedir»); si no, busca con ?q=.
 	if ids := r.URL.Query().Get("ids"); ids != "" {
-		products, err = h.Orch.ProductsByID(r.Context(), strings.Split(ids, ","))
+		products, err = h.Orch.ProductsByID(r.Context(), service, strings.Split(ids, ","))
 	} else {
-		products, err = h.Orch.Products(r.Context(), r.URL.Query().Get("q"))
+		products, err = h.Orch.Products(r.Context(), service, r.URL.Query().Get("q"))
 	}
 	if err != nil {
 		writeError(w, err)
@@ -50,10 +67,15 @@ func (h *HTTP) Products(w http.ResponseWriter, r *http.Request, _ string) {
 }
 
 func (h *HTTP) Quote(w http.ResponseWriter, r *http.Request, userID string) {
+	service, ok := serviceOf(w, r)
+	if !ok {
+		return
+	}
 	req, ok := decodeRequest(w, r)
 	if !ok {
 		return
 	}
+	req.Service = service
 	quote, err := h.Orch.Quote(r.Context(), userID, req)
 	if err != nil {
 		writeError(w, err)
@@ -63,10 +85,15 @@ func (h *HTTP) Quote(w http.ResponseWriter, r *http.Request, userID string) {
 }
 
 func (h *HTTP) Create(w http.ResponseWriter, r *http.Request, userID string) {
+	service, ok := serviceOf(w, r)
+	if !ok {
+		return
+	}
 	req, ok := decodeRequest(w, r)
 	if !ok {
 		return
 	}
+	req.Service = service
 	order, err := h.Orch.Create(r.Context(), userID, req)
 	if err != nil {
 		writeError(w, err)

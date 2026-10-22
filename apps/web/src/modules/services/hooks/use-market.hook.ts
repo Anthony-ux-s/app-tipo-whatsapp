@@ -1,9 +1,11 @@
-import type { Product } from '@parla/types';
+import type { Product, ServiceId } from '@parla/types';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { cartCount, cartEstimateCents, useCartStore } from '@shared/stores/cart.store';
 import { errorMessage, http } from '@shared/utils/http';
 import { parseShoppingQuery } from '../utils/services.utils';
+
+const EMPTY: Record<string, never> = {};
 
 export interface ProductGroup {
   /** Lo que se buscó («azúcar»); null = catálogo completo. */
@@ -11,15 +13,17 @@ export interface ProductGroup {
   products: Product[];
 }
 
-const searchProducts = (q: string) => http.get<Product[]>(`/services/mercado/products?q=${encodeURIComponent(q)}`);
 
 /**
  * Mercado: se escribe la lista como se habla («un kilo de azúcar, arroz»), se busca cada cosa y
  * se arma el carrito.
  */
-export function useMarket() {
+export function useMarket(service: ServiceId) {
   const navigate = useNavigate();
-  const items = useCartStore((s) => s.items);
+  const cartService = useCartStore((s) => s.service);
+  const allItems = useCartStore((s) => s.items);
+  // El carrito de otra tienda no cuenta aquí (al agregar algo, se empieza uno nuevo).
+  const items = cartService === service ? allItems : EMPTY;
   const change = useCartStore((s) => s.change);
   const [query, setQuery] = useState('');
   const [terms, setTerms] = useState<string[]>([]);
@@ -29,6 +33,7 @@ export function useMarket() {
 
   useEffect(() => {
     let alive = true;
+    const searchProducts = (q: string) => http.get<Product[]>(`/services/${service}/products?q=${encodeURIComponent(q)}`);
     setGroups(null);
     setError(null);
     const requests = terms.length
@@ -40,7 +45,7 @@ export function useMarket() {
     return () => {
       alive = false;
     };
-  }, [terms, attempt]);
+  }, [terms, attempt, service]);
 
   const count = cartCount(items);
   const estimate = useMemo(() => cartEstimateCents(items), [items]);
@@ -56,16 +61,19 @@ export function useMarket() {
     onQueryChange: (value: string) => setQuery(value),
     search: (event?: FormEvent) => {
       event?.preventDefault();
-      setTerms(parseShoppingQuery(query));
+      const found = parseShoppingQuery(query);
+      setTerms(found);
+      // Lo que busca sirve para mostrarle primero las ofertas que le interesan (no frena la búsqueda).
+      for (const term of found) void http.post('/interests/search', { service, term }).catch(() => undefined);
     },
     clearSearch: () => {
       setQuery('');
       setTerms([]);
     },
-    add: (product: Product) => change(product, 1),
-    subtract: (product: Product) => change(product, -1),
+    add: (product: Product) => change(product, 1, service),
+    subtract: (product: Product) => change(product, -1, service),
     retry: () => setAttempt((n) => n + 1),
-    goToCart: () => navigate('/app/servicios/mercado/carrito'),
+    goToCart: () => navigate(`/app/servicios/${service}/carrito`),
     back: () => navigate('/app/servicios'),
   };
 }

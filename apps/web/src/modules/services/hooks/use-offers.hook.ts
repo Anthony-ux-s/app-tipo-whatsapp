@@ -3,18 +3,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { cartCount, cartEstimateCents, useCartStore } from '@shared/stores/cart.store';
 import { errorMessage, http } from '@shared/utils/http';
-import { SHOWCASE_OFFERS, type OfferCategory, type OfferTab } from '../const/offers.const';
 import { discountPercent } from '../utils/services.utils';
 
 /**
- * Ofertas de todos los servicios. Las del Mercado son productos rebajados de MercaYa (se compran con
- * el mismo carrito); las de restaurantes y salud se muestran mientras se conecta su sistema.
+ * Ofertas: los productos rebajados de MercaYa (se compran con el mismo carrito). Cuando se conecte otro
+ * servicio, sus ofertas reales se suman aquí.
  */
 export function useOffers() {
   const navigate = useNavigate();
   const items = useCartStore((s) => s.items);
   const change = useCartStore((s) => s.change);
-  const [tab, setTab] = useState<OfferTab>('todas');
   const [products, setProducts] = useState<Product[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -40,17 +38,11 @@ export function useOffers() {
     [products],
   );
 
-  const shows = (category: OfferCategory) => tab === 'todas' || tab === category;
-
   return {
-    tab,
-    selectTab: setTab,
-    shows,
     marketOffers,
+    catalog: products,
     marketLoading: !products && !error,
     error,
-    restaurantOffers: SHOWCASE_OFFERS.filter((o) => o.category === 'restaurantes'),
-    healthOffers: SHOWCASE_OFFERS.filter((o) => o.category === 'salud'),
     count: cartCount(items),
     estimate: cartEstimateCents(items),
     quantityOf: (productId: string) => items[productId]?.quantity ?? 0,

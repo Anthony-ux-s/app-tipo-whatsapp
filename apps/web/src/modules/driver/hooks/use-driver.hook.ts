@@ -16,6 +16,8 @@ export function useDriverOrders() {
   const [tab, setTab] = useState<DriverTab>('disponibles');
   const [error, setError] = useState<string | null>(null);
   const [togglingOnline, setTogglingOnline] = useState(false);
+  /** El pedido que se está tomando desde la lista (para el «cargando» de su botón). */
+  const [taking, setTaking] = useState<string | null>(null);
 
   const reload = () => {
     setError(null);
@@ -42,6 +44,21 @@ export function useDriverOrders() {
     error,
     reload,
     open: (id: string) => navigate(`/app/rapidito/pedidos/${id}`),
+    taking,
+    /** «Tomar pedido» directo desde la tarjeta: si sale bien, abre el pedido para ir a recogerlo. */
+    take: async (id: string) => {
+      setTaking(id);
+      try {
+        await useDriverStore.getState().accept(id);
+        toast('¡Es tuyo! Ve a la tienda a recogerlo.', 'success');
+        navigate(`/app/rapidito/pedidos/${id}`);
+      } catch (err) {
+        toast(errorMessage(err), 'error');
+        reload();
+      } finally {
+        setTaking(null);
+      }
+    },
     openRoutes: () => navigate('/app/rapidito/rutas'),
     back: () => navigate('/app/pedidos'),
     togglingOnline,

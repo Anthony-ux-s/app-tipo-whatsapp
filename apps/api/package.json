@@ -9,12 +9,12 @@
     "dev": "nest start --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "prisma:generate": "prisma generate",
-    "db:push": "prisma db push --skip-generate",
-    "db:seed": "tsx prisma/seed/seed.ts",
-    "db:setup": "prisma generate && prisma db push --skip-generate && tsx prisma/seed/seed.ts",
-    "db:reset": "node prisma/reset.mjs",
-    "db:postgres-schema": "node prisma/make-postgres-schema.mjs"
+    "prisma:generate": "node ../../scripts/with-env.mjs prisma generate",
+    "db:migrate": "node ../../scripts/with-env.mjs prisma migrate deploy",
+    "db:migrate:dev": "node ../../scripts/with-env.mjs prisma migrate dev",
+    "db:seed": "node ../../scripts/with-env.mjs tsx prisma/seed/bootstrap.ts",
+    "db:setup": "npm run prisma:generate && npm run db:migrate && npm run db:seed",
+    "db:studio": "node ../../scripts/with-env.mjs prisma studio"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",

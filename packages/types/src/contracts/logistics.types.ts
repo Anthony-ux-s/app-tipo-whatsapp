@@ -29,7 +29,17 @@ export interface DeliveryPricing {
   handlingMinutes: number;
   /** Pedidos que un repartidor puede llevar a la vez (1 = uno por viaje; más = la ruta los ordena). */
   maxActiveOrders: number;
+  /**
+   * Cómo se reparten los pedidos listos: «optimal» = asignación óptima (algoritmo húngaro con los
+   * minutos por las calles de cada repartidor a cada tienda) con oferta exclusiva; «waves» = oleadas
+   * por cercanía, el primero que lo toma se lo lleva.
+   */
+  dispatchMode: DispatchMode;
+  /** Segundos que el repartidor elegido tiene para aceptar antes de que pase al siguiente mejor. */
+  exclusiveOfferSeconds: number;
 }
+
+export type DispatchMode = 'optimal' | 'waves';
 
 export interface DeliverySettings extends DeliveryPricing {
   updatedAt: string | null;
@@ -74,8 +84,27 @@ export interface RouteStop {
   legKm: number;
 }
 
+/** Un pedido del plan, para mostrarlo en su propia tarjeta. */
+export interface RoutePlanOrder {
+  orderId: string;
+  /** Últimos 4 caracteres del id, para nombrarlo («Pedido #A1B2»). */
+  shortId: string;
+  businessName: string;
+  customerName: string;
+  dropoffLine: string;
+  /** Lo siguiente que tiene que hacer con este pedido. */
+  next: 'pickup' | 'dropoff';
+  /** Números de parada en el plan (null si esa parada ya pasó o no tiene ubicación). */
+  pickupStop: number | null;
+  dropoffStop: number | null;
+  earningsCents: number;
+}
+
 /** Orden óptimo para recoger y entregar los pedidos en curso del repartidor. */
 export interface DriverRoutePlan {
+  /** Cómo se midieron las distancias: por las calles (tabla de OSRM) o en línea recta × factor. */
+  method: 'streets' | 'straight_line';
+  orders: RoutePlanOrder[];
   start: GeoPoint | null;
   /** Vehículo del repartidor (su ícono en el mapa). */
   vehicle: DriverVehicle;
@@ -170,4 +199,49 @@ export interface AdminTraffic {
     orders: number;
   };
   topUsers: TrafficTopUser[];
+}
+
+/** Servicios que se conectan con una API de tienda externa desde el panel de soporte. */
+export type IntegrableService = 'tecnologia' | 'ferreteria' | 'salud';
+
+/** El «idioma» de la API de la tienda: el de Parla (como MercaYa) o la API v1 de RED WIIIL. */
+export type IntegrationFormat = 'parla' | 'redwiiil';
+
+/** Integración tal como la ve soporte (las claves nunca vuelven completas). */
+export interface AdminIntegration {
+  service: IntegrableService;
+  name: string;
+  format: IntegrationFormat;
+  enabled: boolean;
+  baseUrl: string;
+  prefix: string;
+  apiKeySet: boolean;
+  /** Últimos 4 caracteres de la clave, para reconocerla. */
+  apiKeyHint: string | null;
+  adminKeySet: boolean;
+  updatedAt: string | null;
+  updatedByName: string | null;
+}
+
+export interface UpdateIntegrationRequest {
+  name: string;
+  /** Si no viene, se reconoce por la clave (las de RED WIIIL empiezan con «wiiil_»). */
+  format?: IntegrationFormat;
+  enabled: boolean;
+  baseUrl: string;
+  prefix: string;
+  /** Vacía o ausente = se conserva la guardada; para quitarla, `clearApiKey`. */
+  apiKey?: string;
+  clearApiKey?: boolean;
+  adminKey?: string;
+  clearAdminKey?: boolean;
+}
+
+/** Resultado de «Probar conexión» con la API de la tienda. */
+export interface IntegrationTestResult {
+  ok: boolean;
+  message: string;
+  products: number;
+  /** Algunos nombres del catálogo, para confirmar que es la tienda correcta. */
+  sample: string[];
 }

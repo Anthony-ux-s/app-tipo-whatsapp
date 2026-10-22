@@ -1,0 +1,22 @@
+{
+  "packageId": "com.tudominio.parla",
+  "host": "chat.tudominio.com",
+  "name": "Parla — chats y servicios",
+  "launcherName": "Parla",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#009d71",
+  "navigationColor": "#009d71",
+  "backgroundColor": "#f0f2f5",
+  "startUrl": "/?source=twa",
+  "iconUrl": "https://chat.tudominio.com/icons/icon-512.png",
+  "maskableIconUrl": "https://chat.tudominio.com/icons/icon-maskable-512.png",
+  "webManifestUrl": "https://chat.tudominio.com/manifest.webmanifest",
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "enableNotifications": true,
+  "fallbackType": "customtabs",
+  "signingKey": { "path": "./android.keystore", "alias": "parla" },
+  "isChromeOSOnly": false,
+  "isMetaQuest": false
+}

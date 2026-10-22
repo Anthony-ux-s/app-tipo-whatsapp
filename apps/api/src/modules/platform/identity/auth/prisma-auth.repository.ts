@@ -51,8 +51,8 @@ export class PrismaAuthRepository implements AuthRepository {
         ...(q
           ? {
               OR: [
-                { displayName: { contains: q } },
-                { username: { contains: q.replace(/^@/, '').toLowerCase() } },
+                { displayName: { contains: q, mode: 'insensitive' } },
+                { username: { contains: q.replace(/^@/, '').toLowerCase(), mode: 'insensitive' } },
                 ...(digits.length >= 3 ? [{ phone: { contains: digits } }] : []),
               ],
             }

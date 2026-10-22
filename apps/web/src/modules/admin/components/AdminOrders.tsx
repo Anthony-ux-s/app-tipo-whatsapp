@@ -54,8 +54,8 @@ export function AdminOrders({ chip }: { chip: (on: boolean, onClick: () => void,
 
   return (
     <>
-      <div className="-mt-2 flex gap-1.5 overflow-x-auto pb-1">{VIEWS.map((v) => chip(view === v.id, () => setView(v.id), v.label))}</div>
-      <Field label="Buscar" placeholder="Id del pedido, nombre o teléfono del cliente" value={draft} onChange={(e) => setDraft(e.target.value)} icon={<Search className="size-4" />} data-testid="admin-order-search" />
+      <div className="-mt-2 flex flex-wrap gap-1.5">{VIEWS.map((v) => chip(view === v.id, () => setView(v.id), v.label))}</div>
+      <Field label="Buscar" placeholder="Pedido, nombre o teléfono" value={draft} onChange={(e) => setDraft(e.target.value)} icon={<Search className="size-4" />} data-testid="admin-order-search" />
 
       {list.error && !list.items ? (
         <ErrorState message={list.error} onRetry={list.reload} />

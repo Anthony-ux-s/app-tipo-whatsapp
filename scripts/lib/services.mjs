@@ -10,6 +10,8 @@ import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+// Un solo archivo de variables: el .env de la raíz (copia de .env.example). Lo ya definido en el entorno tiene prioridad.
+if (existsSync(join(root, '.env'))) process.loadEnvFile(join(root, '.env'));
 export const isWindows = process.platform === 'win32';
 export const npm = isWindows ? 'npm.cmd' : 'npm';
 

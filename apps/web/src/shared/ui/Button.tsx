@@ -12,20 +12,25 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
+/**
+ * Botones grandes, redondeados y con color (fáciles de ver y de tocar, para cualquier edad): el
+ * principal en verde con sombra, el de peligro en rojo; al tocarlos se «hunden» un poco.
+ */
 const VARIANTS: Record<Variant, string> = {
   primary:
-    'bg-brand text-white hover:bg-brand-strong shadow-float active:scale-[0.98] disabled:bg-teal-700/50',
+    'bg-gradient-to-b from-teal-400 to-brand text-white shadow-[0_4px_0_0_var(--color-brand-strong)] hover:brightness-105 active:translate-y-0.5 active:shadow-[0_2px_0_0_var(--color-brand-strong)] disabled:from-teal-300 disabled:to-teal-300 disabled:shadow-none dark:disabled:from-teal-800 dark:disabled:to-teal-800',
   secondary:
-    'bg-surface text-ink border border-line hover:bg-surface-2 active:scale-[0.98] disabled:opacity-60',
+    'bg-surface text-ink border-2 border-line hover:border-teal-300 hover:bg-surface-2 active:scale-[0.98] disabled:opacity-60',
   ghost: 'text-ink-soft hover:bg-surface-3 hover:text-ink disabled:opacity-50',
-  // Acción destructiva: dentro de la paleta corporativa, con contraste fuerte e ícono.
-  danger: 'bg-teal-950 text-white hover:bg-black active:scale-[0.98] disabled:opacity-60 dark:bg-teal-900',
+  // Acción destructiva (cancelar, eliminar): roja, se entiende sin leer.
+  danger:
+    'bg-gradient-to-b from-rose-500 to-rose-600 text-white shadow-[0_4px_0_0_#9f1239] hover:brightness-105 active:translate-y-0.5 active:shadow-[0_2px_0_0_#9f1239] disabled:opacity-60',
 };
 
 const SIZES: Record<Size, string> = {
   sm: 'h-9 px-3 text-sm gap-1.5',
-  md: 'h-11 px-4 text-sm gap-2',
-  lg: 'h-12 px-6 text-base gap-2',
+  md: 'h-12 px-5 text-[15px] gap-2',
+  lg: 'h-14 px-6 text-lg gap-2.5',
 };
 
 export function Button({
@@ -44,7 +49,7 @@ export function Button({
     <button
       type={type}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center rounded-[var(--radius-card)] font-semibold transition-all duration-200 ease-in-out disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
+      className={`inline-flex items-center justify-center rounded-2xl font-bold transition-all duration-150 ease-in-out disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
       {...rest}
     >
       {loading ? <Spinner className="size-4" /> : icon}

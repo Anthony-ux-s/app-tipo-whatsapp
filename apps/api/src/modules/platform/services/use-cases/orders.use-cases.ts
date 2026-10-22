@@ -149,6 +149,7 @@ export function toDriverOrder(
     commissionPercent: pay.commissionPercent,
     earningsCents: split.earningsCents,
     distanceToStoreKm: viewerLocation && store ? Math.round(distanceKm(viewerLocation, store) * 10) / 10 : null,
+    exclusiveUntil: order.status === 'searching_driver' && order.reservedFor?.driverId === driverId ? order.reservedFor.until.toISOString() : null,
     hasDeliveryPhoto: !!order.deliveryPhotoId,
     mine: order.driverId === driverId,
     timeline: order.timeline,
@@ -255,6 +256,7 @@ export class CreateOrderUseCase {
     const order = await this.orders.create({
       ...input,
       businessId: business?.id ?? null,
+      pickup: business?.location ?? null,
       status: 'pending_payment',
       deliveryCode: newDeliveryCode(),
       etaMinutes: input.etaMinutes,

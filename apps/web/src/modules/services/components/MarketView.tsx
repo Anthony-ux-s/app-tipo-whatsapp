@@ -1,20 +1,34 @@
+import type { ServiceId } from '@parla/types';
 import { Search, X } from 'lucide-react';
+import { Navigate, useParams } from 'react-router';
 import { EmptyState, ErrorState } from '@shared/ui/States';
 import { NoResultsIllustration } from '@shared/ui/illustrations';
+import { ForYouSection } from '../../growth/components/ForYouSection';
+import { useForYou } from '../../growth/hooks/use-for-you.hook';
 import { useMarket } from '../hooks/use-market.hook';
 import { ProductCard } from './ProductCard';
 import { useStoreStatus } from '../hooks/use-store-status.hook';
 import { CartBar, PageHeader, ServicePage, StoreClosedBanner } from './ServicesUi';
+import { isServiceId, STORE_TEXTS } from '../const/services.const';
 
-/** Mercado (tienda MercaYa): se escribe la lista como se habla y se arma el carrito. */
+/** La tienda de un servicio (Mercado, Tecnología…): se escribe la lista como se habla y se arma el carrito. */
 export function MarketView() {
-  const m = useMarket();
-  const store = useStoreStatus('mercado');
+  const { service } = useParams();
+  if (!isServiceId(service)) return <Navigate to="/app/servicios" replace />;
+  return <StoreView key={service} service={service} />;
+}
+
+function StoreView({ service }: { service: ServiceId }) {
+  const m = useMarket(service);
+  // Solo en la vista completa (sin búsqueda): ahí está todo el catálogo para elegir qué le interesa.
+  const forYou = useForYou(m.terms.length ? null : (m.groups?.[0]?.products ?? null));
+  const store = useStoreStatus(service);
+  const text = STORE_TEXTS[service];
   return (
     <ServicePage
       footer={<CartBar count={m.count} estimateCents={m.estimate} onOpen={m.goToCart} />}
     >
-      <PageHeader title="Mercado" subtitle="Tienda MercaYa · delivery Rapidito · pago con QR" onBack={m.back} />
+      <PageHeader title={text.title} subtitle={text.subtitle} onBack={m.back} />
       <StoreClosedBanner status={store.status} />
 
       <form onSubmit={m.search} className="flex flex-col gap-2" role="search">
@@ -24,7 +38,7 @@ export function MarketView() {
             type="search"
             value={m.query}
             onChange={(e) => m.onQueryChange(e.target.value)}
-            placeholder="¿Qué necesitas? ej. un kilo de azúcar, arroz"
+            placeholder={text.placeholder}
             aria-label="Buscar productos"
             className="h-12 w-full rounded-2xl bg-surface pr-24 pl-11 text-[15px] text-ink shadow-float outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-teal-500/40"
           />
@@ -55,6 +69,13 @@ export function MarketView() {
             <div key={i} className="h-60 animate-pulse rounded-2xl bg-surface-3" />
           ))}
         </div>
+      )}
+
+      {!m.terms.length && (
+        <ForYouSection
+          forYou={forYou}
+          render={(product) => <ProductCard key={product.id} product={product} quantity={m.quantityOf(product.id)} onAdd={() => m.add(product)} onSubtract={() => m.subtract(product)} />}
+        />
       )}
 
       {m.groups?.map((group) => (

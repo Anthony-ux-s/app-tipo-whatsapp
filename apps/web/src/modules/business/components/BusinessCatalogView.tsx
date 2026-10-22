@@ -1,4 +1,4 @@
-import { Package, Pencil, Search } from 'lucide-react';
+import { Pencil, Search } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { Button } from '@shared/ui/Button';
 import { Field } from '@shared/ui/Field';
@@ -7,6 +7,7 @@ import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatSoles } from '@shared/utils/money';
 import { PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { discountPercent } from '../../services/utils/services.utils';
+import { ProductImage } from '../../services/components/ProductImage';
 import { useStoreCatalog } from '../hooks/use-store-settings.hook';
 
 /**
@@ -49,8 +50,8 @@ export function BusinessCatalogView() {
                 const discount = discountPercent(p.priceCents, p.listPriceCents);
                 return (
                   <li key={p.id} data-testid="catalog-item" className="flex items-center gap-3 px-4 py-3 md:px-5">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-3 text-ink-soft">
-                      <Package className="size-5" />
+                    <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-3 text-ink-soft">
+                      <ProductImage name={p.name} category={group.category} imageUrl={p.imageUrl} className="size-9" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[15px] font-semibold text-ink">{p.name}</span>

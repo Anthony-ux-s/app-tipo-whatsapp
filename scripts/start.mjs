@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Un solo comando: instala, prepara la base de datos, carga los datos de ejemplo y arranca
+// Un solo comando: instala, aplica las migraciones de la base de datos (Supabase) y arranca
 // gateway (Go) + tiempo real (Elixir) + core (NestJS) + simuladores de tienda, delivery y pagos + web.
 //   npm start          todo compilado
 //   npm run dev        el core con recarga automática
@@ -16,17 +16,22 @@ if (!existsSync(join(root, 'node_modules', '.package-lock.json'))) {
   run(npm, ['install']);
 }
 
-const envFile = join(root, 'apps', 'api', '.env');
+const envFile = join(root, '.env');
 if (!existsSync(envFile)) {
-  step('Creando apps/api/.env a partir de .env.example');
-  copyFileSync(join(root, 'apps', 'api', '.env.example'), envFile);
+  copyFileSync(join(root, '.env.example'), envFile);
+  console.error('\n✖ Creé el archivo .env a partir de .env.example. Complétalo (sobre todo DATABASE_URL y DIRECT_URL de Supabase) y vuelve a ejecutar el comando.');
+  process.exit(1);
+}
+if (!process.env.DATABASE_URL || !process.env.DIRECT_URL) {
+  console.error('\n✖ Faltan DATABASE_URL y DIRECT_URL (conexiones de Supabase) en el archivo .env.');
+  process.exit(1);
 }
 
 step('Compilando contratos y cifrado compartidos');
 run(npm, ['run', 'build:packages']);
 
 if (!devMode) {
-  step('Preparando la base de datos (SQLite embebida) y los datos de ejemplo');
+  step('Aplicando las migraciones en la base de datos (Supabase)');
   run(npm, ['run', 'db:setup', '-w', '@parla/api']);
 
   step('Compilando el core (NestJS)');

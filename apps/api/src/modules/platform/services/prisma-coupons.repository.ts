@@ -30,7 +30,7 @@ export class PrismaCouponsRepository implements CouponsRepository {
   }
 
   async list(limit: number): Promise<CouponRecord[]> {
-    const rows = await this.prisma.coupon.findMany({ orderBy: { createdAt: 'desc' }, take: limit });
+    const rows = await this.prisma.coupon.findMany({ where: { ownerUserId: null }, orderBy: { createdAt: 'desc' }, take: limit });
     return rows.map(toCouponRecord);
   }
 

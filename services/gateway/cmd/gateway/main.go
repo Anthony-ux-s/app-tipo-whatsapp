@@ -60,6 +60,7 @@ func main() {
 	wallet := pagaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client, APIKey: cfg.PagayaAPIKey}
 	orch := &orders.Orchestrator{
 		Commerce:  mercaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client, AdminKey: cfg.MercayaAdminKey},
+		Stores:    &orders.CoreStores{Core: core, HTTP: client},
 		Delivery:  orders.CoreDelivery{Core: core, Fallback: rapidito.Client{BaseURL: cfg.ProvidersURL, HTTP: client}},
 		Payments:  wallet,
 		Core:      core,

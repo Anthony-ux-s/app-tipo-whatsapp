@@ -1,5 +1,5 @@
 import type { DeliveryPricing, DeliveryQuoteBreakdown, DeliverySettings, DriverVehicle, GeoPoint } from '@parla/types';
-import { Fuel, MapPinned, Route, Save } from 'lucide-react';
+import { Fuel, MapPinned, Route, Save, Users } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from '@shared/stores/toast.store';
 import { Button } from '@shared/ui/Button';
@@ -166,7 +166,39 @@ export function AdminDeliverySettings() {
           <NumberInput label="Mínimo" value={form.min} onChange={(v) => set('min', v)} suffix="S/" />
           <NumberInput label="Máximo" value={form.max} onChange={(v) => set('max', v)} suffix="S/" />
           <NumberInput label="Minutos fijos (recoger y entregar)" value={form.handlingMinutes} onChange={(v) => set('handlingMinutes', Number(v))} step="1" suffix="min" />
+        </div>
+      </Card>
+
+      <Card
+        icon={<Users className="size-5" />}
+        title="Reparto de pedidos"
+        footer="Óptima: cada pocos segundos se calcula, con los minutos por las calles de cada repartidor a cada tienda, el reparto de menor tiempo total (algoritmo húngaro). Si un repartidor ya va a esa tienda, se le suma el pedido."
+      >
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Cómo se reparten los pedidos">
+          {(
+            [
+              ['optimal', 'Asignación óptima', 'Se le ofrece primero al repartidor que mejor conviene, solo a él por unos segundos.'],
+              ['waves', 'Por oleadas', 'Se ofrece a todos los cercanos (3, 6, 12 km…) y el primero que lo toma se lo lleva.'],
+            ] as const
+          ).map(([id, label, hint]) => (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={form.dispatchMode === id}
+              onClick={() => set('dispatchMode', id)}
+              className={`rounded-[var(--radius-card)] border p-3 text-left transition-colors ${form.dispatchMode === id ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/60' : 'border-line hover:border-teal-300'}`}
+            >
+              <span className="block text-sm font-bold text-ink">{label}</span>
+              <span className="block text-xs text-ink-soft">{hint}</span>
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <NumberInput label="Pedidos por repartidor a la vez" value={form.maxActiveOrders} onChange={(v) => set('maxActiveOrders', Number(v))} step="1" suffix="1 a 5" />
+          {form.dispatchMode === 'optimal' && (
+            <NumberInput label="Tiempo para aceptar la oferta" value={form.exclusiveOfferSeconds} onChange={(v) => set('exclusiveOfferSeconds', Number(v))} step="5" suffix="seg" />
+          )}
         </div>
       </Card>
 
@@ -183,30 +215,22 @@ export function AdminDeliverySettings() {
             </select>
           </label>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] text-sm">
-            <thead>
-              <tr className="text-left text-xs text-ink-faint">
-                <th className="py-1 font-semibold">Vehículo</th>
-                <th className="py-1 font-semibold">Rendimiento (km por galón)</th>
-                <th className="py-1 font-semibold">Velocidad en la ciudad (km/h)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {VEHICLES.map((v) => (
-                <tr key={v} className="border-t border-line">
-                  <td className="py-2 pr-3 font-medium text-ink">{v}</td>
-                  <td className="py-2 pr-3">
-                    <input aria-label={`Rendimiento de ${v}`} type="number" min="0" value={form.kmPerGallon[v]} onChange={(e) => setPerVehicle('kmPerGallon', v, e.target.value)} className="h-9 w-24 rounded-lg bg-surface-3 px-2 text-ink outline-none" />
-                  </td>
-                  <td className="py-2">
-                    <input aria-label={`Velocidad de ${v}`} type="number" min="1" value={form.avgSpeedKmh[v]} onChange={(e) => setPerVehicle('avgSpeedKmh', v, e.target.value)} className="h-9 w-24 rounded-lg bg-surface-3 px-2 text-ink outline-none" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* Una fila por vehículo con sus dos datos: entra en cualquier pantalla, sin deslizar. */}
+        <ul className="flex flex-col divide-y divide-line" aria-label="Rendimiento y velocidad por vehículo">
+          {VEHICLES.map((v) => (
+            <li key={v} className="grid grid-cols-[minmax(4.5rem,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-end gap-2 py-2">
+              <span className="pb-2 text-sm font-semibold text-ink">{v}</span>
+              <label className="flex min-w-0 flex-col gap-0.5 text-[11px] text-ink-faint">
+                km por galón
+                <input aria-label={`Rendimiento de ${v}`} type="number" min="0" value={form.kmPerGallon[v]} onChange={(e) => setPerVehicle('kmPerGallon', v, e.target.value)} className="h-10 w-full min-w-0 rounded-lg bg-surface-3 px-2 text-sm text-ink outline-none" />
+              </label>
+              <label className="flex min-w-0 flex-col gap-0.5 text-[11px] text-ink-faint">
+                km/h en la ciudad
+                <input aria-label={`Velocidad de ${v}`} type="number" min="1" value={form.avgSpeedKmh[v]} onChange={(e) => setPerVehicle('avgSpeedKmh', v, e.target.value)} className="h-10 w-full min-w-0 rounded-lg bg-surface-3 px-2 text-sm text-ink outline-none" />
+              </label>
+            </li>
+          ))}
+        </ul>
       </Card>
 
       <Card icon={<Route className="size-5" />} title="Cálculo de la distancia">

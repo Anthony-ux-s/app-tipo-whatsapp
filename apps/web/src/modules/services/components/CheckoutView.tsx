@@ -9,12 +9,15 @@ import { formatSoles } from '@shared/utils/money';
 import { useCheckout } from '../hooks/use-checkout.hook';
 import { useStoreStatus } from '../hooks/use-store-status.hook';
 import { AmountRow, PageHeader, ServicePage, StoreClosedBanner } from './ServicesUi';
+import { ProductImage } from './ProductImage';
+import { STORE_TEXTS } from '../const/services.const';
 import { SavedAddresses } from './SavedAddresses';
 
 /** Carrito → dirección → total (productos + delivery) → pagar con QR. */
 export function CheckoutView() {
   const c = useCheckout();
-  const store = useStoreStatus('mercado');
+  const store = useStoreStatus(c.service);
+  const text = STORE_TEXTS[c.service];
 
   if (c.count === 0) {
     return (
@@ -23,8 +26,8 @@ export function CheckoutView() {
         <EmptyState
           illustration={<EmptyChatsIllustration />}
           title="Tu carrito está vacío"
-          description="Busca lo que necesitas en el Mercado y agrégalo."
-          action={<Button icon={<ShoppingBasket className="size-4" />} onClick={c.keepShopping}>Ir al Mercado</Button>}
+          description={text.empty}
+          action={<Button icon={<ShoppingBasket className="size-4" />} onClick={c.keepShopping}>Ir a {text.title}</Button>}
         />
       </ServicePage>
     );
@@ -32,11 +35,14 @@ export function CheckoutView() {
 
   return (
     <ServicePage>
-      <PageHeader title="Tu carrito" subtitle={`${c.count} productos de MercaYa`} onBack={c.keepShopping} />
+      <PageHeader title="Tu carrito" subtitle={`${c.count} productos de ${text.title}`} onBack={c.keepShopping} />
 
       <section className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-float" aria-label="Productos">
         {c.lines.map(({ product, quantity }) => (
           <div key={product.id} className="flex items-center gap-3 px-4 py-3" data-testid="cart-line">
+            <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/60 dark:to-cyan-950/60">
+              <ProductImage name={product.name} category={product.category} imageUrl={product.imageUrl} className="size-9" />
+            </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-semibold text-ink">{product.name}</p>
               <p className="text-xs text-ink-soft">
@@ -127,6 +133,30 @@ export function CheckoutView() {
             </button>
           </div>
         ) : (
+          <>
+          {c.myCoupons.length > 0 && (
+            <ul className="flex flex-col gap-2" aria-label="Tus cupones" data-testid="my-coupons">
+              {c.myCoupons.map((m) => (
+                <li key={m.code}>
+                  <button
+                    type="button"
+                    onClick={() => c.useMyCoupon(m.code)}
+                    disabled={m.missingCents > 0}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-dashed border-teal-400 bg-teal-50 px-3 py-2.5 text-left transition-colors enabled:hover:bg-teal-100 disabled:border-line disabled:bg-surface-3 dark:bg-teal-950/40 dark:enabled:hover:bg-teal-900/50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold text-ink">{m.description}</span>
+                      <span className="block font-mono text-xs text-ink-soft">
+                        {m.code}
+                        {m.missingCents > 0 ? ` · agrega ${formatSoles(m.missingCents)} más para usarlo` : ''}
+                      </span>
+                    </span>
+                    <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${m.missingCents > 0 ? 'bg-surface text-ink-faint' : 'bg-brand text-white'}`}>{m.missingCents > 0 ? 'Aún no' : 'Usar'}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <form
             className="flex items-start gap-2"
             onSubmit={(e) => {
@@ -139,6 +169,7 @@ export function CheckoutView() {
               Aplicar
             </Button>
           </form>
+          </>
         )}
       </section>
 

@@ -71,3 +71,40 @@ func catalogoInicial() []Producto {
 	}
 	return productos
 }
+
+// catalogoTecnologia: la tienda de tecnología de prueba (TecnoYa).
+func catalogoTecnologia() []Producto {
+	p := func(sku, nombre, presentacion string, precio, stock int, categoria string) Producto {
+		return Producto{SKU: sku, Nombre: nombre, Presentacion: presentacion, PrecioCentimos: precio, Stock: stock, Categoria: categoria}
+	}
+	productos := []Producto{
+		p("CEL-A15-128", "Celular Galaxy A15 128 GB", "1 unidad", 64900, 25, "Celulares"),
+		p("CEL-RN13-256", "Celular Redmi Note 13 256 GB", "1 unidad", 89900, 18, "Celulares"),
+		p("CEL-MOTO-G24", "Celular Moto G24 128 GB", "1 unidad", 54900, 30, "Celulares"),
+		p("LAP-IDEA-I5", "Laptop IdeaPad 15\" Core i5 16 GB", "1 unidad", 249900, 8, "Laptops"),
+		p("LAP-VIVO-R7", "Laptop VivoBook 14\" Ryzen 7 16 GB", "1 unidad", 279900, 6, "Laptops"),
+		p("TAB-TAB-A9", "Tablet Galaxy Tab A9 64 GB", "1 unidad", 69900, 12, "Tablets"),
+		p("AUD-BT-PRO", "Audífonos Bluetooth con cancelación de ruido", "1 par", 19900, 40, "Audio"),
+		p("AUD-EAR-BUDS", "Audífonos inalámbricos earbuds", "1 par", 8990, 60, "Audio"),
+		p("PAR-BT-MINI", "Parlante Bluetooth portátil", "1 unidad", 12900, 35, "Audio"),
+		p("REL-SMART-5", "Reloj inteligente deportivo", "1 unidad", 15900, 22, "Accesorios"),
+		p("CAR-USB-C-65", "Cargador rápido USB-C 65 W", "1 unidad", 7990, 80, "Accesorios"),
+		p("CAB-USB-C-2M", "Cable USB-C a USB-C 2 m", "1 unidad", 2490, 150, "Accesorios"),
+		p("POW-20K", "Batería externa 20 000 mAh", "1 unidad", 9990, 45, "Accesorios"),
+		p("MOU-INAL", "Mouse inalámbrico", "1 unidad", 3990, 70, "Computación"),
+		p("TEC-MEC-RGB", "Teclado mecánico RGB", "1 unidad", 14900, 20, "Computación"),
+		p("MON-24-FHD", "Monitor 24\" Full HD", "1 unidad", 49900, 10, "Computación"),
+	}
+	ofertas := map[string]int{
+		"CEL-A15-128": 72900,
+		"AUD-BT-PRO":  24900,
+		"POW-20K":     12990,
+		"LAP-IDEA-I5": 279900,
+	}
+	for i := range productos {
+		if antes, ok := ofertas[productos[i].SKU]; ok {
+			productos[i].PrecioAntesCentimos = &antes
+		}
+	}
+	return productos
+}

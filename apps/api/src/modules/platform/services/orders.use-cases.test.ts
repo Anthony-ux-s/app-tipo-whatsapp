@@ -55,6 +55,7 @@ import {
   ListBusinessOrdersUseCase,
 } from './use-cases/business-orders.use-cases';
 import { AcceptDeliveryUseCase, DeliverOrderUseCase, ListDriverOrdersUseCase, ReleaseDeliveryUseCase } from './use-cases/driver-orders.use-cases';
+import { OptimalDispatchUseCase } from './use-cases/optimal-dispatch.use-cases';
 import {
   GetDriverEarningsUseCase,
   LeaveDriverUseCase,
@@ -626,6 +627,56 @@ describe('pedidos de Servicios (core)', () => {
     /** La tienda en Miraflores; Carlos a ~1 km y Lucía a ~9 km. */
     const store = { lat: -12.1268, lng: -77.0195 };
     const later = (minutes: number) => new Date(Date.now() + minutes * 60_000);
+
+    describe('asignación óptima', () => {
+      const optimalSettings = { get: async () => ({ pricing: { ...DEFAULT_DELIVERY_PRICING, dispatchMode: 'optimal' as const, exclusiveOfferSeconds: 45 }, updatedAt: null, updatedById: null }), save: async () => { throw new Error('no se usa'); } };
+      /** Sin servidor de rutas en las pruebas: línea recta × factor de calles. */
+      const noStreets = { route: async () => null, matrix: async () => null };
+      const policy = new DispatchPolicy({ dispatch: DEFAULT_DISPATCH }, optimalSettings);
+      let optimal: OptimalDispatchUseCase;
+      let list: ListDriverOrdersUseCase;
+      let accept: AcceptDeliveryUseCase;
+
+      beforeEach(async () => {
+        businesses.businesses[0].location = store;
+        // Carlos a ~1 km de la tienda y Lucía a ~2 km: los dos dentro de la primera oleada.
+        await drivers.saveLocation(carlos.id, { lat: -12.12, lng: -77.03 }, new Date());
+        await drivers.saveLocation(lucia.id, { lat: -12.135, lng: -77.006 }, new Date());
+        decide = new DecideBusinessOrderUseCase(orders, users, events, policy);
+        optimal = new OptimalDispatchUseCase(orders, drivers, optimalSettings, noStreets, users, realtime, dispatcher, policy, payPolicy);
+        list = new ListDriverOrdersUseCase(drivers, orders, users, payPolicy, policy);
+        accept = new AcceptDeliveryUseCase(drivers, orders, users, events, payPolicy, policy, optimalSettings);
+      });
+
+      it('retiene el pedido listo, lo reserva para el más conveniente y solo él lo ve', async () => {
+        await readyForDrivers();
+        // Recién listo: retenido mientras se decide (nadie lo ve todavía).
+        expect((await orders.findById(ID))!.reservedFor).toMatchObject({ driverId: null });
+        expect((await list.execute(carlos.id)).available).toEqual([]);
+
+        const round = await optimal.execute();
+        expect(round.offered).toEqual([expect.objectContaining({ orderId: ID, driverId: carlos.id })]);
+        expect((await list.execute(carlos.id)).available.map((o) => o.id)).toEqual([ID]);
+        expect((await list.execute(lucia.id)).available).toEqual([]);
+        await expect(accept.execute(lucia.id, ID)).rejects.toThrow();
+        const taken = await accept.execute(carlos.id, ID);
+        expect(taken.status).toBe('driver_assigned');
+        expect((await orders.findById(ID))!.reservedFor).toBeNull();
+      });
+
+      it('si el elegido deja vencer la oferta, pasa al siguiente mejor; si nadie queda, a las oleadas', async () => {
+        await readyForDrivers();
+        await optimal.execute();
+        // Carlos no responde en 45 s: la siguiente ronda se lo ofrece a Lucía.
+        const second = await optimal.execute(new Date(Date.now() + 50_000));
+        expect(second.offered).toEqual([expect.objectContaining({ orderId: ID, driverId: lucia.id })]);
+        // Lucía tampoco: vuelve a la oferta por oleadas y lo ven los dos.
+        const third = await optimal.execute(new Date(Date.now() + 100_000));
+        expect(third.released).toEqual([ID]);
+        expect((await orders.findById(ID))!.reservedFor).toBeNull();
+        expect((await list.execute(lucia.id)).available.map((o) => o.id)).toEqual([ID]);
+      });
+    });
 
     it('primero a los cercanos y, si nadie lo toma, se amplía el radio en oleadas', async () => {
       businesses.businesses[0].location = store;

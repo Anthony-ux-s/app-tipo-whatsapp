@@ -43,6 +43,18 @@ type Commerce interface {
 	Update(ctx context.Context, id string, patch mercaya.ProductPatch) (services.Product, error)
 }
 
+// Stores: la tienda de los servicios que no son el Mercado (se conectan desde Integraciones del panel
+// de soporte, con la API de tienda de Parla: catálogo, productos, reservas y anulaciones).
+type Stores interface {
+	// For: la tienda del servicio, o ErrServiceOff si no está conectada o está apagada.
+	For(ctx context.Context, service services.ServiceID) (Commerce, error)
+	// Enabled: si el servicio está conectado y encendido (para mostrarlo disponible).
+	Enabled(ctx context.Context, service services.ServiceID) bool
+}
+
+// ErrServiceOff: el servicio no tiene una tienda conectada (o soporte la apagó).
+var ErrServiceOff = errors.New("servicio sin tienda conectada")
+
 // Delivery: la tarifa y el tiempo estimado del delivery.
 type Delivery interface {
 	// Quote: pickup es la tienda (nil si no se conoce su ubicación) y address trae el punto de entrega.
@@ -77,6 +89,8 @@ func unavailable(what string) error {
 
 type Orchestrator struct {
 	Commerce Commerce
+	// Stores: las tiendas de los otros servicios (p. ej. Tecnología); nil = solo el Mercado.
+	Stores   Stores
 	Delivery Delivery
 	Payments Payments
 	Core     Core
@@ -96,6 +110,8 @@ type Orchestrator struct {
 func Catalog() []services.ServiceInfo {
 	return []services.ServiceInfo{
 		{ID: services.Mercado, Name: "Mercado", Description: "Abarrotes, frutas y productos del día. Pagas con QR y te lo lleva un repartidor de Rapidito.", Provider: "MercaYa · delivery Rapidito · pago PagaYa", Available: true},
+		{ID: services.Tecnologia, Name: "Tecnología", Description: "Celulares, laptops y accesorios con garantía y entrega en el día.", Provider: "Próximamente", Available: false},
+		{ID: services.Ferreteria, Name: "Ferretería", Description: "Herramientas, pinturas, gasfitería y electricidad para la casa y la obra.", Provider: "Próximamente", Available: false},
 		{ID: services.Salud, Name: "Salud", Description: "Citas médicas, farmacia y resultados en un solo lugar.", Provider: "Próximamente", Available: false},
 	}
 }
@@ -116,9 +132,44 @@ func (o *Orchestrator) newID() string {
 	return "ord_" + hex.EncodeToString(b)
 }
 
+// store: la tienda que atiende un servicio (el Mercado, la fija; los demás, la que conectó soporte).
+func (o *Orchestrator) store(ctx context.Context, service services.ServiceID) (Commerce, error) {
+	if service == "" || service == services.Mercado {
+		return o.Commerce, nil
+	}
+	if o.Stores == nil {
+		return nil, notAvailable()
+	}
+	c, err := o.Stores.For(ctx, service)
+	if errors.Is(err, ErrServiceOff) {
+		return nil, notAvailable()
+	}
+	if err != nil {
+		slog.Warn("no se pudo cargar la integración del servicio", "servicio", service, "error", err)
+		return nil, unavailable("Parla")
+	}
+	return c, nil
+}
+
+func notAvailable() error {
+	return &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Este servicio todavía no está disponible"}
+}
+
+// CatalogFor: los servicios, con Tecnología (y los demás) disponibles solo si soporte los conectó.
+func (o *Orchestrator) CatalogFor(ctx context.Context) []services.ServiceInfo {
+	list := Catalog()
+	for i := range list {
+		if list[i].ID != services.Mercado && o.Stores != nil && o.Stores.Enabled(ctx, list[i].ID) {
+			list[i].Available = true
+			list[i].Provider = "Tienda conectada"
+		}
+	}
+	return list
+}
+
 // ProductsByID trae de la tienda los productos pedidos (para «Volver a pedir»), con su precio y stock
 // de ahora. Los que ya no existen no vienen.
-func (o *Orchestrator) ProductsByID(ctx context.Context, ids []string) ([]services.Product, error) {
+func (o *Orchestrator) ProductsByID(ctx context.Context, service services.ServiceID, ids []string) ([]services.Product, error) {
 	if len(ids) > maxItems {
 		return nil, invalid(fmt.Sprintf("Se pueden pedir hasta %d productos", maxItems))
 	}
@@ -127,6 +178,10 @@ func (o *Orchestrator) ProductsByID(ctx context.Context, ids []string) ([]servic
 			return nil, invalid("Hay un producto no válido")
 		}
 	}
+	shop, err := o.store(ctx, service)
+	if err != nil {
+		return nil, err
+	}
 	products := make([]services.Product, len(ids))
 	errs := make([]error, len(ids))
 	var wg sync.WaitGroup
@@ -134,7 +189,7 @@ func (o *Orchestrator) ProductsByID(ctx context.Context, ids []string) ([]servic
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			products[i], errs[i] = o.Commerce.Product(ctx, id)
+			products[i], errs[i] = shop.Product(ctx, id)
 		}()
 	}
 	wg.Wait()
@@ -153,12 +208,16 @@ func (o *Orchestrator) ProductsByID(ctx context.Context, ids []string) ([]servic
 }
 
 // Products busca en la tienda.
-func (o *Orchestrator) Products(ctx context.Context, query string) ([]services.Product, error) {
+func (o *Orchestrator) Products(ctx context.Context, service services.ServiceID, query string) ([]services.Product, error) {
 	query = strings.TrimSpace(query)
 	if utf8.RuneCountInString(query) > 80 {
 		return nil, invalid("La búsqueda es demasiado larga")
 	}
-	products, err := o.Commerce.Search(ctx, query)
+	shop, err := o.store(ctx, service)
+	if err != nil {
+		return nil, err
+	}
+	products, err := shop.Search(ctx, query)
 	if err != nil {
 		slog.Warn("búsqueda en la tienda falló", "error", err)
 		return nil, unavailable("La tienda")
@@ -207,7 +266,14 @@ func validateRequest(req services.QuoteRequest) (services.QuoteRequest, error) {
 // tarifa del delivery, y devuelve también la cotización del delivery (el core la guarda con el pedido).
 func (o *Orchestrator) quote(ctx context.Context, userID string, req services.QuoteRequest) (services.OrderQuote, services.QuoteRequest, rapidito.Quote, error) {
 	// Una sola consulta al core: si la tienda atiende y desde dónde sale el repartidor.
-	pickup, err := o.storeOpen(ctx, services.Mercado)
+	if req.Service == "" {
+		req.Service = services.Mercado
+	}
+	shop, err := o.store(ctx, req.Service)
+	if err != nil {
+		return services.OrderQuote{}, req, rapidito.Quote{}, err
+	}
+	pickup, err := o.storeOpen(ctx, req.Service)
 	if err != nil {
 		return services.OrderQuote{}, req, rapidito.Quote{}, err
 	}
@@ -223,7 +289,7 @@ func (o *Orchestrator) quote(ctx context.Context, userID string, req services.Qu
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			products[i], errs[i] = o.Commerce.Product(ctx, item.ProductID)
+			products[i], errs[i] = shop.Product(ctx, item.ProductID)
 		}()
 	}
 	wg.Wait()
@@ -289,8 +355,12 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 		return services.Order{}, err
 	}
 	id := o.newID()
+	shop, err := o.store(ctx, req.Service)
+	if err != nil {
+		return services.Order{}, err
+	}
 
-	if err := o.Commerce.Reserve(ctx, id, req.Items); err != nil {
+	if err := shop.Reserve(ctx, id, req.Items); err != nil {
 		var stock mercaya.OutOfStockError
 		if errors.As(err, &stock) {
 			return services.Order{}, &Error{Status: http.StatusConflict, Code: "conflict", Message: "Uno de los productos se agotó mientras armabas el pedido. Revisa el carrito."}
@@ -320,12 +390,12 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 	})
 	if err != nil {
 		slog.Warn("cobro en la billetera falló", "pedido", id, "error", err)
-		o.release(ctx, id)
+		o.release(ctx, req.Service, id)
 		return services.Order{}, unavailable("El pago")
 	}
 
 	saved, err := o.Core.CreateOrder(ctx, services.InternalCreateOrder{
-		ID: id, UserID: userID, Service: services.Mercado, Lines: q.Lines,
+		ID: id, UserID: userID, Service: req.Service, Lines: q.Lines,
 		SubtotalCents: q.SubtotalCents, DeliveryFeeCents: q.DeliveryFeeCents, TipCents: q.TipCents, TotalCents: q.TotalCents, Currency: services.Currency,
 		DiscountCents: q.DiscountCents, CouponCode: couponCode,
 		Address: req.Address,
@@ -343,7 +413,7 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 		if err := o.Payments.Cancel(ctx, charge.ID); err != nil && !errors.Is(err, payments.ErrAlreadyPaid) {
 			slog.Error("no se pudo anular el cobro de un pedido fallido", "pedido", id, "cobro", charge.ID, "error", err)
 		}
-		o.release(ctx, id)
+		o.release(ctx, req.Service, id)
 		return services.Order{}, unavailable("Parla")
 	}
 	return saved.Order, nil
@@ -351,8 +421,12 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 
 // release devuelve a la tienda el stock de un pedido que no siguió. Si la tienda no responde se
 // anota en el log: la reserva queda apartada hasta que alguien la anule (es idempotente).
-func (o *Orchestrator) release(ctx context.Context, orderID string) {
-	if err := o.Commerce.Release(ctx, orderID); err != nil {
+func (o *Orchestrator) release(ctx context.Context, service services.ServiceID, orderID string) {
+	shop, err := o.store(ctx, service)
+	if err == nil {
+		err = shop.Release(ctx, orderID)
+	}
+	if err != nil {
 		slog.Error("no se pudo devolver el stock a la tienda", "pedido", orderID, "error", err)
 	}
 }
@@ -383,7 +457,7 @@ func (o *Orchestrator) PaymentEvent(ctx context.Context, ev payments.Event) erro
 				return err
 			}
 			if err == nil {
-				o.release(ctx, order.ID)
+				o.release(ctx, order.Service, order.ID)
 			}
 		}
 		return nil
@@ -564,7 +638,7 @@ func (o *Orchestrator) close(ctx context.Context, userID, orderID string, c canc
 		slog.Error("no se pudo guardar la cancelación en el core", "pedido", order.ID, "error", err)
 		return services.Order{}, unavailable("Parla")
 	}
-	o.release(ctx, order.ID)
+	o.release(ctx, order.Service, order.ID)
 	return updated.Order, nil
 }
 
@@ -633,27 +707,26 @@ func noBusiness() error {
 	return &Error{Status: http.StatusNotFound, Code: "not_found", Message: "No tienes un negocio en Parla"}
 }
 
-// ownStore comprueba que la persona es dueña de la tienda del Mercado (la única con catálogo hoy).
-func (o *Orchestrator) ownStore(ctx context.Context, userID string) error {
+// ownStore comprueba que la persona es dueña de una tienda y devuelve la API de esa tienda.
+func (o *Orchestrator) ownStore(ctx context.Context, userID string) (Commerce, error) {
 	business, err := o.Core.BusinessByOwner(ctx, userID)
 	switch {
 	case errors.Is(err, ErrNotFound):
-		return noBusiness()
+		return nil, noBusiness()
 	case err != nil:
 		slog.Error("no se pudo consultar el negocio", "error", err)
-		return unavailable("Parla")
-	case business.Service != services.Mercado:
-		return noBusiness()
+		return nil, unavailable("Parla")
 	}
-	return nil
+	return o.store(ctx, business.Service)
 }
 
 // StoreCatalog: todo el catálogo de la tienda, también lo agotado, por categoría y nombre.
 func (o *Orchestrator) StoreCatalog(ctx context.Context, userID string) ([]services.Product, error) {
-	if err := o.ownStore(ctx, userID); err != nil {
+	shop, err := o.ownStore(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
-	products, err := o.Commerce.Search(ctx, "")
+	products, err := shop.Search(ctx, "")
 	if err != nil {
 		slog.Warn("catálogo de la tienda falló", "error", err)
 		return nil, unavailable("La tienda")
@@ -669,7 +742,8 @@ func (o *Orchestrator) StoreCatalog(ctx context.Context, userID string) ([]servi
 
 // UpdateStoreProduct: la dueña cambia precio, oferta o stock de un producto de su tienda.
 func (o *Orchestrator) UpdateStoreProduct(ctx context.Context, userID, productID string, patch CatalogPatch) (services.Product, error) {
-	if err := o.ownStore(ctx, userID); err != nil {
+	shop, err := o.ownStore(ctx, userID)
+	if err != nil {
 		return services.Product{}, err
 	}
 	if patch.PriceCents == nil && !patch.ListPriceSet && patch.Stock == nil {
@@ -686,7 +760,7 @@ func (o *Orchestrator) UpdateStoreProduct(ctx context.Context, userID, productID
 		price := patch.PriceCents
 		if price == nil {
 			// Sin precio nuevo, la oferta se compara con el precio vigente de la tienda.
-			current, err := o.Commerce.Product(ctx, productID)
+			current, err := shop.Product(ctx, productID)
 			if errors.Is(err, mercaya.ErrNotFound) {
 				return services.Product{}, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Producto no encontrado"}
 			}
@@ -699,7 +773,7 @@ func (o *Orchestrator) UpdateStoreProduct(ctx context.Context, userID, productID
 			return services.Product{}, invalid("El precio normal debe ser mayor que el de oferta")
 		}
 	}
-	product, err := o.Commerce.Update(ctx, productID, mercaya.ProductPatch{
+	product, err := shop.Update(ctx, productID, mercaya.ProductPatch{
 		PriceCents: patch.PriceCents, ListPriceCents: patch.ListPriceCents,
 		ClearListPrice: patch.ListPriceSet && patch.ListPriceCents == nil, Stock: patch.Stock,
 	})

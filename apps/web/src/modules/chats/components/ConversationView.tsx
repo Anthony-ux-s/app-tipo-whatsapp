@@ -1,4 +1,5 @@
 import { ChevronDown, Download, Lock, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { Spinner } from '@shared/ui/Spinner';
 import { ErrorState } from '@shared/ui/States';
 import { useConversation } from '../hooks/use-conversation.hook';
@@ -120,26 +121,28 @@ export function ConversationView() {
         <ThreadPanel conversation={conversation} rootId={panel.rootId} myId={chat.user.id} actions={chat.actions} onClose={chat.closePanel} />
       )}
 
-      {chat.lightbox && (
-        <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-teal-950/90 p-4" role="dialog" aria-label="Imagen" onClick={chat.closeImage}>
-          <div className="absolute top-4 right-4 flex gap-2">
-            <a
-              href={chat.lightbox.url}
-              download={chat.lightbox.fileName}
-              onClick={(e) => e.stopPropagation()}
-              aria-label="Descargar imagen"
-              title="Descargar"
-              className="flex size-11 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
-            >
-              <Download className="size-5" />
-            </a>
-            <button type="button" onClick={chat.closeImage} aria-label="Cerrar imagen" className="flex size-11 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20">
-              <X className="size-6" />
-            </button>
-          </div>
-          <img src={chat.lightbox.url} alt="Imagen ampliada" className="max-h-full max-w-full animate-pop rounded-lg object-contain shadow-pop" />
-        </div>
-      )}
+      {chat.lightbox &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-teal-950/90 p-4" role="dialog" aria-label="Imagen" onClick={chat.closeImage}>
+            <div className="absolute top-4 right-4 flex gap-2">
+              <a
+                href={chat.lightbox.url}
+                download={chat.lightbox.fileName}
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Descargar imagen"
+                title="Descargar"
+                className="flex size-11 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+              >
+                <Download className="size-5" />
+              </a>
+              <button type="button" onClick={chat.closeImage} aria-label="Cerrar imagen" className="flex size-11 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20">
+                <X className="size-6" />
+              </button>
+            </div>
+            <img src={chat.lightbox.url} alt="Imagen ampliada" className="max-h-full max-w-full animate-pop rounded-lg object-contain shadow-pop" />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

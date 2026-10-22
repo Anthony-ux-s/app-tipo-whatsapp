@@ -1,5 +1,7 @@
-import { Bike, ChevronRight, MapPin, Route, Store, UserRound } from 'lucide-react';
+import { Bike, ChevronRight, MapPin, Package, Route, Store, UserRound } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import { Button } from '@shared/ui/Button';
 import { Toggle } from '@shared/ui/Toggle';
 import type { DriverOrder } from '@parla/types';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
@@ -70,22 +72,23 @@ export function DriverOrdersView() {
         </button>
       )}
 
-      <div className="-mt-2 flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Pedidos de Rapidito">
+      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-surface-3 p-1" role="tablist" aria-label="Pedidos de Rapidito">
         {(
           [
-            ['disponibles', `Para recoger${r.available.length ? ` · ${r.available.length}` : ''}`],
-            ['mias', 'Mis entregas'],
+            ['disponibles', 'Para recoger', r.available.length],
+            ['mias', 'Mis entregas', 0],
           ] as const
-        ).map(([id, label]) => (
+        ).map(([id, label, count]) => (
           <button
             key={id}
             type="button"
             role="tab"
             aria-selected={r.tab === id}
             onClick={() => r.selectTab(id)}
-            className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition-colors duration-200 ${r.tab === id ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200' : 'bg-surface text-ink-soft shadow-float hover:text-ink'}`}
+            className={`flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-bold transition-all duration-200 ${r.tab === id ? 'bg-surface text-ink shadow-float' : 'text-ink-soft hover:text-ink'}`}
           >
             {label}
+            {count > 0 && <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-extrabold text-white">{count}</span>}
           </button>
         ))}
       </div>
@@ -105,7 +108,7 @@ export function DriverOrdersView() {
         <ul className="flex flex-col gap-3" data-testid="driver-orders">
           {r.orders.map((order) => (
             <li key={order.id}>
-              <DriverOrderCard order={order} onOpen={() => r.open(order.id)} />
+              <DriverOrderCard order={order} onOpen={() => r.open(order.id)} onTake={() => void r.take(order.id)} taking={r.taking === order.id} />
             </li>
           ))}
         </ul>
@@ -114,38 +117,78 @@ export function DriverOrdersView() {
   );
 }
 
-function DriverOrderCard({ order, onOpen }: { order: DriverOrder; onOpen: () => void }) {
+function DriverOrderCard({ order, onOpen, onTake, taking }: { order: DriverOrder; onOpen: () => void; onTake: () => void; taking: boolean }) {
   const units = order.lines.reduce((sum, l) => sum + l.quantity, 0);
+  const forMe = !order.mine && !!order.exclusiveUntil;
   return (
-    <button
-      type="button"
-      onClick={onOpen}
+    <article
       data-testid="driver-order-item"
-      className="group flex w-full flex-col gap-2 rounded-2xl bg-surface p-4 text-left shadow-float transition-colors duration-200 hover:bg-surface-2 md:px-5"
+      className={`flex flex-col gap-3 rounded-3xl bg-surface p-4 shadow-float md:p-5 ${forMe ? 'ring-2 ring-amber-400' : ''}`}
     >
-      <span className="flex items-center justify-between gap-3">
-        <span className="text-lg font-extrabold text-ink">
-          Ganas {formatSoles(order.earningsCents)}
-          {order.tipCents > 0 && <span className="ml-1.5 align-middle text-xs font-bold text-emerald-700 dark:text-emerald-400">incluye {formatSoles(order.tipCents)} de propina</span>}
-        </span>
-        {order.mine ? <OrderStatusBadge status={order.status} /> : <span className="text-xs text-ink-faint">{formatListTimestamp(order.updatedAt)}</span>}
-      </span>
-      <span className="flex items-start gap-2 text-sm text-ink">
-        <Store className="mt-0.5 size-4 shrink-0 text-brand" />
-        <span className="min-w-0">
-          <span className="font-semibold">{order.business.name}</span> · {order.business.address}
-          {order.distanceToStoreKm !== null && !order.mine && (
-            <span className="ml-1.5 whitespace-nowrap text-xs font-bold text-brand dark:text-teal-300" data-testid="distance-to-store">a {formatDistance(order.distanceToStoreKm)} de ti</span>
+      <button type="button" onClick={onOpen} className="group flex flex-col gap-3 text-left">
+        <span className="flex items-start justify-between gap-3">
+          <span>
+            <span className="block text-xs font-bold tracking-wide text-ink-faint uppercase">Ganas</span>
+            <span className="block font-display text-3xl leading-none font-extrabold text-ink">{formatSoles(order.earningsCents)}</span>
+            {order.tipCents > 0 && <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">+ {formatSoles(order.tipCents)} de propina 🎉</span>}
+          </span>
+          {order.mine ? (
+            <OrderStatusBadge status={order.status} />
+          ) : forMe ? (
+            <ExclusiveBadge until={order.exclusiveUntil!} />
+          ) : (
+            <span className="text-xs text-ink-faint">{formatListTimestamp(order.updatedAt)}</span>
           )}
         </span>
-      </span>
-      <span className="flex items-start gap-2 text-sm text-ink-soft">
-        <MapPin className="mt-0.5 size-4 shrink-0" />
-        <span className="min-w-0">
-          {order.customerName} · {order.address.line}
+        <span className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+            <Store className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-bold text-ink">{order.business.name}</span>
+            <span className="block truncate text-sm text-ink-soft">
+              {order.distanceToStoreKm !== null && !order.mine ? (
+                <b className="text-brand dark:text-teal-300" data-testid="distance-to-store">a {formatDistance(order.distanceToStoreKm)} de ti</b>
+              ) : (
+                order.business.address
+              )}
+            </span>
+          </span>
         </span>
-      </span>
-      <span className="text-xs text-ink-faint">{units} {units === 1 ? 'producto' : 'productos'}</span>
-    </button>
+        <span className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-brand dark:bg-teal-950 dark:text-teal-300">
+            <MapPin className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-bold text-ink">{order.customerName}</span>
+            <span className="block truncate text-sm text-ink-soft">{order.address.line}</span>
+          </span>
+        </span>
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-faint">
+          <Package className="size-3.5" /> {units} {units === 1 ? 'producto' : 'productos'} · ver detalle
+          <ChevronRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
+        </span>
+      </button>
+      {!order.mine && order.status === 'searching_driver' && (
+        <Button size="lg" fullWidth icon={<Bike className="size-5" />} onClick={onTake} loading={taking} data-testid="take-from-list">
+          Tomar pedido
+        </Button>
+      )}
+    </article>
+  );
+}
+
+/** Asignación óptima: este pedido se eligió para ti; cuenta los segundos que quedan para aceptarlo. */
+function ExclusiveBadge({ until }: { until: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.ceil((new Date(until).getTime() - now) / 1000));
+  return (
+    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-200" data-testid="exclusive-offer">
+      {seconds > 0 ? `Para ti · ${seconds} s` : 'Se pasó al siguiente'}
+    </span>
   );
 }

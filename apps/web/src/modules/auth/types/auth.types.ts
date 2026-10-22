@@ -1,10 +1,3 @@
-export interface DemoAccount {
-  identifier: string;
-  name: string;
-  role: string;
-  color: string;
-}
-
 export interface AuthHighlight {
   title: string;
   text: string;

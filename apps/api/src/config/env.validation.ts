@@ -17,6 +17,8 @@ export interface AppEnv {
   routingUrl: string;
   /** Si la API también sirve la web compilada (un solo proceso en producción). */
   webDist: string | null;
+  /** App Android (APK): con esto la API publica /.well-known/assetlinks.json y la app se abre sin barra del navegador. */
+  androidApp: { packageId: string; fingerprints: string[] } | null;
   /** Claves VAPID para Web Push; si faltan, el adaptador las genera y las guarda. */
   vapid: { publicKey: string; privateKey: string } | null;
   vapidSubject: string;
@@ -49,17 +51,22 @@ export interface DeliveryWatchConfig {
 export const DEV_JWT_SECRET = 'parla-dev-secret-cambiar-en-produccion';
 export const DEV_INTERNAL_TOKEN = 'parla-dev-internal-token';
 
-/** Carga apps/api/.env (si existe) y valida las variables que la API necesita. */
+/** Carga el .env de la raíz del proyecto (o el de apps/api) y valida las variables que la API necesita. */
 export function loadEnv(): AppEnv {
-  const envFile = resolve(process.cwd(), '.env');
-  if (existsSync(envFile)) process.loadEnvFile(envFile);
+  // Lo que ya está definido (Docker, el hosting) tiene prioridad sobre los archivos.
+  for (const envFile of [resolve(process.cwd(), '.env'), resolve(process.cwd(), '../../.env')]) {
+    if (existsSync(envFile)) process.loadEnvFile(envFile);
+  }
   const env = process.env;
   const production = env.NODE_ENV === 'production';
 
   const required = ['DATABASE_URL', 'JWT_SECRET'] as const;
   const missing = required.filter((key) => !env[key]);
   if (missing.length) {
-    throw new Error(`Faltan variables de entorno: ${missing.join(', ')} (copia .env.example a .env)`);
+    throw new Error(`Faltan variables de entorno: ${missing.join(', ')} (copia .env.example a .env en la raíz del proyecto y complétalo)`);
+  }
+  if (!/^postgres(ql)?:\/\//.test(env.DATABASE_URL!)) {
+    throw new Error('DATABASE_URL debe ser una conexión de PostgreSQL (Supabase): postgresql://usuario:clave@host:6543/postgres?pgbouncer=true');
   }
   if (production && (env.JWT_SECRET === DEV_JWT_SECRET || env.JWT_SECRET!.length < 32)) {
     throw new Error('En producción JWT_SECRET debe ser un secreto propio de al menos 32 caracteres');
@@ -104,6 +111,10 @@ export function loadEnv(): AppEnv {
     storageDir: resolve(process.cwd(), env.STORAGE_DIR ?? './storage'),
     routingUrl: (env.ROUTING_URL ?? 'https://router.project-osrm.org').replace(/\/$/, ''),
     webDist: webDistPath && existsSync(resolve(webDistPath, 'index.html')) ? webDistPath : null,
+    androidApp:
+      env.APK_PACKAGE_ID && env.APK_SHA256_CERT_FINGERPRINTS
+        ? { packageId: env.APK_PACKAGE_ID.trim(), fingerprints: env.APK_SHA256_CERT_FINGERPRINTS.split(',').map((f) => f.trim()).filter(Boolean) }
+        : null,
     vapid:
       env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY
         ? { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY }

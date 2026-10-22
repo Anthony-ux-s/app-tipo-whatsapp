@@ -189,3 +189,36 @@ func TestAnularLaReservaDevuelveElStockUnaSolaVez(t *testing.T) {
 		t.Fatalf("referencia anulada: %d", resp.StatusCode)
 	}
 }
+
+func TestTecnoYaExigeLaClaveDeAPI(t *testing.T) {
+	mux := http.NewServeMux()
+	NewTecnoYa().Routes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	get := func(key string) (*http.Response, error) {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/tecnoya/v1/catalogo?buscar=celular", nil)
+		if key != "" {
+			req.Header.Set("x-api-key", key)
+		}
+		return http.DefaultClient.Do(req)
+	}
+	for _, key := range []string{"", "otra-clave"} {
+		resp, err := get(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("con la clave %q esperaba 401, obtuve %d", key, resp.StatusCode)
+		}
+	}
+	resp, err := get(DevTecnoYaAPIKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body struct{ Resultados []Producto }
+	_ = json.NewDecoder(resp.Body).Decode(&body)
+	if resp.StatusCode != http.StatusOK || len(body.Resultados) != 3 {
+		t.Fatalf("con la clave buena esperaba los 3 celulares, obtuve %d %+v", resp.StatusCode, body.Resultados)
+	}
+}

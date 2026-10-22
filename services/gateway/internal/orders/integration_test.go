@@ -38,7 +38,7 @@ func TestIntegracionPedidoCompletoContraLosSimuladores(t *testing.T) {
 	orch.PublicURL = gw.URL
 
 	ctx := context.Background()
-	found, err := orch.Products(ctx, "azucar")
+	found, err := orch.Products(ctx, services.Mercado, "azucar")
 	if err != nil || len(found) == 0 {
 		t.Fatalf("búsqueda: %v %v", found, err)
 	}
@@ -145,7 +145,7 @@ func TestIntegracionLaDuenaCambiaUnPrecio(t *testing.T) {
 	t.Cleanup(func() {
 		_, _ = orch.UpdateStoreProduct(ctx, owner, "SAL-YOD-1K", CatalogPatch{PriceCents: &before.PriceCents})
 	})
-	found, err := orch.Products(ctx, "sal de mesa")
+	found, err := orch.Products(ctx, services.Mercado, "sal de mesa")
 	if err != nil || len(found) == 0 || found[0].PriceCents != price {
 		t.Fatalf("la búsqueda debía traer el precio nuevo %d: %+v %v", price, found, err)
 	}

@@ -1,13 +1,4 @@
-import type { AuthHighlight, DemoAccount } from '../types/auth.types';
-
-export const DEMO_PASSWORD = 'Parla2026!';
-
-/** Cuentas de prueba creadas por el seed (se muestran solo para la demo). */
-export const DEMO_ACCOUNTS: DemoAccount[] = [
-  { identifier: 'laura', name: 'Laura Méndez', role: 'Grupos, chats y pedidos', color: 'teal' },
-  { identifier: 'andres', name: 'Andrés Rojas', role: 'Para chatear con Laura', color: 'emerald' },
-  { identifier: '+573001234567', name: 'Sofía Ramírez', role: 'Entra con su teléfono', color: 'emerald-dark' },
-];
+import type { AuthHighlight } from '../types/auth.types';
 
 export const AUTH_HIGHLIGHTS: AuthHighlight[] = [
   { title: 'Cifrado de extremo a extremo', text: 'Solo quienes están en el chat pueden leer los mensajes. Ni siquiera nuestro servidor.' },

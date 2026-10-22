@@ -1,10 +1,25 @@
 import type { ClaimReason, ClaimStatus, OrderStatus, ServiceId } from '@parla/types';
 import type { ServiceIconName } from '../components/ServiceIcons';
 
-export const SERVICE_VISUALS: Record<ServiceId, { icon: ServiceIconName; to: string | null }> = {
-  mercado: { icon: 'mercado', to: '/app/servicios/mercado' },
-  salud: { icon: 'salud', to: null },
+/** Cada servicio: su ícono 3D (en /public/services) y su tienda (se abre si el servicio está disponible). */
+export const SERVICE_VISUALS: Record<ServiceId, { art: string; to: string | null }> = {
+  mercado: { art: 'mercado', to: '/app/servicios/mercado' },
+  tecnologia: { art: 'tecnologia', to: '/app/servicios/tecnologia' },
+  ferreteria: { art: 'ferreteria', to: '/app/servicios/ferreteria' },
+  salud: { art: 'salud', to: '/app/servicios/salud' },
 };
+
+/** Textos de la tienda de cada servicio. */
+export const STORE_TEXTS: Record<ServiceId, { title: string; subtitle: string; placeholder: string; empty: string }> = {
+  mercado: { title: 'Mercado', subtitle: 'Tienda MercaYa · delivery Rapidito · pago con QR', placeholder: '¿Qué necesitas? ej. un kilo de azúcar, arroz', empty: 'Busca lo que necesitas en el Mercado y agrégalo.' },
+  tecnologia: { title: 'Tecnología', subtitle: 'Tienda conectada · delivery Rapidito · pago con QR', placeholder: '¿Qué buscas? ej. celular, audífonos', empty: 'Busca celulares, laptops o accesorios y agrégalos.' },
+  ferreteria: { title: 'Ferretería', subtitle: 'Ferretería conectada · delivery Rapidito · pago con QR', placeholder: '¿Qué buscas? ej. martillo, pintura', empty: 'Busca herramientas o materiales y agrégalos.' },
+  salud: { title: 'Salud', subtitle: 'Farmacia conectada · delivery Rapidito · pago con QR', placeholder: '¿Qué buscas? ej. vitamina C', empty: 'Busca lo que necesitas en la farmacia y agrégalo.' },
+};
+
+export function isServiceId(value: string | undefined): value is ServiceId {
+  return value === 'mercado' || value === 'tecnologia' || value === 'ferreteria' || value === 'salud';
+}
 
 /** Sistemas externos que atienden el mercado (cada uno por su API, a través del gateway). */
 export const MARKET_PARTNERS: { icon: ServiceIconName; name: string; role: string }[] = [

@@ -12,7 +12,7 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     await page.goto('/app/servicios');
     await expect(page.getByRole('heading', { name: 'Servicios' })).toBeVisible();
     await expect(page.getByTestId('service-mercado')).toBeVisible();
-    await expect(page.getByText('Próximamente')).toHaveCount(1); // Salud, aún no disponible
+    await expect(page.getByLabel(/Próximamente/)).toHaveCount(2); // Tecnología y Salud, aún no disponibles
     await page.getByTestId('service-mercado').click();
 
     // Se escribe como se habla: «un kilo de azúcar, arroz»
@@ -103,12 +103,12 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     await carlos.page.goto('/app/pedidos');
     await carlos.page.getByTestId('my-rapidito').click();
     await expect(carlos.page.getByRole('heading', { name: 'Rapidito' })).toBeVisible();
-    const offer = carlos.page.getByTestId('driver-order-item').filter({ hasText: 'Laura · Av. Larco 123' }).last();
+    const offer = carlos.page.getByTestId('driver-order-item').filter({ hasText: 'Av. Larco 123' }).last();
     // 95 % de la tarifa (Rapidito descuenta el 5 %) + la propina completa
-    await expect(offer).toContainText(`Ganas S/ ${((deliveryCents - Math.round(deliveryCents * 0.05) + 200) / 100).toFixed(2)}`);
-    await expect(offer).toContainText('incluye S/ 2.00 de propina');
-    await offer.click();
-    await carlos.page.getByTestId('take-order').click();
+    await expect(offer).toContainText(`S/ ${((deliveryCents - Math.round(deliveryCents * 0.05) + 200) / 100).toFixed(2)}`);
+    await expect(offer).toContainText('+ S/ 2.00 de propina');
+    // Se toma directo desde la tarjeta y se abre el pedido
+    await offer.getByTestId('take-from-list').click();
     await expect(carlos.page.getByTestId('order-status')).toHaveAttribute('data-status', 'driver_assigned');
 
     // Laura ve a su repartidor y su código de entrega; la tienda ve que Carlos va por el pedido

@@ -14,16 +14,18 @@ instala en el celular como PWA.
 Requisitos: **Node.js 20.19+**, **Go 1.23+** y **Elixir 1.17+ con Erlang/OTP 27+** (probado con Node 24,
 Go 1.27 y Elixir 1.20 / OTP 29). En Windows: `winget install GoLang.Go Erlang.ErlangOTP Elixir.Elixir`.
 Si Go o Elixir no quedaron en el PATH de la terminal, el script los busca en su carpeta de instalación.
-No hace falta instalar ninguna base de datos ni contratar ningún servicio: la tienda, el delivery y la
-billetera son simuladores locales.
+La base de datos es **PostgreSQL en Supabase** (con **Prisma** como ORM). Hace falta un proyecto de
+Supabase y copiar sus dos conexiones al `.env` (ver [Configuración](#configuración-env)). La tienda, el
+delivery y la billetera siguen siendo simuladores locales.
 
 ```bash
+cp .env.example .env      # en Windows: copy .env.example .env  → y completa DATABASE_URL, DIRECT_URL, ADMIN_*…
 npm start
 ```
 
-Ese único comando instala las dependencias (la primera vez), crea `apps/api/.env`, prepara la
-base de datos SQLite embebida, carga los datos de ejemplo, compila el gateway y los simuladores (Go) y
-el tiempo real (Elixir), y levanta cinco procesos:
+Ese comando instala las dependencias (la primera vez), aplica las migraciones de Prisma en Supabase,
+crea tu cuenta de administrador (variables `ADMIN_*`, **sin datos de ejemplo**), compila el gateway y los
+simuladores (Go) y el tiempo real (Elixir), y levanta cinco procesos:
 
 | Servicio | URL | Quién lo ve |
 | --- | --- | --- |
@@ -36,8 +38,9 @@ el tiempo real (Elixir), y levanta cinco procesos:
 Los puertos se pueden cambiar con `PARLA_WEB_PORT`, `PARLA_GATEWAY_PORT`, `PARLA_CORE_PORT`,
 `PARLA_REALTIME_PORT` y `PARLA_PROVIDERS_PORT`.
 
-Para instalarla en el celular, abre la web desde el navegador del teléfono y elige «Agregar a la
-pantalla de inicio». La cámara, el micrófono y las notificaciones push exigen HTTPS fuera de
+Para instalarla en el celular (PWA), abre la web desde el navegador del teléfono y toca «Instalar la app»
+en el menú ☰ (en iPhone: Compartir → «Agregar a inicio»). Para la **app de Android (APK)** mira
+[docs/apk/LEEME.md](docs/apk/LEEME.md). La cámara, el micrófono y las notificaciones push exigen HTTPS fuera de
 `localhost` (ver [Despliegue](#despliegue-a-producción)).
 
 Otros comandos:
@@ -50,35 +53,22 @@ Otros comandos:
 | `npm test` | Pruebas unitarias: cifrado, casos de uso del core y utilidades de la web. |
 | `go test ./...` en `services/gateway` y `services/providers` · `mix test` en `services/realtime` | Pruebas del gateway, los simuladores y el tiempo real. |
 | `npm run test:e2e` | Recorrido de punta a punta con Playwright. La primera vez: `npx playwright install chromium`. |
-| `npm run db:reset` | Borra la base de desarrollo y los archivos, y vuelve a cargar los datos de ejemplo. |
+| `npm run db:migrate` | Aplica las migraciones de Prisma pendientes en Supabase (nunca borra datos). |
+| `npm run db:seed` | Crea el administrador y la primera tienda a partir del `.env` (se puede repetir). |
 | `npm run typecheck` / `npm run build` | Verificación de tipos y compilación de producción. |
 
-## Usuarios de prueba
+## Primer acceso
 
-Contraseña para todos: **`Parla2026!`**
-
-| Entrar con | Persona | Qué tiene |
-| --- | --- | --- |
-| `laura` | Laura Méndez | La más activa: grupos, chats y pedidos |
-| `andres` | Andrés Rojas | Para chatear o llamar a Laura |
-| `camila` | Camila Torres | Creó (y administra) el grupo «Diseño tienda en línea» |
-| `tienda` | Elena Condori | **Dueña de Bodega MercaYa**: recibe los pedidos del Mercado, los acepta, los alista y se los entrega al repartidor |
-| `repartidor` | Carlos Huamán | **Repartidor de Rapidito** (moto B7K-482): toma pedidos listos, los recoge y los entrega con el código del cliente |
-| `repartidora` | Lucía Ramos | **Repartidora de Rapidito** (moto D5T-663): para ver que el primero que toma un pedido se lo queda |
-| `soporte` | Soporte Parla | **Soporte**: en *Ajustes → Soporte Parla* ve todos los pedidos (y cancela los trabados), aprueba repartidores, resuelve reclamos y crea cupones |
-| `+57 300 123 4567` | Sofía Ramírez | Entra con su **teléfono** |
-| `diego`, `mateo`, `valentina` | Resto de contactos | |
-
-Todas las cuentas de ejemplo tienen el teléfono verificado (Andrés `+57 300 555 0101`, Camila `…0102`,
-Diego `…0103`, Mateo `…0104`, Valentina `…0105` y Laura `+57 310 456 7890`). Laura además tiene
-correo de recuperación (`laura@example.com`).
+No hay usuarios ni datos de ejemplo. Define `ADMIN_USERNAME` y `ADMIN_PASSWORD` en el `.env` y ejecuta
+`npm run db:seed` (o simplemente arranca la app, que lo hace sola): esa cuenta entra al panel
+**Administración** desde el menú ☰. Las demás personas se registran desde la app.
 
 **Registro nuevo**: en `/registro` escribes tu número y llega un código por SMS. Sin OneSignal
 configurado, el código aparece en pantalla como «modo de prueba» y en la consola del core. Luego
 pones tu nombre, un usuario opcional y la contraseña.
 
-- **Llamada**: entra con `laura` en una ventana y con `andres` en otra (o en una ventana privada) y
-  pulsa el botón de video o de teléfono en su chat.
+- **Llamada**: entra con una cuenta en una ventana y con otra en una ventana privada, y pulsa el botón de
+  video o de teléfono en su chat.
 - **Compra**: *Servicios → Mercado*, busca «un kilo de azúcar, arroz», agrega, escribe la dirección y
   pulsa *Pagar con QR*. Escanea el QR con el celular (en la misma red) o pulsa *Pagar desde este
   celular*: se abre la billetera simulada.
@@ -192,7 +182,7 @@ pones tu nombre, un usuario opcional y la contraseña.
   - **Vigilancia automática** (cada minuto): un pedido listo que nadie toma en 5 minutos se vuelve a
     ofrecer y se avisa a la tienda; si el repartidor no lo recoge en 25 minutos o su celular deja de
     mandar ubicación 8 minutos, el pedido se le quita y se ofrece a otros (con aviso a él y anotado en
-    el historial). Los tiempos se cambian con `DELIVERY_*` en `apps/api/.env`.
+    el historial). Los tiempos se cambian con `DELIVERY_*` en el `.env`.
   - **Mapa en vivo** (OpenStreetMap): el cliente marca en el carrito dónde le entregan; mientras dura
     la entrega, el celular del repartidor comparte su ubicación (solo con el cliente y la tienda de ese
     pedido) y ambos lo ven moverse **por la ruta de las calles** (OSRM), con la distancia que falta,
@@ -325,22 +315,48 @@ packages/
 
 Las decisiones de tecnología, una por una y con su porqué, están en **[DECISIONES.md](DECISIONES.md)**.
 
+## Configuración (`.env`)
+
+Un solo archivo en la raíz sirve para todo (API, gateway, tiempo real, Prisma y Docker). Copia
+`.env.example` a `.env` y completa los valores: el archivo explica cada variable. Lo imprescindible:
+
+| Variable | Qué es |
+| --- | --- |
+| `DATABASE_URL` | Supabase → Project Settings → Database → conexión **Transaction pooler** (puerto 6543), con `?pgbouncer=true`. |
+| `DIRECT_URL` | La conexión **directa** (puerto 5432): solo para aplicar migraciones. |
+| `PUBLIC_URL`, `WEB_ORIGIN` | La dirección pública con `https://`. |
+| `JWT_SECRET`, `INTERNAL_TOKEN`, `PAGAYA_*`, `MERCAYA_ADMIN_KEY` | Secretos propios (el `.env.example` dice cómo generarlos). |
+| `ONESIGNAL_*` | Códigos por SMS y correo (el registro no funciona sin ellos). |
+| `VAPID_*` | Notificaciones push (`npx web-push generate-vapid-keys`). |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Tu cuenta de administrador. |
+
+## Base de datos (Prisma + Supabase)
+
+El esquema está en `apps/api/prisma/schema.prisma` y los cambios se aplican con **migraciones** versionadas
+(`apps/api/prisma/migrations`). `npm run db:migrate` aplica las pendientes. Para cambiar el esquema en
+desarrollo: edita `schema.prisma`, ejecuta `npm run db:migrate:dev -w @parla/api -- --name lo_que_cambia` y
+sube la carpeta de migración nueva al repositorio.
+
+Los archivos subidos (ya cifrados) se guardan en `STORAGE_DIR`; en Docker es un volumen. Si el hosting
+borra el disco entre despliegues, monta un volumen persistente ahí.
+
 ## Despliegue a producción
 
-**Opción A — Docker + PostgreSQL** (servidor propio, VPS, Render, Fly, Railway):
+**Opción A — Docker** (servidor propio, VPS, Render, Fly, Railway):
 
 ```bash
-cp .env.production.example .env.production   # completa PUBLIC_URL, POSTGRES_PASSWORD, secretos…
-docker compose --env-file .env.production up -d --build
+cp .env.example .env     # completa DATABASE_URL, DIRECT_URL, PUBLIC_URL, secretos, ONESIGNAL_*, ADMIN_*…
+docker compose up -d --build
 ```
 
-Levanta `gateway` (8080), `providers` (8081, la página de pago que abre el QR), `core`, `realtime` y
-`db`. Los avisos de pago y delivery viajan por la red interna. El core compila el esquema PostgreSQL y
-sincroniza la base al arrancar. Pon delante un proxy con HTTPS (Caddy, Nginx, Traefik o el del proveedor).
+Levanta `gateway` (8080), `providers` (8081, la página de pago que abre el QR), `core` y `realtime`. La
+base de datos es Supabase (no hay contenedor de base de datos). Al arrancar, el core aplica las migraciones,
+crea el administrador si faltara y sirve la app. Pon delante un proxy con HTTPS (Caddy, Nginx, Traefik o el
+del proveedor): la cámara, el micrófono, las notificaciones push y la PWA exigen HTTPS.
 
-**Opción B — sin Docker**: `npm run start:prod`. Usa la base de `DATABASE_URL` (SQLite por defecto),
-genera los secretos (sesiones, token entre servicios y firmas de los avisos) en `apps/api/.secrets/`
-si no los defines, y el gateway sirve todo en el puerto `PORT` (4100).
+**Opción B — sin Docker**: `npm run start:prod`. Genera los secretos (sesiones, token entre servicios y
+firmas de los avisos) en `apps/api/.secrets/` si no los defines, y el gateway sirve todo en el puerto
+`PARLA_GATEWAY_PORT` (4100).
 
 En producción ningún servicio arranca con secretos de desarrollo:
 - `JWT_SECRET` debe tener 32+ caracteres;
@@ -349,7 +365,13 @@ En producción ningún servicio arranca con secretos de desarrollo:
 El core además envía cabeceras de seguridad con helmet (CSP estricta, HSTS, `nosniff`,
 `frame-ancestors 'none'`).
 
-Variables completas en `apps/api/.env.example` y `.env.production.example`.
+La tienda, el delivery y la billetera siguen siendo los simuladores de `services/providers` hasta que se
+conecten proveedores reales (las tiendas reales se conectan desde Administración → Integrar).
+
+## App de Android (APK)
+
+La app ya es una **PWA instalable**. El APK es esa misma PWA empaquetada (Trusted Web Activity), así que
+se actualiza sola cuando despliegas. Pasos y archivos en [docs/apk/LEEME.md](docs/apk/LEEME.md).
 
 ## Pruebas
 

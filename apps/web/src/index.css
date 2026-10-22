@@ -270,3 +270,28 @@ svg .stk-bob, svg .stk-shake, svg .stk-bow, svg .stk-sway, .stk-wave, .stk-spin 
   font-size: var(--chat-font-size, 15px);
   font-family: var(--chat-font, var(--font-sans));
 }
+
+/* Ruleta de descuentos */
+@keyframes bulb-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+@keyframes pointer-flick {
+  0%, 100% { transform: rotate(0); }
+  50% { transform: rotate(-14deg); }
+}
+@keyframes confetti-fall {
+  0% { transform: translate3d(0, -12vh, 0) rotate(0); opacity: 1; }
+  100% { transform: translate3d(var(--dx), 108vh, 0) rotate(var(--spin)); opacity: 0.9; }
+}
+@keyframes prize-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(34 182 141 / 0.45); }
+  50% { box-shadow: 0 0 0 14px rgb(34 182 141 / 0); }
+}
+@keyframes wheel-idle {
+  0%, 100% { transform: rotate(-1.5deg); }
+  50% { transform: rotate(1.5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .roulette-motion { animation: none !important; transition-duration: 0.01ms !important; }
+}

@@ -17,6 +17,8 @@ export interface CouponRule {
   startsAt: Date | null;
   endsAt: Date | null;
   active: boolean;
+  /** Cupón personal (ganado en la ruleta): solo esa persona lo puede usar. */
+  ownerUserId?: string | null;
 }
 
 /** Con qué se evalúa: el carrito y cuánto lo usó ya la persona (y todos). */

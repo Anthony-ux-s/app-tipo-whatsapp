@@ -1,4 +1,4 @@
-import type { DeliveryAddress, Product } from '@parla/types';
+import type { DeliveryAddress, Product, ServiceId } from '@parla/types';
 import { create } from 'zustand';
 
 export interface CartItem {
@@ -20,10 +20,12 @@ function savedAddress(): DeliveryAddress {
 }
 
 interface CartState {
+  /** De qué servicio es el carrito: un pedido es de una sola tienda. */
+  service: ServiceId;
   items: Record<string, CartItem>;
   address: DeliveryAddress;
-  /** Suma o resta unidades; en 0 sale del carrito. */
-  change: (product: Product, delta: number) => void;
+  /** Suma o resta unidades; en 0 sale del carrito. Si es de otro servicio, empieza un carrito nuevo. */
+  change: (product: Product, delta: number, service?: ServiceId) => void;
   remove: (productId: string) => void;
   setAddress: (address: DeliveryAddress) => void;
   /** Propina para el repartidor (se cobra con el pedido). */
@@ -31,7 +33,7 @@ interface CartState {
   setTip: (cents: number) => void;
   clear: () => void;
   /** «Volver a pedir»: el carrito queda con estos productos (hasta el stock de ahora). */
-  refill: (lines: { product: Product; quantity: number }[]) => number;
+  refill: (lines: { product: Product; quantity: number }[], service?: ServiceId) => number;
 }
 
 /**
@@ -39,16 +41,19 @@ interface CartState {
  * el gateway con los precios de la tienda.
  */
 export const useCartStore = create<CartState>((set, get) => ({
+  service: 'mercado',
   items: {},
   address: savedAddress(),
 
-  change: (product, delta) => {
-    const current = get().items[product.id]?.quantity ?? 0;
+  change: (product, delta, service = 'mercado') => {
+    // Otra tienda: el carrito anterior no se mezcla con este.
+    const fresh = service !== get().service;
+    const current = fresh ? 0 : (get().items[product.id]?.quantity ?? 0);
     const quantity = Math.min(MAX_QUANTITY, Math.min(product.stock, Math.max(0, current + delta)));
-    const items = { ...get().items };
+    const items = fresh ? {} : { ...get().items };
     if (quantity === 0) delete items[product.id];
     else items[product.id] = { product, quantity };
-    set({ items });
+    set({ items, service, ...(fresh ? { tipCents: 0 } : {}) });
   },
 
   remove: (productId) => {
@@ -69,13 +74,13 @@ export const useCartStore = create<CartState>((set, get) => ({
   tipCents: 0,
   setTip: (cents) => set({ tipCents: Math.max(0, Math.min(10_000, Math.round(cents))) }),
   clear: () => set({ items: {}, tipCents: 0 }),
-  refill: (lines) => {
+  refill: (lines, service = 'mercado') => {
     const items: Record<string, CartItem> = {};
     for (const { product, quantity } of lines) {
       const q = Math.min(MAX_QUANTITY, product.stock, quantity);
       if (q > 0) items[product.id] = { product, quantity: q };
     }
-    set({ items });
+    set({ items, service });
     return Object.keys(items).length;
   },
 }));

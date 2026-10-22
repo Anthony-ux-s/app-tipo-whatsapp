@@ -21,6 +21,8 @@ export interface OrderRecord {
   service: ServiceId;
   /** Negocio que prepara el pedido (con su dueño y dirección); null en pedidos sin negocio. */
   business: OrderBusiness | null;
+  /** Dónde se recogió: la ubicación de la tienda cuando se creó el pedido (null en pedidos viejos). */
+  pickup: GeoPoint | null;
   status: OrderStatus;
   lines: OrderLine[];
   subtotalCents: number;
@@ -51,6 +53,11 @@ export interface OrderRecord {
   /** Oferta por cercanía: radio actual (null = a todos) y desde cuándo. */
   offerRadiusKm: number | null;
   offerWaveAt: Date | null;
+  /**
+   * Asignación óptima: reservado para un repartidor hasta `until` (solo él lo ve). Con `driverId`
+   * null, retenido mientras se decide a quién dárselo. null = sin reserva.
+   */
+  reservedFor: OfferReservation | null;
   deliveryPhotoId: string | null;
   deliveredWithoutCode: boolean;
   /** Reclamos del pedido, el último primero. */
@@ -61,8 +68,13 @@ export interface OrderRecord {
 
 export type NewOrder = Omit<
   OrderRecord,
-  'createdAt' | 'updatedAt' | 'delivery' | 'business' | 'driverId' | 'driverLocation' | 'deliveryCodeAttempts' | 'timeline' | 'rating' | 'offerRadiusKm' | 'offerWaveAt' | 'deliveryPhotoId' | 'deliveredWithoutCode' | 'claims'
-> & { businessId: string | null };
+  'createdAt' | 'updatedAt' | 'delivery' | 'business' | 'driverId' | 'driverLocation' | 'deliveryCodeAttempts' | 'timeline' | 'rating' | 'offerRadiusKm' | 'offerWaveAt' | 'reservedFor' | 'deliveryPhotoId' | 'deliveredWithoutCode' | 'claims'
+> & { businessId: string | null; pickup?: GeoPoint | null };
+
+export interface OfferReservation {
+  driverId: string | null;
+  until: Date;
+}
 
 export interface OrderChanges {
   status: OrderStatus;
@@ -72,6 +84,8 @@ export interface OrderChanges {
   driverId?: string | null;
   /** Al quedar listo (o volver a ofrecerse): primera oleada de la oferta por cercanía. */
   offer?: { radiusKm: number | null; at: Date };
+  /** Reserva de la asignación óptima (null la quita). */
+  reservation?: OfferReservation | null;
   deliveryPhotoId?: string;
   deliveredWithoutCode?: boolean;
   /**
@@ -112,6 +126,8 @@ export interface OrdersRepository {
   resetDeliveryCode(id: string, code: string): Promise<OrderRecord>;
   /** Pedidos en estos estados (para la vigilancia de los deliveries), del más viejo al más nuevo. */
   listByStatus(statuses: OrderStatus[], limit: number): Promise<OrderRecord[]>;
+  /** Reserva (o libera, con null) un pedido que sigue sin repartidor para la asignación óptima. */
+  reserveOffer(id: string, reservation: OfferReservation | null): Promise<OrderRecord | null>;
   /** Amplía la oferta de un pedido que sigue sin repartidor (no cambia su estado). */
   widenOffer(id: string, radiusKm: number | null, at: Date): Promise<OrderRecord | null>;
   /** Guarda la calificación (solo si aún no tenía). Devuelve null si ya estaba calificado. */

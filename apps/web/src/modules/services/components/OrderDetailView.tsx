@@ -41,7 +41,7 @@ export function OrderDetailView() {
   return (
     <ServicePage>
       <PageHeader
-        title={`Pedido · ${formatSoles(order.totalCents)}`}
+        title={`Pedido #${order.id.slice(-4).toUpperCase()} · ${formatSoles(order.totalCents)}`}
         subtitle={`Mercado · ${formatLongDate(order.createdAt)}`}
         onBack={d.back}
         action={<OrderStatusBadge status={order.status} />}
@@ -91,52 +91,36 @@ export function OrderDetailView() {
         </section>
       )}
 
-      {order.business && order.status !== 'pending_payment' && order.status !== 'payment_expired' && (
-        <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Negocio" data-testid="business-card">
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
-            {order.status === 'preparing' ? <ChefHat className="size-6" /> : <Store className="size-6" />}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-bold text-ink">
-              {order.status === 'paid'
-                ? `${businessName} está revisando tu pedido`
-                : order.status === 'preparing'
-                  ? `${businessName} está preparando tu pedido`
-                  : order.status === 'rejected'
-                    ? `${businessName} no pudo aceptar tu pedido`
-                    : businessName}
-            </p>
-            <p className="text-sm text-ink-soft">
-              {order.status === 'paid' ? 'Te avisamos apenas lo acepte.' : order.status === 'preparing' ? 'Un repartidor de Rapidito lo recogerá cuando esté listo.' : '¿Dudas sobre tu pedido? Escríbele.'}
-            </p>
-          </div>
-          <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={() => chat.open('business')} loading={chat.opening === 'business'} data-testid="chat-business">
-            Escribir
+      {stopped && (
+        <section className="rounded-2xl bg-surface p-5 text-center shadow-float" data-testid="order-stopped">
+          {order.status === 'rejected' || order.status === 'cancelled' ? (
+            <>
+              <p className="font-bold text-ink">
+                {order.status === 'rejected' ? `${businessName} no aceptó este pedido` : 'Pedido cancelado'}
+              </p>
+              <p className="mt-1 text-sm text-ink-soft" data-testid="refund">
+                {order.payment.refundedAt
+                  ? `Te devolvimos ${formatSoles(order.totalCents)} a tu billetera ${order.payment.provider} (${formatTime(order.payment.refundedAt)}).`
+                  : order.payment.paidAt
+                    ? 'Estamos devolviendo tu pago.'
+                    : 'No se te cobró nada.'}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-bold text-ink">El cobro venció sin pagarse</p>
+              <p className="mt-1 text-sm text-ink-soft">No se te cobró nada. Puedes volver a hacer el pedido cuando quieras.</p>
+            </>
+          )}
+          <Button className="mt-4" icon={<RotateCcw className="size-4" />} onClick={() => void again.reorder(order)} loading={again.loading} data-testid="reorder">
+            Volver a pedir
           </Button>
         </section>
       )}
 
-      {order.deliveryCode && order.status !== 'delivered' && (
-        <section className="flex items-center gap-4 rounded-2xl border-2 border-dashed border-teal-300 bg-teal-50 p-4 md:p-5 dark:border-teal-800 dark:bg-teal-950/40" aria-label="Código de entrega">
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand text-white">
-            <KeyRound className="size-6" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-ink-soft">Tu código de entrega</p>
-            <p className="font-mono text-3xl font-extrabold tracking-[0.3em] text-ink" data-testid="delivery-code">{order.deliveryCode}</p>
-            {order.deliveryCodeLocked ? (
-              <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">Se bloqueó: alguien probó códigos equivocados. Genera uno nuevo y díctaselo en persona.</p>
-            ) : (
-              <p className="text-xs text-ink-soft">Dáselo al repartidor solo cuando tengas tu pedido en la mano.</p>
-            )}
-          </div>
-          {order.deliveryCodeLocked && (
-            <Button variant="secondary" icon={<RefreshCw className="size-4" />} onClick={d.renewCode} loading={d.busy === 'renew'} data-testid="renew-code">
-              Código nuevo
-            </Button>
-          )}
-        </section>
-      )}
+      {(order.status === 'searching_driver' || !!order.delivery) && <SectionTitle>Entrega</SectionTitle>}
+
+      <LiveTracking order={order} audience="customer" />
 
       {(order.status === 'searching_driver' || order.delivery) && (
         <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Delivery" data-testid="delivery-card">
@@ -169,6 +153,28 @@ export function OrderDetailView() {
         </section>
       )}
 
+      {order.deliveryCode && order.status !== 'delivered' && (
+        <section className="flex items-center gap-4 rounded-2xl border-2 border-dashed border-teal-300 bg-teal-50 p-4 md:p-5 dark:border-teal-800 dark:bg-teal-950/40" aria-label="Código de entrega">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand text-white">
+            <KeyRound className="size-6" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-ink-soft">Tu código de entrega</p>
+            <p className="font-mono text-3xl font-extrabold tracking-[0.3em] text-ink" data-testid="delivery-code">{order.deliveryCode}</p>
+            {order.deliveryCodeLocked ? (
+              <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">Se bloqueó: alguien probó códigos equivocados. Genera uno nuevo y díctaselo en persona.</p>
+            ) : (
+              <p className="text-xs text-ink-soft">Dáselo al repartidor solo cuando tengas tu pedido en la mano.</p>
+            )}
+          </div>
+          {order.deliveryCodeLocked && (
+            <Button variant="secondary" icon={<RefreshCw className="size-4" />} onClick={d.renewCode} loading={d.busy === 'renew'} data-testid="renew-code">
+              Código nuevo
+            </Button>
+          )}
+        </section>
+      )}
+
       {order.status === 'delivered' && order.hasDeliveryPhoto && (
         <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Foto de la entrega" data-testid="delivery-photo">
           <p className="text-sm font-bold text-ink">
@@ -178,49 +184,36 @@ export function OrderDetailView() {
         </section>
       )}
 
-      <LiveTracking order={order} audience="customer" />
-      <RateOrderCard order={order} />
-      <ClaimCard order={order} />
-      {order.status === 'delivered' && (
-        <Button variant="secondary" className="self-center" icon={<RotateCcw className="size-4" />} onClick={() => void again.reorder(order)} loading={again.loading} data-testid="reorder">
-          Volver a pedir
-        </Button>
-      )}
+      {order.business && order.status !== 'pending_payment' && order.status !== 'payment_expired' && <SectionTitle>Tienda</SectionTitle>}
 
-      {d.canCancel && (
-        <Button variant="ghost" className="self-center" icon={<X className="size-4" />} onClick={d.askCancel} data-testid="cancel-order">
-          Cancelar pedido
-        </Button>
-      )}
-
-      {stopped && (
-        <section className="rounded-2xl bg-surface p-5 text-center shadow-float" data-testid="order-stopped">
-          {order.status === 'rejected' || order.status === 'cancelled' ? (
-            <>
-              <p className="font-bold text-ink">
-                {order.status === 'rejected' ? `${businessName} no aceptó este pedido` : 'Pedido cancelado'}
-              </p>
-              <p className="mt-1 text-sm text-ink-soft" data-testid="refund">
-                {order.payment.refundedAt
-                  ? `Te devolvimos ${formatSoles(order.totalCents)} a tu billetera ${order.payment.provider} (${formatTime(order.payment.refundedAt)}).`
-                  : order.payment.paidAt
-                    ? 'Estamos devolviendo tu pago.'
-                    : 'No se te cobró nada.'}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="font-bold text-ink">El cobro venció sin pagarse</p>
-              <p className="mt-1 text-sm text-ink-soft">No se te cobró nada. Puedes volver a hacer el pedido cuando quieras.</p>
-            </>
-          )}
-          <Button className="mt-4" icon={<RotateCcw className="size-4" />} onClick={() => void again.reorder(order)} loading={again.loading} data-testid="reorder">
-            Volver a pedir
+      {order.business && order.status !== 'pending_payment' && order.status !== 'payment_expired' && (
+        <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Negocio" data-testid="business-card">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+            {order.status === 'preparing' ? <ChefHat className="size-6" /> : <Store className="size-6" />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-ink">
+              {order.status === 'paid'
+                ? `${businessName} está revisando tu pedido`
+                : order.status === 'preparing'
+                  ? `${businessName} está preparando tu pedido`
+                  : order.status === 'rejected'
+                    ? `${businessName} no pudo aceptar tu pedido`
+                    : businessName}
+            </p>
+            <p className="text-sm text-ink-soft">
+              {order.status === 'paid' ? 'Te avisamos apenas lo acepte.' : order.status === 'preparing' ? 'Un repartidor de Rapidito lo recogerá cuando esté listo.' : '¿Dudas sobre tu pedido? Escríbele.'}
+            </p>
+          </div>
+          <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={() => chat.open('business')} loading={chat.opening === 'business'} data-testid="chat-business">
+            Escribir
           </Button>
         </section>
       )}
 
-      <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Detalle">
+      <SectionTitle>Tu pedido</SectionTitle>
+
+      <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Productos y pago">
         {order.lines.map((line) => (
           <div key={line.productId} className="flex items-baseline justify-between gap-4 text-sm">
             <span className="min-w-0 text-ink">
@@ -244,6 +237,22 @@ export function OrderDetailView() {
 
       {order.timeline.length > 1 && <OrderTimeline entries={order.timeline} />}
 
+      {(order.status === 'delivered' || d.canCancel) && <SectionTitle>¿Algo más?</SectionTitle>}
+
+      <RateOrderCard order={order} />
+      <ClaimCard order={order} />
+      {order.status === 'delivered' && (
+        <Button variant="secondary" className="self-center" icon={<RotateCcw className="size-4" />} onClick={() => void again.reorder(order)} loading={again.loading} data-testid="reorder">
+          Volver a pedir
+        </Button>
+      )}
+
+      {d.canCancel && (
+        <Button variant="ghost" className="self-center" icon={<X className="size-4" />} onClick={d.askCancel} data-testid="cancel-order">
+          Cancelar pedido
+        </Button>
+      )}
+
       <Modal
         open={d.confirmCancel}
         onClose={d.closeCancel}
@@ -266,4 +275,9 @@ export function OrderDetailView() {
       </Modal>
     </ServicePage>
   );
+}
+
+/** Título pequeño de cada bloque del pedido, para leerlo de un vistazo. */
+function SectionTitle({ children }: { children: string }) {
+  return <h2 className="-mb-2 px-1 pt-1 text-xs font-bold tracking-wider text-ink-faint uppercase">{children}</h2>;
 }

@@ -112,7 +112,7 @@ export function BusinessOrderDetailView() {
           <p className="text-sm text-ink-soft">{BUSINESS_STATUS_HINTS[order.status]}</p>
           {order.status === 'paid' && (
             <div className="flex flex-wrap gap-2">
-              <Button icon={<Check className="size-4" />} onClick={d.accept} loading={d.busy === 'accept'} disabled={!!d.busy} data-testid="accept-order">
+              <Button size="lg" icon={<Check className="size-5" />} onClick={d.accept} loading={d.busy === 'accept'} disabled={!!d.busy} data-testid="accept-order">
                 Aceptar pedido
               </Button>
               <Button variant="ghost" icon={<X className="size-4" />} onClick={d.askReject} disabled={!!d.busy}>
@@ -121,7 +121,7 @@ export function BusinessOrderDetailView() {
             </div>
           )}
           {order.status === 'preparing' && (
-            <Button icon={<PackageCheck className="size-4" />} onClick={d.ready} loading={d.busy === 'ready'} data-testid="ready-order" className="self-start">
+            <Button size="lg" icon={<PackageCheck className="size-5" />} onClick={d.ready} loading={d.busy === 'ready'} data-testid="ready-order">
               Listo · llamar a Rapidito
             </Button>
           )}
@@ -139,7 +139,7 @@ export function BusinessOrderDetailView() {
           )}
           {order.status === 'driver_assigned' && (
             <div className="flex flex-wrap gap-2">
-              <Button icon={<PackageCheck className="size-4" />} onClick={d.handoff} loading={d.busy === 'handoff'} disabled={!!d.busy} data-testid="handoff-order">
+              <Button size="lg" icon={<PackageCheck className="size-5" />} onClick={d.handoff} loading={d.busy === 'handoff'} disabled={!!d.busy} data-testid="handoff-order">
                 Le entregué el pedido a {driverName}
               </Button>
               <Button variant="ghost" icon={<RefreshCw className="size-4" />} onClick={d.reassign} loading={d.busy === 'reassign'} disabled={!!d.busy} data-testid="reassign-order">

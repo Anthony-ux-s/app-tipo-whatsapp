@@ -1,7 +1,7 @@
-import type { GeoPoint, Order, OrderQuote, Product, QuoteRequest } from '@parla/types';
-import { useEffect, useMemo, useState } from 'react';
+import type { GeoPoint, MyCoupon, Order, OrderQuote, Product, QuoteRequest } from '@parla/types';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { cartCount, useCartStore } from '@shared/stores/cart.store';
+import { cartCount, cartEstimateCents, useCartStore } from '@shared/stores/cart.store';
 import { useOrdersStore } from '@shared/stores/orders.store';
 import { toast } from '@shared/stores/toast.store';
 import { ApiError, errorMessage, http } from '@shared/utils/http';
@@ -15,6 +15,7 @@ const MIN_ADDRESS = 6;
  */
 export function useCheckout() {
   const navigate = useNavigate();
+  const service = useCartStore((s) => s.service);
   const items = useCartStore((s) => s.items);
   const address = useCartStore((s) => s.address);
   const change = useCartStore((s) => s.change);
@@ -34,8 +35,27 @@ export function useCheckout() {
   const [couponDraft, setCouponDraft] = useState('');
   const [couponCode, setCouponCode] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
+  const [myCoupons, setMyCoupons] = useState<MyCoupon[]>([]);
+
+  // Los cupones que ganó en la ruleta aparecen listos para tocar.
+  useEffect(() => {
+    http.get<MyCoupon[]>('/coupons/mine').then(setMyCoupons).catch(() => undefined);
+  }, []);
 
   const lines = Object.values(items);
+
+  // Cada cupón ganado dice cuánto le falta al carrito para poder usarlo (compra mínima).
+  const subtotalCents = cartEstimateCents(items);
+  const wallet = useMemo(() => myCoupons.map((c) => ({ ...c, missingCents: Math.max(0, c.minSubtotalCents - subtotalCents) })), [myCoupons, subtotalCents]);
+  // El primer cupón que ya se puede usar se aplica solo, una vez; si la persona lo quita, no se vuelve a poner.
+  const autoApplied = useRef(false);
+  useEffect(() => {
+    if (autoApplied.current || couponCode || subtotalCents <= 0) return;
+    const usable = wallet.find((c) => c.missingCents === 0);
+    if (!usable) return;
+    autoApplied.current = true;
+    setCouponCode(usable.code);
+  }, [wallet, couponCode, subtotalCents]);
   const request = useMemo<QuoteRequest>(
     () => ({
       items: Object.values(items).map((i) => ({ productId: i.product.id, quantity: i.quantity })),
@@ -56,7 +76,7 @@ export function useCheckout() {
     setQuoting(true);
     const timer = window.setTimeout(() => {
       http
-        .post<OrderQuote>('/services/mercado/quote', request)
+        .post<OrderQuote>(`/services/${service}/quote`, request)
         .then((q) => alive && setQuote(q))
         .catch((err) => {
           if (!alive) return;
@@ -92,6 +112,11 @@ export function useCheckout() {
     onAddressChange: (line: string) => setAddress({ ...address, line }),
     /** Elegir una dirección guardada. */
     pickAddress: setAddress,
+    myCoupons: wallet,
+    useMyCoupon: (code: string) => {
+      setCouponError(null);
+      setCouponCode(code);
+    },
     couponDraft,
     couponCode,
     couponError,
@@ -105,6 +130,7 @@ export function useCheckout() {
       setCouponCode(couponDraft);
     },
     removeCoupon: () => {
+      autoApplied.current = true;
       setCouponCode(null);
       setCouponDraft('');
       setCouponError(null);
@@ -145,7 +171,7 @@ export function useCheckout() {
       if (!quote) return;
       setPlacing(true);
       try {
-        const order = await http.post<Order>('/services/mercado/orders', request);
+        const order = await http.post<Order>(`/services/${service}/orders`, request);
         upsertOrder(order);
         clear();
         navigate(`/app/pedidos/${order.id}`, { replace: true });
@@ -154,6 +180,7 @@ export function useCheckout() {
         setPlacing(false);
       }
     },
-    keepShopping: () => navigate('/app/servicios/mercado'),
+    service,
+    keepShopping: () => navigate(`/app/servicios/${service}`),
   };
 }

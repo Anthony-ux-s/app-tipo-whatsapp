@@ -87,9 +87,9 @@ func New(opts Options) http.Handler {
 			return limited(withUser(opts.JWTSecret, next))
 		}
 		mux.HandleFunc("GET /api/services", authed(svc.Catalog))
-		mux.HandleFunc("GET /api/services/mercado/products", authed(svc.Products))
-		mux.HandleFunc("POST /api/services/mercado/quote", authed(svc.Quote))
-		mux.HandleFunc("POST /api/services/mercado/orders", authed(svc.Create))
+		mux.HandleFunc("GET /api/services/{service}/products", authed(svc.Products))
+		mux.HandleFunc("POST /api/services/{service}/quote", authed(svc.Quote))
+		mux.HandleFunc("POST /api/services/{service}/orders", authed(svc.Create))
 		// Cancelar y rechazar mueven dinero (anular o devolver en la billetera): los resuelve el gateway.
 		mux.HandleFunc("POST /api/orders/{id}/cancel", authed(svc.CancelOrder))
 		mux.HandleFunc("POST /api/business/orders/{id}/reject", authed(svc.RejectOrder))

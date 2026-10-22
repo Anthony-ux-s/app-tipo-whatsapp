@@ -48,7 +48,7 @@ export class BusinessController {
   /** Para cualquier cliente: si la tienda de un servicio recibe pedidos ahora. */
   @Get('status/:service')
   async statusOf(@Param('service') service: string): Promise<{ status: BusinessStatus | null }> {
-    if (!['mercado', 'salud'].includes(service)) return { status: null };
+    if (!['mercado', 'tecnologia', 'ferreteria', 'salud'].includes(service)) return { status: null };
     return { status: await this.status.execute(service as ServiceId) };
   }
 

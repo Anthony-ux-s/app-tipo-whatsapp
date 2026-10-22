@@ -37,13 +37,22 @@ const maxPriceCents = 1_000_000 // S/ 10 000 por unidad: más que eso es un erro
 // el simulador). Parla solo la consume: busca, consulta productos y reserva o anula el carrito.
 type Client struct {
 	BaseURL string
-	HTTP    *http.Client
+	// Prefix: dónde publica la tienda su API («/mercaya/v1» si está vacío; TecnoYa usa «/tecnoya/v1»).
+	Prefix string
+	HTTP   *http.Client
 	// APIKey: credencial de Parla ante la tienda, en la cabecera APIKeyHeader (x-api-key por defecto).
 	APIKey       string
 	APIKeyHeader string
 	// AdminKey: clave de la API de administración (cambiar precios, ofertas y stock); vacía = la tienda
 	// administra su catálogo en su propio sistema y Parla no lo cambia.
 	AdminKey string
+}
+
+func (c Client) prefix() string {
+	if c.Prefix == "" {
+		return "/mercaya/v1"
+	}
+	return c.Prefix
 }
 
 // ErrCatalogReadOnly: el catálogo se administra en el sistema de la tienda.
@@ -126,7 +135,7 @@ func translate(p producto) (services.Product, error) {
 
 // Search busca en el catálogo. Los productos mal formados se omiten en vez de romper la lista.
 func (c Client) Search(ctx context.Context, query string) ([]services.Product, error) {
-	status, raw, err := c.call(ctx, http.MethodGet, c.BaseURL+"/mercaya/v1/catalogo?buscar="+url.QueryEscape(query), nil, nil)
+	status, raw, err := c.call(ctx, http.MethodGet, c.BaseURL+c.prefix()+"/catalogo?buscar="+url.QueryEscape(query), nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +162,7 @@ func (c Client) Product(ctx context.Context, id string) (services.Product, error
 	if !services.ValidID.MatchString(id) {
 		return services.Product{}, ErrNotFound
 	}
-	status, raw, err := c.call(ctx, http.MethodGet, c.BaseURL+"/mercaya/v1/productos/"+url.PathEscape(id), nil, nil)
+	status, raw, err := c.call(ctx, http.MethodGet, c.BaseURL+c.prefix()+"/productos/"+url.PathEscape(id), nil, nil)
 	if err != nil {
 		return services.Product{}, err
 	}
@@ -188,7 +197,7 @@ func (c Client) Reserve(ctx context.Context, reference string, items []services.
 	for i, item := range items {
 		lineas[i] = linea{SKU: item.ProductID, Cantidad: item.Quantity}
 	}
-	status, raw, err := c.call(ctx, http.MethodPost, c.BaseURL+"/mercaya/v1/pedidos", map[string]any{"referencia": reference, "lineas": lineas}, nil)
+	status, raw, err := c.call(ctx, http.MethodPost, c.BaseURL+c.prefix()+"/pedidos", map[string]any{"referencia": reference, "lineas": lineas}, nil)
 	if err != nil {
 		return err
 	}
@@ -213,7 +222,7 @@ func (c Client) Reserve(ctx context.Context, reference string, items []services.
 // Release anula la reserva del pedido y la tienda devuelve su stock. Es idempotente; si la tienda no
 // conoce la referencia (nunca se reservó), no hay nada que devolver.
 func (c Client) Release(ctx context.Context, reference string) error {
-	status, raw, err := c.call(ctx, http.MethodDelete, c.BaseURL+"/mercaya/v1/pedidos/"+url.PathEscape(reference), nil, nil)
+	status, raw, err := c.call(ctx, http.MethodDelete, c.BaseURL+c.prefix()+"/pedidos/"+url.PathEscape(reference), nil, nil)
 	if err != nil {
 		return err
 	}
@@ -247,7 +256,7 @@ func (c Client) Update(ctx context.Context, id string, patch ProductPatch) (serv
 	if patch.Stock != nil {
 		body["stock"] = *patch.Stock
 	}
-	status, raw, err := c.call(ctx, http.MethodPatch, c.BaseURL+"/mercaya/v1/productos/"+url.PathEscape(id), body, map[string]string{"x-mercaya-clave": c.AdminKey})
+	status, raw, err := c.call(ctx, http.MethodPatch, c.BaseURL+c.prefix()+"/productos/"+url.PathEscape(id), body, map[string]string{"x-mercaya-clave": c.AdminKey})
 	if err != nil {
 		return services.Product{}, err
 	}

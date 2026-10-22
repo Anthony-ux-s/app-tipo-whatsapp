@@ -1,10 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { GeoPoint } from '@parla/types';
 import { APP_ENV, type AppEnv } from '../../config/env.validation';
-import type { StreetRoute, StreetRouter } from './street-router.port';
+import type { StreetMatrix, StreetRoute, StreetRouter } from './street-router.port';
 
 const TIMEOUT_MS = 2_500;
 const CACHE_SIZE = 500;
+/** El servidor público de OSRM acepta hasta 100 puntos por tabla. */
+const MAX_TABLE_POINTS = 100;
+const coord = (p: GeoPoint) => `${p.lng.toFixed(4)},${p.lat.toFixed(4)}`;
 
 /**
  * Rutas por las calles con OSRM (OpenStreetMap). En producción conviene un OSRM propio
@@ -32,6 +35,28 @@ export class OsrmStreetRouter implements StreetRouter {
       if (this.cache.size >= CACHE_SIZE) this.cache.delete(this.cache.keys().next().value!);
       this.cache.set(key, route);
       return route;
+    } catch {
+      return null;
+    }
+  }
+
+  async matrix(sources: GeoPoint[], destinations: GeoPoint[]): Promise<StreetMatrix | null> {
+    if (!sources.length || !destinations.length || !this.env.routingUrl) return null;
+    if (sources.length + destinations.length > MAX_TABLE_POINTS) return null;
+    const coords = [...sources, ...destinations].map(coord).join(';');
+    const src = sources.map((_, i) => i).join(';');
+    const dst = destinations.map((_, i) => sources.length + i).join(';');
+    try {
+      const res = await fetch(`${this.env.routingUrl}/table/v1/driving/${coords}?sources=${src}&destinations=${dst}&annotations=duration,distance`, {
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { code?: string; durations?: (number | null)[][]; distances?: (number | null)[][] };
+      if (body.code !== 'Ok' || !body.durations || !body.distances) return null;
+      return {
+        km: body.distances.map((row) => row.map((m) => (m === null ? null : m / 1000))),
+        minutes: body.durations.map((row) => row.map((s) => (s === null ? null : s / 60))),
+      };
     } catch {
       return null;
     }

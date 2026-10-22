@@ -22,7 +22,7 @@ import type { ClaimChanges, ClaimRecord, ClaimsRepository, NewClaim } from '../m
 import type { DriverLedgerRepository, LedgerEntryRecord } from '../modules/platform/services/driver-ledger.repository';
 import type { PhotosRepository } from '../modules/platform/services/photos.repository';
 import type { DriverChanges, DriverRecord, DriverRegistration, DriversRepository } from '../modules/platform/services/drivers.repository';
-import type { AdminOrderFilter, NewOrder, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
+import type { AdminOrderFilter, NewOrder, OfferReservation, OrderChanges, OrderRecord, OrdersRepository } from '../modules/platform/services/orders.repository';
 import type { CouponRecord, CouponsRepository, NewCoupon } from '../modules/platform/services/coupons.repository';
 import type { AddressesRepository } from '../modules/platform/services/addresses.repository';
 import type { DeliveryAddress as AddressInput, SavedAddress } from '@parla/types';
@@ -346,7 +346,7 @@ export class InMemoryOrdersRepository implements OrdersRepository {
     private readonly businesses = new InMemoryBusinessesRepository(),
     private readonly drivers?: InMemoryDriversRepository,
   ) {}
-  async create({ businessId, ...order }: NewOrder) {
+  async create({ businessId, pickup, ...order }: NewOrder) {
     const found = this.businesses.businesses.find((b) => b.id === businessId);
     const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId, address: found.address, location: found.location ?? null } : null;
     const now = new Date();
@@ -360,6 +360,8 @@ export class InMemoryOrdersRepository implements OrdersRepository {
       rating: null,
       offerRadiusKm: null,
       offerWaveAt: null,
+      reservedFor: null,
+      pickup: pickup ?? null,
       deliveryPhotoId: null,
       deliveredWithoutCode: false,
       claims: [],
@@ -429,11 +431,17 @@ export class InMemoryOrdersRepository implements OrdersRepository {
     Object.assign(order, { offerRadiusKm: radiusKm, offerWaveAt: at });
     return this.withLocation(order);
   }
-  async updateIfStatus(id: string, expected: OrderStatus, { note, offer, ...changes }: OrderChanges) {
+  async reserveOffer(id: string, reservation: OfferReservation | null) {
+    const order = this.orders.find((o) => o.id === id && o.status === 'searching_driver' && !o.driverId);
+    if (!order) return null;
+    order.reservedFor = reservation;
+    return this.withLocation(order);
+  }
+  async updateIfStatus(id: string, expected: OrderStatus, { note, offer, reservation, ...changes }: OrderChanges) {
     const order = this.orders.find((o) => o.id === id);
     if (!order || order.status !== expected) return null;
     if (changes.status !== expected || note) order.timeline.push({ status: changes.status, at: new Date().toISOString(), ...(note ? { note } : {}) });
-    Object.assign(order, changes, { updatedAt: new Date() }, offer ? { offerRadiusKm: offer.radiusKm, offerWaveAt: offer.at } : {});
+    Object.assign(order, changes, { updatedAt: new Date() }, offer ? { offerRadiusKm: offer.radiusKm, offerWaveAt: offer.at } : {}, reservation !== undefined ? { reservedFor: reservation } : {});
     return this.withLocation(order);
   }
   async resetDeliveryCode(id: string, code: string) {

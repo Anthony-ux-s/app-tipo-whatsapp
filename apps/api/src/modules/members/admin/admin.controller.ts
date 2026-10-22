@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, Put, Query, StreamableFile } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, NotFoundException, Param, Post, Put, Query, StreamableFile } from '@nestjs/common';
 import type {
   AdminClaim,
   AdminCoupon,
@@ -12,8 +12,14 @@ import type {
   DeliveryPricing,
   DeliveryQuoteBreakdown,
   DeliverySettings,
+  DispatchMode,
   DriverStatus,
   DriverVehicle,
+  AdminIntegration,
+  IntegrableService,
+  IntegrationFormat,
+  IntegrationTestResult,
+  UpdateIntegrationRequest,
 } from '@parla/types';
 import { Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsInt, IsISO8601, IsLatitude, IsLongitude, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
@@ -25,6 +31,7 @@ import { ADMIN_ORDER_VIEWS, GetAdminOrderUseCase, ListAdminOrdersUseCase, type A
 import { CreateCouponUseCase, ListCouponsUseCase, SetCouponActiveUseCase } from '../../platform/services/use-cases/coupons.use-cases';
 import { GetTrafficUseCase, ListPeopleUseCase, SetPersonBlockedUseCase } from '../../platform/services/use-cases/admin-people.use-cases';
 import { GetDeliverySettingsUseCase, SimulateDeliveryQuoteUseCase, UpdateDeliverySettingsUseCase } from '../../platform/services/use-cases/logistics.use-cases';
+import { INTEGRABLE_SERVICES, ListIntegrationsUseCase, TestIntegrationUseCase, UpdateIntegrationUseCase } from '../../platform/services/use-cases/integrations.use-cases';
 
 class ReviewDriverDto {
   @IsIn(['approve', 'reject']) decision: 'approve' | 'reject';
@@ -73,6 +80,8 @@ class DeliveryPricingDto implements DeliveryPricing {
   @IsNumber() streetFactor: number;
   @IsNumber() handlingMinutes: number;
   @IsInt() maxActiveOrders: number;
+  @IsIn(['optimal', 'waves']) dispatchMode: DispatchMode;
+  @IsInt() exclusiveOfferSeconds: number;
 }
 
 class PointDto {
@@ -90,6 +99,30 @@ class SimulateQuoteDto {
 class BlockPersonDto {
   @IsBoolean() blocked: boolean;
   @IsOptional() @IsString() @MaxLength(300) reason?: string;
+}
+
+class IntegrationDto implements UpdateIntegrationRequest {
+  @IsString() @MaxLength(60) name: string;
+  @IsOptional() @IsIn(['parla', 'redwiiil']) format?: IntegrationFormat;
+  @IsBoolean() enabled: boolean;
+  @IsString() @MaxLength(300) baseUrl: string;
+  @IsString() @MaxLength(100) prefix: string;
+  @IsOptional() @IsString() @MaxLength(200) apiKey?: string;
+  @IsOptional() @IsBoolean() clearApiKey?: boolean;
+  @IsOptional() @IsString() @MaxLength(200) adminKey?: string;
+  @IsOptional() @IsBoolean() clearAdminKey?: boolean;
+}
+
+class IntegrationTestDto {
+  @IsOptional() @IsIn(['parla', 'redwiiil']) format?: IntegrationFormat;
+  @IsString() @MaxLength(300) baseUrl: string;
+  @IsString() @MaxLength(100) prefix: string;
+  @IsOptional() @IsString() @MaxLength(200) apiKey?: string;
+}
+
+function integrableService(value: string): IntegrableService {
+  if (!INTEGRABLE_SERVICES.includes(value as IntegrableService)) throw new NotFoundException('Servicio no encontrado');
+  return value as IntegrableService;
 }
 
 const PEOPLE_FILTERS: AdminPeopleFilter[] = ['all', 'clients', 'drivers', 'businesses', 'blocked'];
@@ -123,7 +156,28 @@ export class AdminController {
     private readonly listPeople: ListPeopleUseCase,
     private readonly setBlocked: SetPersonBlockedUseCase,
     private readonly getTraffic: GetTrafficUseCase,
+    private readonly listIntegrations: ListIntegrationsUseCase,
+    private readonly updateIntegration: UpdateIntegrationUseCase,
+    private readonly testIntegration: TestIntegrationUseCase,
   ) {}
+
+  /** Integraciones: la API de tienda de cada servicio (Tecnología, Salud). */
+  @Get('integrations')
+  integrations(@CurrentUser() user: AuthUser): Promise<AdminIntegration[]> {
+    return this.listIntegrations.execute(user.userId);
+  }
+
+  @Put('integrations/:service')
+  saveIntegration(@CurrentUser() user: AuthUser, @Param('service') service: string, @Body() body: IntegrationDto): Promise<AdminIntegration> {
+    return this.updateIntegration.execute(user.userId, integrableService(service), body);
+  }
+
+  /** «Probar conexión» con lo que se está editando (sin guardarlo). */
+  @HttpCode(200)
+  @Post('integrations/:service/test')
+  test(@CurrentUser() user: AuthUser, @Param('service') service: string, @Body() body: IntegrationTestDto): Promise<IntegrationTestResult> {
+    return this.testIntegration.execute(user.userId, integrableService(service), body);
+  }
 
   /** Tarifa del delivery: base, por km y combustible por vehículo. */
   @Get('delivery-settings')

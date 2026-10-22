@@ -1,5 +1,5 @@
 import type { AdminClaim, AdminDriver, DriverStatus } from '@parla/types';
-import { Check, FileImage, HandCoins, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { BarChart3, Bike, Dices, Check, FileImage, HandCoins, LifeBuoy, Package, Plug, RefreshCw, Route, ShieldCheck, Ticket, Users, X, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router';
 import { Button, IconButton } from '@shared/ui/Button';
@@ -9,11 +9,13 @@ import { PrivatePhoto } from '@shared/ui/PrivatePhoto';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
 import { EmptyChatsIllustration } from '@shared/ui/illustrations';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
-import { PageHeader, ServicePage } from '../../services/components/ServicesUi';
+import { PageHeader } from '../../services/components/ServicesUi';
 import { CLAIM_REASON_LABEL, CLAIM_STATUS_LABEL } from '../../services/const/services.const';
 import { useAdmin, type ClaimsView } from '../hooks/use-admin.hook';
 import { AdminCoupons } from './AdminCoupons';
 import { AdminDeliverySettings } from './AdminDeliverySettings';
+import { AdminMarketing } from './AdminMarketing';
+import { AdminIntegrations } from './AdminIntegrations';
 import { AdminPeople } from './AdminPeople';
 import { AdminTraffic } from './AdminTraffic';
 import { AdminOrders } from './AdminOrders';
@@ -28,46 +30,79 @@ const CLAIM_FILTERS: { id: ClaimsView; label: string }[] = [
   { id: 'resolved', label: 'Resueltos' },
 ];
 
-/** Panel de soporte de Parla: pedidos, personas, tráfico, tarifas del delivery, repartidores, reclamos y cupones. */
+const SECTIONS = [
+  ['pedidos', 'Pedidos', 'Todos los pedidos y su estado', Package],
+  ['personas', 'Personas', 'Usuarios, negocios y roles', Users],
+  ['trafico', 'Tráfico', 'Actividad y números del día', BarChart3],
+  ['tarifas', 'Tarifas', 'Precios y reparto del delivery', Route],
+  ['integraciones', 'Integrar', 'Conexión con tiendas externas', Plug],
+  ['repartidores', 'Repartidores', 'Revisar y aprobar altas', Bike],
+  ['reclamos', 'Reclamos', 'Devoluciones y casos abiertos', LifeBuoy],
+  ['cupones', 'Cupones', 'Descuentos y promociones', Ticket],
+  ['marketing', 'Marketing', 'Ruletas, rascas, cofres y ofertas', Dices],
+] as const satisfies readonly (readonly [string, string, string, LucideIcon])[];
+
+/** Panel de soporte de Parla: en pantalla grande, menú lateral fijo + contenido ancho; en el celular, rejilla de secciones arriba. */
 export function AdminView() {
   const a = useAdmin();
   const [rejecting, setRejecting] = useState<{ kind: 'driver' | 'claim'; id: string; name: string } | null>(null);
   if (!a.isAdmin) return <Navigate to="/app/ajustes" replace />;
   const list = a.tab === 'repartidores' ? a.drivers : a.claims;
   const ownList = a.tab === 'repartidores' || a.tab === 'reclamos';
+  const current = SECTIONS.find((s) => s[0] === a.tab);
 
   return (
-    <ServicePage>
-      <PageHeader
-        title="Soporte Parla"
-        subtitle="Pedidos, personas, tráfico, tarifas del delivery, repartidores, reclamos y cupones"
-        onBack={a.back}
-        action={
-          ownList ? (
-            <IconButton label="Actualizar" onClick={list.reload}>
-              <RefreshCw className="size-5" />
-            </IconButton>
-          ) : undefined
-        }
-      />
+    <div className="flex min-w-0 flex-1 flex-col bg-canvas">
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 pt-3 pb-8 sm:px-4 md:px-6 md:pt-6 lg:flex-row lg:items-start lg:gap-8 lg:px-8">
+          {/* Menú: rejilla en celular/tableta, columna lateral fija en pantalla grande. */}
+          <nav className="flex flex-col gap-4 lg:sticky lg:top-6 lg:w-64 lg:shrink-0 xl:w-72" aria-label="Panel de soporte">
+            <PageHeader title="Soporte Parla" subtitle="Todo Parla en un solo lugar" onBack={a.back} />
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5 lg:grid-cols-1 lg:gap-1" role="tablist" aria-orientation="vertical">
+              {SECTIONS.map(([id, label, hint, Icon]) => {
+                const on = a.tab === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => a.selectTab(id)}
+                    data-testid={`admin-tab-${id}`}
+                    className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[11px] leading-tight font-bold transition-colors duration-200 lg:flex-row lg:gap-3 lg:px-3 lg:py-2.5 lg:text-left lg:text-sm ${on ? 'bg-brand text-white shadow-float' : 'bg-surface text-ink-soft shadow-float hover:text-ink lg:bg-transparent lg:shadow-none lg:hover:bg-surface-3'}`}
+                  >
+                    <Icon className="size-5 shrink-0" />
+                    <span className="min-w-0 lg:flex-1">
+                      <span className="block w-full truncate text-center lg:text-left">{label}</span>
+                      <span className={`hidden truncate text-xs font-medium lg:block ${on ? 'text-white/80' : 'text-ink-faint'}`}>{hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Panel de soporte">
-        {(
-          [
-            ['pedidos', 'Pedidos'],
-            ['personas', 'Personas'],
-            ['trafico', 'Tráfico'],
-            ['tarifas', 'Tarifas y rutas'],
-            ['repartidores', 'Repartidores'],
-            ['reclamos', 'Reclamos'],
-            ['cupones', 'Cupones'],
-          ] as const
-        ).map(([id, label]) => (
-          <Chip key={id} on={a.tab === id} onClick={() => a.selectTab(id)} role="tab" testId={`admin-tab-${id}`}>
-            {label}
-          </Chip>
-        ))}
-      </div>
+          <main className="flex min-w-0 flex-1 flex-col gap-4 md:gap-5" aria-live="polite">
+            {current && (
+              <div className="hidden items-center justify-between gap-3 lg:flex">
+                <div className="min-w-0">
+                  <h2 className="text-2xl font-extrabold text-ink">{current[1] === 'Integrar' ? 'Integraciones' : current[1]}</h2>
+                  <p className="text-sm text-ink-soft">{current[2]}</p>
+                </div>
+                {ownList && (
+                  <IconButton label="Actualizar" onClick={list.reload}>
+                    <RefreshCw className="size-5" />
+                  </IconButton>
+                )}
+              </div>
+            )}
+            {ownList && (
+              <div className="flex justify-end lg:hidden">
+                <IconButton label="Actualizar" onClick={list.reload}>
+                  <RefreshCw className="size-5" />
+                </IconButton>
+              </div>
+            )}
 
       {a.tab === 'pedidos' && (
         <AdminOrders
@@ -79,7 +114,9 @@ export function AdminView() {
         />
       )}
       {a.tab === 'cupones' && <AdminCoupons />}
+      {a.tab === 'marketing' && <AdminMarketing />}
       {a.tab === 'tarifas' && <AdminDeliverySettings />}
+      {a.tab === 'integraciones' && <AdminIntegrations />}
       {a.tab === 'trafico' && <AdminTraffic />}
       {a.tab === 'personas' && (
         <AdminPeople
@@ -92,7 +129,7 @@ export function AdminView() {
       )}
 
       {ownList && (
-      <div className="-mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Filtro">
+      <div className="flex flex-wrap gap-1.5" aria-label="Filtro">
         {a.tab === 'repartidores'
           ? DRIVER_FILTERS.map((f) => (
               <Chip key={f.id} small on={a.driverStatus === f.id} onClick={() => a.setDriverStatus(f.id)}>
@@ -114,7 +151,7 @@ export function AdminView() {
       ) : list.items.length === 0 ? (
         <EmptyState compact illustration={<EmptyChatsIllustration />} title="Nada por aquí" description={a.tab === 'repartidores' ? 'No hay repartidores en esta lista.' : 'No hay reclamos en esta lista.'} />
       ) : a.tab === 'repartidores' ? (
-        <ul className="flex flex-col gap-3" data-testid="admin-drivers">
+        <ul className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2" data-testid="admin-drivers">
           {a.drivers.items!.map((d) => (
             <li key={d.userId}>
               <DriverItem
@@ -127,7 +164,7 @@ export function AdminView() {
           ))}
         </ul>
       ) : (
-        <ul className="flex flex-col gap-3" data-testid="admin-claims">
+        <ul className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2" data-testid="admin-claims">
           {a.claims.items!.map((c) => (
             <li key={c.id}>
               <ClaimItem claim={c} busy={a.busy === `claim:${c.id}`} onRefund={(cents) => void a.refundClaim(c.id, cents)} onReject={() => setRejecting({ kind: 'claim', id: c.id, name: c.customerName })} />
@@ -148,7 +185,10 @@ export function AdminView() {
           }}
         />
       )}
-    </ServicePage>
+          </main>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -13,12 +13,12 @@
     "build:packages": "npm run build -w @parla/types -w @parla/crypto",
     "build": "npm run build:packages && npm run build -w @parla/api && npm run build -w @parla/web",
     "db:setup": "npm run db:setup -w @parla/api",
-    "db:reset": "npm run db:reset -w @parla/api",
     "test": "npm run build:packages && npm run test -w @parla/crypto -w @parla/api -w @parla/web",
     "test:e2e": "npm run test:e2e -w @parla/web",
     "typecheck": "npm run build:packages && npm run typecheck -w @parla/api -w @parla/web",
     "start:prod": "node scripts/start-prod.mjs",
-    "sim:delivery": "node scripts/simulate-delivery.mjs"
+    "db:migrate": "npm run db:migrate -w @parla/api",
+    "db:seed": "npm run db:seed -w @parla/api"
   },
   "engines": {
     "node": ">=20.19"

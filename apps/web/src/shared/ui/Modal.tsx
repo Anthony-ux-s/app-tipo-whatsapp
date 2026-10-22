@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { IconButton } from './Button';
 
 interface ModalProps {
@@ -12,7 +13,11 @@ interface ModalProps {
   size?: 'sm' | 'md';
 }
 
-/** Diálogo centrado en escritorio y hoja inferior en el celular. */
+/**
+ * Diálogo centrado en escritorio y hoja inferior en el celular. Se dibuja directo en <body> (portal):
+ * dentro de un panel con animación quedaría encerrado en él, detrás de la barra de abajo o de la
+ * lista de chats.
+ */
 export function Modal({ open, title, description, onClose, children, footer, size = 'md' }: ModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -22,7 +27,7 @@ export function Modal({ open, title, description, onClose, children, footer, siz
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={title}>
       <div className="absolute inset-0 animate-fade-in bg-teal-950/40 backdrop-blur-[2px]" onClick={onClose} />
       <div
@@ -40,6 +45,7 @@ export function Modal({ open, title, description, onClose, children, footer, siz
         <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">{children}</div>
         {footer && <footer className="safe-bottom flex justify-end gap-2 border-t border-line bg-surface-2 px-5 py-3 sm:px-6">{footer}</footer>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
