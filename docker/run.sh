@@ -3,7 +3,7 @@
 # termina y la plataforma lo reinicia (mejor que dejar la app a medias).
 set -u
 
-PUBLIC_PORT="${PORT:-4100}"   # Railway pone aquí el puerto público
+PUBLIC_PORT="${PORT:-4100}"   # la plataforma (Render, Railway…) define $PORT; por defecto 4100
 LOCAL=127.0.0.1               # los programas se hablan por IPv4 local (Elixir escucha solo en IPv4)
 CORE_PORT=4101
 REALTIME_PORT_LOCAL=4102
@@ -11,7 +11,7 @@ PROVIDERS_PORT_LOCAL=4103
 
 for var in DATABASE_URL DIRECT_URL JWT_SECRET INTERNAL_TOKEN; do
   if [ -z "${!var:-}" ]; then
-    echo "✖ Falta la variable $var (agrégala en Railway → Variables)" >&2
+    echo "✖ Falta la variable $var (agrégala en las variables de entorno de tu plataforma)" >&2
     exit 1
   fi
 done
@@ -30,9 +30,9 @@ echo "▸ Aplicando migraciones en la base de datos…"
 npx prisma migrate deploy --schema prisma/schema.prisma || { echo "✖ Falló la migración: revisa DATABASE_URL y DIRECT_URL" >&2; exit 1; }
 npx tsx prisma/seed/bootstrap.ts || echo "⚠ No se pudo crear el administrador inicial (se puede repetir más tarde)"
 
-# 2) Core
+# 2) Core (también sirve la web compilada; WEB_DIST= vacío la apaga si la web va en otro sitio, p. ej. Vercel)
 echo "▸ Core (NestJS) en :$CORE_PORT"
-PORT=$CORE_PORT WEB_DIST= \
+PORT=$CORE_PORT WEB_DIST="${WEB_DIST-../web/dist}" \
   REALTIME_URL="http://$LOCAL:$REALTIME_PORT_LOCAL" \
   CORE_INTERNAL_URL="http://$LOCAL:$CORE_PORT" \
   node dist/main.js &

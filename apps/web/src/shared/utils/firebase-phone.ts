@@ -70,7 +70,7 @@ const MESSAGES: Record<string, string> = {
   'auth/captcha-check-failed': 'No pudimos comprobar que eres una persona. Recarga la página e inténtalo de nuevo.',
   'auth/operation-not-allowed': 'Este método de ingreso no está activado todavía en Firebase.',
   'auth/popup-blocked': 'Tu navegador bloqueó la ventana de Google. Permite las ventanas emergentes e inténtalo de nuevo.',
-  'auth/unauthorized-domain': 'Este sitio todavía no está autorizado para enviar SMS.',
+  'auth/unauthorized-domain': `Firebase no autoriza esta dirección (${location.host}). Agrégala en Authentication → Settings → Authorized domains.`,
   'auth/network-request-failed': 'No hay conexión. Revisa tu internet.',
   'auth/billing-not-enabled': 'Firebase necesita el plan Blaze (facturación) para enviar SMS reales a este número.',
   'auth/app-not-authorized': 'Esta app todavía no está autorizada en Firebase (revisa la llave de la app web).',

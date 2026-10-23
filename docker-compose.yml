@@ -67,7 +67,9 @@ services:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN}
 
   core:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.core
     restart: unless-stopped
     environment:
       REALTIME_URL: http://realtime:4102

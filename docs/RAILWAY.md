@@ -1,7 +1,7 @@
 # Backend en Railway (todo en un solo servicio)
 
 La web está en Vercel. El backend completo (gateway, core, **tiempo real con Elixir** y simuladores) corre en
-**un solo contenedor** descrito en `Dockerfile.railway`: los programas se hablan por `127.0.0.1`, así que no hay
+**un solo contenedor** descrito en `Dockerfile`: los programas se hablan por `127.0.0.1`, así que no hay
 red interna que configurar. La base de datos es Supabase.
 
 ```
@@ -14,7 +14,7 @@ Vercel (web)  ──/api──►  Railway: gateway :$PORT ─┬─► core    
 
 1. **Cuenta**: entra a <https://railway.com> con GitHub.
 2. **Proyecto**: *New Project → Deploy from GitHub repo →* `Anthony-ux-s/app-tipo-whatsapp`.
-   Railway detecta `railway.json` y construye con `Dockerfile.railway` (la primera vez tarda 8–12 minutos).
+   Railway detecta `railway.json` y construye con `Dockerfile` (la primera vez tarda 8–12 minutos).
 3. **Variables**: abre el servicio → *Variables → Raw Editor* y pega el contenido del archivo **`railway.env`**
    de tu PC (está en la raíz del proyecto, fuera de git; lo generé a partir de tu `.env`).
 4. **Volumen** (para las fotos y archivos subidos): *Settings → Volumes → New Volume* y móntalo en **`/data`**.
@@ -26,7 +26,7 @@ Vercel (web)  ──/api──►  Railway: gateway :$PORT ─┬─► core    
 
 Cada `git push` a `main` vuelve a construir y desplegar solo.
 
-## Qué hace al arrancar (`docker/railway-run.sh`)
+## Qué hace al arrancar (`docker/run.sh`)
 1. Comprueba que existan `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET` e `INTERNAL_TOKEN`.
 2. Aplica las migraciones de Prisma en Supabase (nunca borra datos) y crea el administrador si falta.
 3. Levanta core, tiempo real, simuladores y gateway. Si **uno se cae, el contenedor termina** y Railway lo reinicia.

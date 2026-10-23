@@ -14,3 +14,11 @@ apps/api/.env
 services/gateway/bin
 services/realtime/_build
 services/realtime/deps
+# Secretos y archivos de otras plataformas: nunca deben entrar a la imagen
+.env
+.env.*
+!.env.example
+railway.env
+.vercel
+.claude
+mobile

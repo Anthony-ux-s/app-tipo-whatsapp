@@ -1,0 +1,55 @@
+# Blueprint de Render: crea el servicio con un clic (New → Blueprint). Usa el Dockerfile de la raíz (todo en uno).
+# Los valores con `sync: false` los escribes tú en el panel la primera vez (no se guardan en git).
+# Para Railway usa railway.json; para otras plataformas basta con apuntar al Dockerfile de la raíz.
+services:
+  - type: web
+    name: parla
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter # el plan gratis (512 MB) se queda corto para Node + Elixir + Go juntos
+    healthCheckPath: /gateway/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: INTERNAL_TOKEN
+        generateValue: true
+      - key: PAGAYA_WEBHOOK_SECRET
+        generateValue: true
+      - key: PAGAYA_API_KEY
+        generateValue: true
+      - key: MERCAYA_ADMIN_KEY
+        generateValue: true
+      - key: PUBLIC_WEB_URL
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        value: Soporte
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: Parla
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      # De la web (datos públicos de Firebase): se incrustan al construir la imagen.
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
