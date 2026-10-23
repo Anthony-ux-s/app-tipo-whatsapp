@@ -16,10 +16,71 @@ import { StartEmailVerificationUseCase, VerifyEmailUseCase } from './email.use-c
 import { LoginUseCase } from './login.use-case';
 import { MatchContactsUseCase } from './match-contacts.use-case';
 import type { FirebaseTokenVerifier } from '../../../../../infra/auth/firebase-token.verifier';
-import { StartPhoneVerificationUseCase, VerifyFirebasePhoneUseCase, VerifyPhoneUseCase } from './phone-verification.use-case';
+import { StartEmailRegistrationUseCase, StartPhoneVerificationUseCase, VerifyEmailRegistrationUseCase, VerifyFirebasePhoneUseCase, VerifyPhoneUseCase } from './phone-verification.use-case';
 import { RegisterUserUseCase } from './register-user.use-case';
 import { ProfileEvents, UpdateProfileUseCase } from './update-profile.use-case';
 import { UploadAvatarUseCase } from './avatar.use-case';
+
+describe('registro con el correo verificado (Brevo)', () => {
+  let users: InMemoryAuthRepository;
+  let sender: RecordingVerificationSender;
+  let verifier: CodeVerifier;
+  let start: StartEmailRegistrationUseCase;
+  let verify: VerifyEmailRegistrationUseCase;
+  let register: RegisterUserUseCase;
+  let login: LoginUseCase;
+
+  const verifiedEmail = async (email: string) => {
+    await start.execute(email);
+    return (await verify.execute(email, sender.lastEmailCode())).verificationToken;
+  };
+
+  beforeEach(() => {
+    users = new InMemoryAuthRepository();
+    sender = new RecordingVerificationSender('brevo');
+    verifier = new CodeVerifier(new InMemoryVerificationCodes(), sender, testEnv);
+    start = new StartEmailRegistrationUseCase(users, verifier);
+    verify = new VerifyEmailRegistrationUseCase(verifier);
+    register = new RegisterUserUseCase(users, fakeHasher, fakeTokens, verifier);
+    login = new LoginUseCase(users, fakeHasher, fakeTokens);
+  });
+
+  it('el código llega al correo con la plantilla, y con él se crea la cuenta (usuario sugerido)', async () => {
+    const started = await start.execute(' Rosa.Perez@Correo.com ');
+    expect(started.sentTo).toBe('r***z@correo.com');
+    expect(sender.emails.at(-1)).toMatchObject({ to: 'rosa.perez@correo.com' });
+    expect(sender.emails.at(-1)!.html).toContain('Estás creando tu cuenta');
+    const token = (await verify.execute('rosa.perez@correo.com', sender.lastEmailCode())).verificationToken;
+    const session = await register.execute({ verificationToken: token, displayName: 'Rosa Pérez', password: 'Clave2026x', ...keys });
+    expect(session.user).toMatchObject({ username: 'rosa.perez', phone: null });
+    // La bienvenida sale después del registro.
+    expect(sender.emails.at(-1)!.subject).toBe('¡Bienvenido a Parla, Rosa!');
+  });
+
+  it('después se entra con el correo (o con el usuario) y la contraseña', async () => {
+    const token = await verifiedEmail('rosa@correo.com');
+    await register.execute({ verificationToken: token, displayName: 'Rosa', password: 'Clave2026x', ...keys });
+    expect((await login.execute({ identifier: 'ROSA@correo.com', password: 'Clave2026x' })).user.displayName).toBe('Rosa');
+    expect((await login.execute({ identifier: 'rosa', password: 'Clave2026x' })).user.displayName).toBe('Rosa');
+    await expect(login.execute({ identifier: 'rosa@correo.com', password: 'Otra2026x' })).rejects.toThrow(UnauthorizedError);
+  });
+
+  it('si el usuario sugerido ya existe, recibe otro; y un correo no se registra dos veces', async () => {
+    await register.execute({ verificationToken: await verifiedEmail('rosa@correo.com'), displayName: 'Rosa', password: 'Clave2026x', ...keys });
+    const second = await register.execute({ verificationToken: await verifiedEmail('rosa@otro.com'), displayName: 'Rosa 2', password: 'Clave2026x', ...keys });
+    expect(second.user.username).toMatch(/^rosa\d{4}$/);
+    await expect(start.execute('rosa@correo.com')).rejects.toThrow(ConflictError);
+  });
+
+  it('rechaza correos mal escritos, códigos equivocados y comprobantes repetidos', async () => {
+    await expect(start.execute('esto-no-es-un-correo')).rejects.toThrow(ValidationError);
+    await start.execute('rosa@correo.com');
+    await expect(verify.execute('rosa@correo.com', '000000')).rejects.toThrow();
+    const token = await verifiedEmail('luis@correo.com');
+    await register.execute({ verificationToken: token, displayName: 'Luis', password: 'Clave2026x', ...keys });
+    await expect(register.execute({ verificationToken: token, displayName: 'Otro', password: 'Clave2026x', ...keys })).rejects.toThrow(UnauthorizedError);
+  });
+});
 
 describe('registro con el teléfono verificado por Firebase', () => {
   const users = new InMemoryAuthRepository();
@@ -138,8 +199,8 @@ describe('registro con el teléfono verificado por SMS', () => {
     const { user } = await register.execute({ verificationToken: await verifiedPhone('+573001112233'), username: 'ana', displayName: 'Ana', password: 'Clave2026', ...keys });
     await expect(login.execute({ identifier: 'ANA', password: 'Clave2026' })).resolves.toMatchObject({ user: { id: user.id } });
     await expect(login.execute({ identifier: '+57 300 111 2233', password: 'Clave2026' })).resolves.toMatchObject({ user: { id: user.id } });
-    await expect(login.execute({ identifier: 'ana', password: 'Otra2026' })).rejects.toThrow('Usuario, teléfono o contraseña incorrectos');
-    await expect(login.execute({ identifier: 'nadie', password: 'Clave2026' })).rejects.toThrow('Usuario, teléfono o contraseña incorrectos');
+    await expect(login.execute({ identifier: 'ana', password: 'Otra2026' })).rejects.toThrow('Usuario, correo, teléfono o contraseña incorrectos');
+    await expect(login.execute({ identifier: 'nadie', password: 'Clave2026' })).rejects.toThrow('Usuario, correo, teléfono o contraseña incorrectos');
   });
 });
 

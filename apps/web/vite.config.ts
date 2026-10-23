@@ -9,6 +9,8 @@ const API_URL = process.env.PARLA_API_URL ?? 'http://localhost:4100';
 const WEB_PORT = Number(process.env.PARLA_WEB_PORT ?? 3100);
 
 export default defineConfig({
+  // Un solo .env en la raíz del proyecto (solo se exponen las variables VITE_*).
+  envDir: '../..',
   plugins: [
     react(),
     tailwindcss(),

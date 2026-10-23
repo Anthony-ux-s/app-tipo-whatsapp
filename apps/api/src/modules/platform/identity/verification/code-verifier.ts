@@ -17,6 +17,7 @@ import {
   type VerificationChannel,
   type VerificationPurpose,
 } from '../../../../kernel/verification-rules';
+import { renderEmail } from '../../../../kernel/email-templates';
 import { DeliveryFailedError, VERIFICATION_SENDER, type VerificationSender } from '../../../../infra/messaging/verification-sender.port';
 import { VERIFICATION_CODES_REPOSITORY, type VerificationCodesRepository, type VerificationRecord } from './verification-codes.repository';
 
@@ -67,8 +68,8 @@ export class CodeVerifier {
         if (input.channel === 'sms') {
           await this.sender.sendSms(input.target, smsText(code, new URL(this.env.publicWebUrl).host));
         } else {
-          const { subject, html } = emailContent(input.purpose, code);
-          await this.sender.sendEmail(input.target, subject, html);
+          const { subject, html, text } = emailContent(input.purpose, code, this.env.publicWebUrl);
+          await this.sender.sendEmail(input.target, subject, html, text);
         }
       } catch (error) {
         if (error instanceof DeliveryFailedError) {
@@ -82,9 +83,23 @@ export class CodeVerifier {
       sentTo: input.sentTo,
       expiresInSeconds: CODE_TTL_MS / 1000,
       resendInSeconds: RESEND_AFTER_MS / 1000,
-      // Solo para probar en desarrollo sin OneSignal: el código vuelve a la pantalla.
-      ...(this.sender.provider === 'dev' && !this.env.production && input.deliver !== false ? { devCode: code } : {}),
+      // Solo para probar en desarrollo sin proveedor: el código vuelve a la pantalla.
+      ...(this.isDev(input.channel) && !this.env.production && input.deliver !== false ? { devCode: code } : {}),
     };
+  }
+
+  private isDev(channel: VerificationChannel): boolean {
+    return this.sender.isDev ? this.sender.isDev(channel) : this.sender.provider === 'dev';
+  }
+
+  /** Correo de bienvenida al crear la cuenta. Es un detalle: si falla, el registro sigue igual. */
+  async sendWelcome(email: string, name: string): Promise<void> {
+    try {
+      const { subject, html, text } = renderEmail('welcome', { name, webUrl: this.env.publicWebUrl });
+      await this.sender.sendEmail(email, subject, html, text);
+    } catch {
+      // Sin bienvenida: no es motivo para fallar.
+    }
   }
 
   /** Verifica el código y devuelve el comprobante para el paso siguiente. */

@@ -56,7 +56,7 @@ export interface SessionUser extends UserProfile {
 }
 
 export interface RegisterRequest {
-  /** Comprobante de que el teléfono se verificó con el código por SMS (de POST /auth/phone/verify). */
+  /** Comprobante de que el teléfono (POST /auth/phone/verify) o el correo (POST /auth/email-signup/verify) se verificó con su código. */
   verificationToken: string;
   /** Opcional: se puede elegir o cambiar después en Ajustes. */
   username?: string;
@@ -126,6 +126,16 @@ export interface VerifyPhoneRequest {
   code: string;
 }
 
+/** Registro con correo: pide el código al correo. */
+export interface StartEmailRegistrationRequest {
+  email: string;
+}
+
+export interface VerifyEmailRegistrationRequest {
+  email: string;
+  code: string;
+}
+
 /** Registro con Firebase: el ID token que recibe la app al confirmar el código SMS. */
 export interface FirebasePhoneRequest {
   idToken: string;
@@ -174,3 +184,16 @@ export interface ContactMatch {
   phone: string;
   user: PublicUser;
 }
+
+/** «Continuar con Google»: el ID token que recibe la app al entrar con su cuenta de Google (por Firebase). */
+export interface GoogleSignInRequest {
+  idToken: string;
+}
+
+/**
+ * Si el correo de Google ya tiene cuenta: `login` (falta la contraseña de Parla para abrir las claves de cifrado).
+ * Si no: `register` con el comprobante del correo, para elegir la contraseña y crear la cuenta.
+ */
+export type GoogleSignInResponse =
+  | { kind: 'login'; auth: AuthResponse }
+  | { kind: 'register'; verificationToken: string; email: string; displayName: string };

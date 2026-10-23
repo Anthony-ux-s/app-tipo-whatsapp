@@ -7,7 +7,7 @@ import { TOKEN_SERVICE, type TokenService } from '../../../../../infra/identity/
 import { toSessionUser } from '../../user.mapper';
 import { AUTH_REPOSITORY, type AuthRepository } from '../auth.repository';
 
-const INVALID = 'Usuario, teléfono o contraseña incorrectos';
+const INVALID = 'Usuario, correo, teléfono o contraseña incorrectos';
 const SUSPENDED = 'Tu cuenta está suspendida. Escríbenos a soporte para revisarla.';
 
 @Injectable()
@@ -32,7 +32,9 @@ export class LoginUseCase {
     const user =
       'phone' in identifier
         ? await this.users.findByPhone(identifier.phone)
-        : await this.users.findByUsername(identifier.username);
+        : 'email' in identifier
+          ? await this.users.findByVerifiedEmail(identifier.email)
+          : await this.users.findByUsername(identifier.username);
 
     // Se compara siempre para no revelar por tiempo de respuesta si la cuenta existe.
     this.dummyHash ??= this.hasher.hash('parla-cuenta-inexistente');

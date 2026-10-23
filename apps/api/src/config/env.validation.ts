@@ -33,6 +33,8 @@ export interface AppEnv {
   coreInternalUrl: string;
   /** Códigos por SMS y correo: OneSignal si está configurado; si no (solo desarrollo), modo de prueba. */
   oneSignal: { appId: string; apiKey: string; smsFrom: string | null } | null;
+  /** Correo transaccional con Brevo (códigos de verificación y bienvenida); null = se usa OneSignal o el modo de prueba. */
+  brevo: { apiKey: string; senderEmail: string; senderName: string } | null;
   /** Vigilancia de los deliveries (pedidos sin repartidor, repartidores que no avanzan). */
   deliveryWatch: DeliveryWatchConfig;
   /** Cuánto gana el repartidor (porcentaje de la tarifa) y mínimos para depositarle. */
@@ -85,8 +87,9 @@ export function loadEnv(): AppEnv {
     env.ONESIGNAL_APP_ID && env.ONESIGNAL_API_KEY
       ? { appId: env.ONESIGNAL_APP_ID, apiKey: env.ONESIGNAL_API_KEY, smsFrom: env.ONESIGNAL_SMS_FROM || null }
       : null;
-  if (production && !oneSignal) {
-    throw new Error('En producción se necesita ONESIGNAL_APP_ID y ONESIGNAL_API_KEY para enviar los códigos de verificación');
+  const brevo = env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL ? { apiKey: env.BREVO_API_KEY, senderEmail: env.BREVO_SENDER_EMAIL.trim(), senderName: env.BREVO_SENDER_NAME?.trim() || 'Parla' } : null;
+  if (production && !oneSignal && !brevo && !env.FIREBASE_PROJECT_ID) {
+    throw new Error('En producción se necesita BREVO_API_KEY y BREVO_SENDER_EMAIL (correo), ONESIGNAL_APP_ID y ONESIGNAL_API_KEY (SMS) o FIREBASE_PROJECT_ID para enviar los códigos de verificación');
   }
 
   const port = Number(env.PORT ?? 4101);
@@ -130,6 +133,7 @@ export function loadEnv(): AppEnv {
     internalToken,
     coreInternalUrl: (env.CORE_INTERNAL_URL || `http://localhost:${port}`).replace(/\/$/, ''),
     oneSignal,
+    brevo,
     driverPay: parseDriverPay(env),
     dispatch: parseDispatch(env),
     deliveryWatch: {

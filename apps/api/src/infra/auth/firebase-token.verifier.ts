@@ -12,6 +12,13 @@ export interface FirebasePhoneIdentity {
   uid: string;
 }
 
+/** La cuenta de Google con la que entró la persona (Google ya comprobó que el correo es suyo). */
+export interface FirebaseGoogleIdentity {
+  email: string;
+  name: string;
+  uid: string;
+}
+
 /** Entrega la clave pública con la que Google firmó el token (`kid` de su cabecera). */
 export type FirebaseKeySource = (kid: string) => Promise<KeyObject | null>;
 
@@ -47,7 +54,26 @@ export class FirebaseTokenVerifier {
   ) {}
 
   async verifyPhoneToken(idToken: string): Promise<FirebasePhoneIdentity> {
-    const invalid = () => new UnauthorizedError('No pudimos verificar tu número. Vuelve a pedir el código.');
+    const { claims, provider } = await this.verifySigned(idToken, 'No pudimos verificar tu número. Vuelve a pedir el código.');
+    if (provider !== 'phone' || typeof claims.phone_number !== 'string' || !claims.phone_number.startsWith('+')) {
+      throw new UnauthorizedError('No pudimos verificar tu número. Vuelve a pedir el código.');
+    }
+    return { phone: claims.phone_number, uid: claims.sub as string };
+  }
+
+  /** Igual, para «Continuar con Google»: exige el proveedor google.com y un correo que Google ya verificó. */
+  async verifyGoogleToken(idToken: string): Promise<FirebaseGoogleIdentity> {
+    const message = 'No pudimos verificar tu cuenta de Google. Inténtalo de nuevo.';
+    const { claims, provider } = await this.verifySigned(idToken, message);
+    if (provider !== 'google.com' || claims.email_verified !== true || typeof claims.email !== 'string' || !claims.email.includes('@')) {
+      throw new UnauthorizedError(message);
+    }
+    return { email: claims.email.toLowerCase(), name: typeof claims.name === 'string' ? claims.name : '', uid: claims.sub as string };
+  }
+
+  /** Firma RS256 de Google, proyecto, vencimiento y que el ingreso sea reciente. Devuelve los datos del token. */
+  private async verifySigned(idToken: string, message: string): Promise<{ claims: Record<string, unknown>; provider: string | undefined }> {
+    const invalid = () => new UnauthorizedError(message);
     const parts = idToken.split('.');
     if (parts.length !== 3) throw invalid();
     let header: { alg?: string; kid?: string };
@@ -77,11 +103,8 @@ export class FirebaseTokenVerifier {
       Number(claims.iat) <= seconds + CLOCK_SKEW_SECONDS &&
       Number.isFinite(authTime) &&
       authTime <= seconds + CLOCK_SKEW_SECONDS &&
-      seconds - authTime <= MAX_AUTH_AGE_SECONDS &&
-      firebase.sign_in_provider === 'phone' &&
-      typeof claims.phone_number === 'string' &&
-      claims.phone_number.startsWith('+');
+      seconds - authTime <= MAX_AUTH_AGE_SECONDS;
     if (!valid) throw invalid();
-    return { phone: claims.phone_number as string, uid: claims.sub as string };
+    return { claims, provider: firebase.sign_in_provider };
   }
 }

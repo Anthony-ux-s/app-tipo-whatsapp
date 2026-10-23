@@ -1,12 +1,15 @@
 import type { VerificationProof, VerificationStarted } from '@parla/types';
 import { useEffect, useState, type FormEvent } from 'react';
+import { useLocation } from 'react-router';
 import { COUNTRIES, defaultCountry, toE164, type Country } from '@shared/const/countries.const';
 import { useSessionStore } from '@shared/stores/session.store';
 import { confirmFirebaseCode, firebaseEnabled, firebaseErrorMessage, sendFirebaseCode } from '@shared/utils/firebase-phone';
 import { errorMessage, http } from '@shared/utils/http';
+import { signupMethod } from '@shared/utils/signup-method';
 import { passwordStrength, validatePassword, validateUsername } from '@shared/utils/validators';
 import type { RegisterErrors, RegisterStep } from '../types/auth.types';
 import { useAuthRedirect } from './use-auth-redirect.hook';
+import type { GoogleSignup } from './use-google-auth.hook';
 import { useSmsAutofill } from './use-sms-autofill.hook';
 
 /**
@@ -19,6 +22,7 @@ export function useRegister() {
   const [step, setStep] = useState<RegisterStep>('phone');
   const [country, setCountry] = useState<Country>(() => defaultCountry());
   const [localNumber, setLocalNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [sent, setSent] = useState<VerificationStarted | null>(null);
   const [code, setCode] = useState('');
   const [proof, setProof] = useState<string | null>(null);
@@ -31,6 +35,20 @@ export function useRegister() {
   const [loading, setLoading] = useState(false);
 
   const phone = toE164(country, localNumber);
+  const google = (useLocation().state as { google?: GoogleSignup } | null)?.google ?? null;
+  const byEmail = signupMethod === 'email' || Boolean(google);
+  const cleanEmail = email.trim().toLowerCase();
+  /** El dato que se verifica: el correo o el teléfono. */
+  const contact = byEmail ? cleanEmail : phone;
+
+  // «Registrarme con Google»: el correo ya lo verificó Google, así que se salta directo a los datos.
+  useEffect(() => {
+    if (!google) return;
+    setEmail(google.email);
+    setProof(google.verificationToken);
+    setDisplayName((name) => name || google.displayName);
+    setStep('details');
+  }, [google]);
 
   // Cuenta regresiva para pedir otro código.
   useEffect(() => {
@@ -41,14 +59,16 @@ export function useRegister() {
 
   const sendCode = async () => {
     setErrors({});
-    if (localNumber.replace(/\D/g, '').length < 6) {
-      setErrors({ phone: 'Escribe tu número de celular' });
+    if (byEmail ? !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail) : localNumber.replace(/\D/g, '').length < 6) {
+      setErrors({ phone: byEmail ? 'Escribe un correo válido, por ejemplo nombre@correo.com' : 'Escribe tu número de celular' });
       return;
     }
     setLoading(true);
     try {
       let started: VerificationStarted;
-      if (firebaseEnabled) {
+      if (byEmail) {
+        started = await http.post<VerificationStarted>('/auth/email-signup/start', { email: cleanEmail });
+      } else if (firebaseEnabled) {
         // Firebase manda el SMS; el contenedor del reCAPTCHA invisible está en la pantalla de registro.
         await sendFirebaseCode(phone, 'recaptcha-container');
         started = { sentTo: `${phone.slice(0, 3)} *** *** ${phone.slice(-4)}`, expiresInSeconds: 600, resendInSeconds: 60 };
@@ -71,9 +91,11 @@ export function useRegister() {
     setLoading(true);
     setErrors({});
     try {
-      const { verificationToken } = firebaseEnabled
-        ? await http.post<VerificationProof>('/auth/phone/firebase', { idToken: await confirmFirebaseCode(value) })
-        : await http.post<VerificationProof>('/auth/phone/verify', { phone, code: value });
+      const { verificationToken } = byEmail
+        ? await http.post<VerificationProof>('/auth/email-signup/verify', { email: cleanEmail, code: value })
+        : firebaseEnabled
+          ? await http.post<VerificationProof>('/auth/phone/firebase', { idToken: await confirmFirebaseCode(value) })
+          : await http.post<VerificationProof>('/auth/phone/verify', { phone, code: value });
       setProof(verificationToken);
       setStep('details');
     } catch (err) {
@@ -116,6 +138,9 @@ export function useRegister() {
     country,
     localNumber,
     phone,
+    email,
+    contact,
+    byEmail,
     sent,
     code,
     resendIn,
@@ -128,6 +153,7 @@ export function useRegister() {
     strength: passwordStrength(password),
     loginState: { from },
     onCountryChange: (iso: string) => setCountry(COUNTRIES.find((c) => c.iso === iso) ?? country),
+    onEmailChange: (value: string) => setEmail(value.replace(/\s/g, '')),
     onLocalNumberChange: (value: string) => setLocalNumber(value.replace(/[^\d\s]/g, '')),
     sendCode: (event?: FormEvent) => {
       event?.preventDefault();

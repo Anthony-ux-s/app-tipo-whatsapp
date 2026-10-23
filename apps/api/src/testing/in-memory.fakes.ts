@@ -631,14 +631,14 @@ export class InMemoryVerificationCodes implements VerificationCodesRepository {
 
 /** Guarda lo que se habría enviado por SMS y correo (para leer el código en la prueba). */
 export class RecordingVerificationSender implements VerificationSender {
-  constructor(readonly provider: 'onesignal' | 'dev' = 'onesignal') {}
+  constructor(readonly provider: 'onesignal' | 'brevo' | 'dev' = 'onesignal') {}
   sms: { phone: string; text: string }[] = [];
-  emails: { to: string; subject: string; html: string }[] = [];
+  emails: { to: string; subject: string; html: string; text?: string }[] = [];
   async sendSms(phone: string, text: string) {
     this.sms.push({ phone, text });
   }
-  async sendEmail(to: string, subject: string, html: string) {
-    this.emails.push({ to, subject, html });
+  async sendEmail(to: string, subject: string, html: string, text?: string) {
+    this.emails.push({ to, subject, html, text });
   }
   lastSmsCode() {
     return this.sms.at(-1)!.text.match(/(\d{6})/)![1];

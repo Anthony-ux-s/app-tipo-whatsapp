@@ -1,3 +1,4 @@
+import { parseEmail } from './phone';
 import { ValidationError } from './domain-error';
 
 /** Nombre de usuario: 3–24 caracteres, minúsculas, números, punto o guion bajo. */
@@ -21,11 +22,12 @@ export function isValidUsername(username: string): boolean {
   return USERNAME_RE.test(username);
 }
 
-export type Identifier = { phone: string } | { username: string };
+export type Identifier = { phone: string } | { email: string } | { username: string };
 
-/** Interpreta lo que el usuario escribe al iniciar sesión: teléfono si empieza con + o es numérico. */
+/** Interpreta lo que el usuario escribe al iniciar sesión: correo si tiene @, teléfono si empieza con + o es numérico. */
 export function parseIdentifier(raw: string): Identifier {
   const trimmed = raw.trim();
+  if (trimmed.includes('@') && !trimmed.startsWith('@')) return { email: parseEmail(trimmed) };
   const compact = normalizePhone(trimmed);
   if (/^\+?\d+$/.test(compact)) {
     const phone = compact.startsWith('+') ? compact : `+${compact}`;

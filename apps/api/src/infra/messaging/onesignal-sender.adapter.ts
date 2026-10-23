@@ -37,7 +37,7 @@ export class OneSignalSender implements VerificationSender {
     });
   }
 
-  async sendEmail(to: string, subject: string, html: string): Promise<void> {
+  async sendEmail(to: string, subject: string, html: string, _text?: string): Promise<void> {
     await this.post('email', {
       target_channel: 'email',
       email_to: [to],

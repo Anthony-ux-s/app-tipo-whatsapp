@@ -1,4 +1,4 @@
-import { ArrowLeft, AtSign, ChevronDown, FlaskConical, KeyRound, MessageSquareText, Phone, UserRound } from 'lucide-react';
+import { ArrowLeft, AtSign, ChevronDown, FlaskConical, KeyRound, Mail, MessageSquareText, Phone, UserRound } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@shared/ui/Button';
 import { CodeInput } from '@shared/ui/CodeInput';
@@ -6,12 +6,18 @@ import { Field, FieldError } from '@shared/ui/Field';
 import { useRegister } from '../hooks/use-register.hook';
 import { firebaseEnabled } from '@shared/utils/firebase-phone';
 import { AuthLayout } from './AuthLayout';
+import { GoogleSignIn } from './GoogleSignIn';
 
 const STRENGTH_LABELS = ['Muy débil', 'Débil', 'Buena', 'Fuerte'];
 const STEP_TITLES = {
   phone: { title: 'Crea tu cuenta', subtitle: 'Empieza con tu número de celular. Te enviaremos un código por SMS.' },
   code: { title: 'Escribe el código', subtitle: 'Te lo enviamos por SMS. Vence en 10 minutos.' },
   details: { title: 'Tus datos', subtitle: 'Así te verán tus contactos. Tus claves de cifrado se crean en este dispositivo.' },
+} as const;
+const EMAIL_TITLES = {
+  phone: { title: 'Crea tu cuenta', subtitle: 'Empieza con tu correo. Te enviaremos un código para confirmarlo.' },
+  code: { title: 'Revisa tu correo', subtitle: 'Te enviamos un código de 6 dígitos. Vence en 10 minutos. Si no lo ves, mira en spam.' },
+  details: STEP_TITLES.details,
 } as const;
 
 function StepDots({ current }: { current: number }) {
@@ -26,54 +32,67 @@ function StepDots({ current }: { current: number }) {
 
 export function RegisterView() {
   const form = useRegister();
-  const titles = STEP_TITLES[form.step];
+  const titles = (form.byEmail ? EMAIL_TITLES : STEP_TITLES)[form.step];
   return (
     <AuthLayout title={titles.title} subtitle={titles.subtitle}>
       <StepDots current={form.step === 'phone' ? 0 : form.step === 'code' ? 1 : 2} />
 
+      {form.step === 'phone' && <GoogleSignIn label="Registrarme con Google" />}
+
       {form.step === 'phone' && (
         <form onSubmit={form.sendCode} className="flex flex-col gap-4" noValidate>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="phone-local" className="text-sm font-medium text-ink">
-              Número de celular
-            </label>
-            <div className="flex gap-2">
-              {/* Se ve compacto («+57 ▾»); al tocarlo se abre la lista nativa con los nombres de los países. */}
-              <label className="relative flex h-12 w-24 shrink-0 items-center justify-between gap-1 rounded-[var(--radius-card)] border border-line bg-surface px-3 text-[15px] font-semibold text-ink focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/30">
-                <span title={form.country.name}>+{form.country.code}</span>
-                <ChevronDown className="size-4 text-ink-faint" />
-                <select
-                  aria-label="País"
-                  value={form.country.iso}
-                  onChange={(e) => form.onCountryChange(e.target.value)}
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                >
-                  {form.countries.map((c) => (
-                    <option key={c.iso} value={c.iso}>
-                      {c.name} (+{c.code})
-                    </option>
-                  ))}
-                </select>
+          {form.byEmail ? (
+            <Field
+              label="Correo electrónico"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              placeholder="nombre@correo.com"
+              icon={<Mail className="size-5" />}
+              value={form.email}
+              onChange={(e) => form.onEmailChange(e.target.value)}
+              hint="Solo lo usamos para confirmar que eres tú y para ayudarte a recuperar tu cuenta."
+              data-testid="signup-email"
+            />
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="phone-local" className="text-sm font-medium text-ink">
+                Número de celular
               </label>
-              <div className="relative flex-1">
-                <Phone className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-ink-faint" />
-                <input
-                  id="phone-local"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel-national"
-                  placeholder={form.country.example}
-                  value={form.localNumber}
-                  onChange={(e) => form.onLocalNumberChange(e.target.value)}
-                  className="h-12 w-full rounded-[var(--radius-card)] border border-line bg-surface pr-3 pl-10 text-[15px] text-ink outline-none placeholder:text-ink-faint focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
-                />
+              <div className="flex gap-2">
+                {/* Se ve compacto («+57 ▾»); al tocarlo se abre la lista nativa con los nombres de los países. */}
+                <label className="relative flex h-12 w-24 shrink-0 items-center justify-between gap-1 rounded-[var(--radius-card)] border border-line bg-surface px-3 text-[15px] font-semibold text-ink focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/30">
+                  <span title={form.country.name}>+{form.country.code}</span>
+                  <ChevronDown className="size-4 text-ink-faint" />
+                  <select aria-label="País" value={form.country.iso} onChange={(e) => form.onCountryChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0">
+                    {form.countries.map((c) => (
+                      <option key={c.iso} value={c.iso}>
+                        {c.name} (+{c.code})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="relative flex-1">
+                  <Phone className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-ink-faint" />
+                  <input
+                    id="phone-local"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel-national"
+                    placeholder={form.country.example}
+                    value={form.localNumber}
+                    onChange={(e) => form.onLocalNumberChange(e.target.value)}
+                    className="h-12 w-full rounded-[var(--radius-card)] border border-line bg-surface pr-3 pl-10 text-[15px] text-ink outline-none placeholder:text-ink-faint focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
+                  />
+                </div>
               </div>
+              <p className="text-xs text-ink-soft">Solo lo usamos para verificar que eres tú y para que tus contactos te encuentren.</p>
             </div>
-            <p className="text-xs text-ink-soft">Solo lo usamos para verificar que eres tú y para que tus contactos te encuentren.</p>
-          </div>
+          )}
           {form.errors.phone && <FieldError message={form.errors.phone} />}
-          <Button type="submit" size="lg" fullWidth loading={form.loading} icon={<MessageSquareText className="size-5" />}>
-            Enviarme el código
+          <Button type="submit" size="lg" fullWidth loading={form.loading} icon={form.byEmail ? <Mail className="size-5" /> : <MessageSquareText className="size-5" />}>
+            {form.byEmail ? 'Enviarme el código al correo' : 'Enviarme el código'}
           </Button>
           <p className="text-center text-xs text-ink-faint">
             Al crear tu cuenta aceptas los{' '}
@@ -94,14 +113,14 @@ export function RegisterView() {
           <p className="text-sm text-ink-soft">
             Enviado a <span className="font-semibold text-ink">{form.sent?.sentTo}</span>.{' '}
             <button type="button" onClick={form.changeNumber} className="inline-flex items-center gap-1 font-semibold text-brand hover:underline dark:text-teal-300">
-              <ArrowLeft className="size-3.5" /> Cambiar número
+              <ArrowLeft className="size-3.5" /> {form.byEmail ? 'Cambiar correo' : 'Cambiar número'}
             </button>
           </p>
           {form.sent?.devCode && (
             <p className="flex items-start gap-2 rounded-[var(--radius-card)] bg-cyan-50 p-3 text-sm text-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-100" data-testid="dev-code">
               <FlaskConical className="mt-0.5 size-4 shrink-0" />
               <span>
-                Modo de prueba (OneSignal sin configurar): tu código es <strong className="font-mono tracking-widest">{form.sent.devCode}</strong>
+                Modo de prueba ({form.byEmail ? 'Brevo' : 'OneSignal'} sin configurar): tu código es <strong className="font-mono tracking-widest">{form.sent.devCode}</strong>
               </span>
             </p>
           )}
@@ -124,7 +143,7 @@ export function RegisterView() {
       {form.step === 'details' && (
         <form onSubmit={form.createAccount} className="flex flex-col gap-4" noValidate>
           <p className="rounded-[var(--radius-card)] bg-teal-50 px-3 py-2 text-sm text-teal-900 dark:bg-teal-950/60 dark:text-teal-100">
-            ✓ Número verificado: <span className="font-semibold">{form.phone}</span>
+            ✓ {form.byEmail ? 'Correo' : 'Número'} verificado: <span className="font-semibold">{form.contact}</span>
           </p>
           <Field
             label="Tu nombre"
@@ -174,12 +193,7 @@ export function RegisterView() {
           </div>
 
           <label className="flex items-start gap-3 text-sm text-ink-soft">
-            <input
-              type="checkbox"
-              checked={form.acceptedTerms}
-              onChange={(e) => form.onTermsChange(e.target.checked)}
-              className="mt-0.5 size-4 shrink-0 accent-teal-700"
-            />
+            <input type="checkbox" checked={form.acceptedTerms} onChange={(e) => form.onTermsChange(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-teal-700" />
             <span>
               Autorizo el tratamiento de mis datos personales según la{' '}
               <Link to="/legal/privacidad" target="_blank" className="font-semibold text-brand underline dark:text-teal-300">
@@ -208,7 +222,7 @@ export function RegisterView() {
       </p>
       {/* Lugar del reCAPTCHA invisible de Firebase (no se ve) y el aviso que Google pide al ocultar su logo. */}
       <div id="recaptcha-container" />
-      {firebaseEnabled && (
+      {firebaseEnabled && !form.byEmail && (
         <p className="mt-4 text-center text-[11px] leading-snug text-ink-faint">
           Este sitio está protegido por reCAPTCHA y se aplican la{' '}
           <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer" className="underline">

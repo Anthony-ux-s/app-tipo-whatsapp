@@ -4,15 +4,17 @@ import { Button, IconButton } from '@shared/ui/Button';
 import { Field, FieldError } from '@shared/ui/Field';
 import { useLogin } from '../hooks/use-login.hook';
 import { AuthLayout } from './AuthLayout';
+import { GoogleSignIn } from './GoogleSignIn';
 
 export function LoginView() {
   const login = useLogin();
   return (
-    <AuthLayout title="Hola de nuevo 👋" subtitle="Entra con tu nombre de usuario o tu número de teléfono.">
+    <AuthLayout title="Hola de nuevo 👋" subtitle="Entra con tu usuario, tu correo o tu número de teléfono.">
+      <GoogleSignIn />
       <form onSubmit={login.submit} className="flex flex-col gap-4" noValidate>
         <Field
-          label="Usuario o teléfono"
-          placeholder="laura o +57 300 123 4567"
+          label="Usuario, correo o teléfono"
+          placeholder="usuario, correo o +51 999 999 999"
           autoComplete="username"
           autoCapitalize="none"
           icon={<UserRound className="size-5" />}

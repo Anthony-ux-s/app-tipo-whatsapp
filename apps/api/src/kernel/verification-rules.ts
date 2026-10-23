@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { renderEmail, type EmailKind, type RenderedEmail } from './email-templates';
 import { ConflictError, UnauthorizedError, ValidationError } from './domain-error';
 
 export type VerificationChannel = 'sms' | 'email';
@@ -77,17 +78,7 @@ export function smsText(code: string, webHost: string): string {
   return `Tu código de Parla es ${code}. Vence en 10 minutos. No lo compartas con nadie.\n\n@${webHost} #${code}`;
 }
 
-export function emailContent(purpose: VerificationPurpose, code: string): { subject: string; html: string } {
-  const subject = purpose === 'reset_password' ? `${code} es tu código para restablecer Parla` : `${code} es tu código para confirmar tu correo en Parla`;
-  const intro =
-    purpose === 'reset_password'
-      ? 'Pediste restablecer tu contraseña de Parla. Escribe este código en la app:'
-      : 'Escribe este código en Parla para confirmar tu correo:';
-  const html = `<div style="font-family:Arial,sans-serif;max-width:420px;margin:auto;padding:24px;color:#111b21">
-<h2 style="color:#0f766e;margin:0 0 12px">Parla</h2>
-<p>${intro}</p>
-<p style="font-size:32px;font-weight:bold;letter-spacing:6px;margin:16px 0">${code}</p>
-<p style="color:#54656f;font-size:13px">Vence en 10 minutos. Si no fuiste tú, ignora este correo: nadie puede entrar sin el código.</p>
-</div>`;
-  return { subject, html };
+export function emailContent(purpose: VerificationPurpose, code: string, webUrl?: string): RenderedEmail {
+  const kind: EmailKind = purpose === 'register' ? 'register' : purpose === 'reset_password' ? 'reset_password' : 'confirm_email';
+  return renderEmail(kind, { code, minutes: CODE_TTL_MS / 60_000, webUrl });
 }

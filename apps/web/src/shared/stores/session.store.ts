@@ -1,5 +1,5 @@
 import { decryptPrivateKey, encryptPrivateKey, generateIdentityKeyPair } from '@parla/crypto';
-import type { AuthResponse, PublicUser, SessionUser, ThemePreference, UpdateProfileRequest, UserPreferences } from '@parla/types';
+import type { AuthResponse, GoogleSignInResponse, PublicUser, SessionUser, ThemePreference, UpdateProfileRequest, UserPreferences } from '@parla/types';
 import { CHAT_FONT_FAMILIES, CHAT_FONT_SIZES } from '../const/chat-text.const';
 import { create } from 'zustand';
 import { lockVault, restoreVault, unlockVault } from '../utils/crypto-vault';
@@ -26,6 +26,10 @@ interface SessionState {
   boot: () => Promise<void>;
   login: (identifier: string, password: string) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
+  /** «Continuar con Google»: con cuenta existente devuelve la sesión (falta la contraseña para abrir las claves); sin cuenta, el comprobante para registrarse. */
+  googleSignIn: (idToken: string) => Promise<GoogleSignInResponse>;
+  /** Abre las claves de cifrado con la contraseña y deja la sesión iniciada. */
+  unlockSession: (response: AuthResponse, password: string) => Promise<void>;
   /** Contraseña nueva con el comprobante del correo: claves nuevas creadas en este dispositivo. */
   resetPassword: (verificationToken: string, password: string) => Promise<void>;
   /** La sesión cambió en el servidor (correo verificado, foto nueva…). */
@@ -41,6 +45,8 @@ interface SessionState {
 
 const LAST_USER_KEY = 'parla.user';
 const THEME_KEY = 'parla.theme';
+/** Marca de «acaba de iniciar sesión»: se consume una vez para llevar a los dueños de tienda a su negocio. */
+export const LANDING_KEY = 'parla.landing';
 
 /** Aplica el tema al documento y lo recuerda para el próximo arranque (antes de pintar). */
 export function applyTheme(theme: ThemePreference): void {
@@ -62,6 +68,8 @@ export const useSessionStore = create<SessionState>((set, get) => {
     const privateKeyJwk = await decryptPrivateKey(user.keyBackup, password);
     await unlockVault(user.id, privateKeyJwk);
     tokenStorage.set(token);
+    // Quien tiene tienda aterriza en «Mi negocio» al entrar (lo resuelve el layout principal cuando carga su negocio).
+    sessionStorage.setItem(LANDING_KEY, '1');
     localStorage.setItem(LAST_USER_KEY, user.id);
     applyTheme(user.preferences.theme);
     applyChatText(user.preferences);
@@ -105,6 +113,10 @@ export const useSessionStore = create<SessionState>((set, get) => {
       const response = await http.post<AuthResponse>('/auth/login', { identifier, password });
       await startSession(response, password);
     },
+
+    googleSignIn: (idToken) => http.post<GoogleSignInResponse>('/auth/google', { idToken }),
+
+    unlockSession: startSession,
 
     register: async (input) => {
       const pair = await generateIdentityKeyPair();

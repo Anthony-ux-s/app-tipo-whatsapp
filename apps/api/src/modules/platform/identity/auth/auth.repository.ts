@@ -2,8 +2,12 @@ import type { EncryptedKeyBackup, UserPreferences } from '@parla/types';
 import type { UserRecord } from '../user.record';
 
 export interface NewUser {
-  phone: string;
-  phoneVerifiedAt: Date;
+  /** Teléfono verificado por SMS; null si la cuenta se creó con el correo. */
+  phone: string | null;
+  phoneVerifiedAt: Date | null;
+  /** Correo verificado (cuentas creadas con el correo). */
+  email?: string | null;
+  emailVerifiedAt?: Date | null;
   username: string | null;
   displayName: string;
   avatarColor: string;

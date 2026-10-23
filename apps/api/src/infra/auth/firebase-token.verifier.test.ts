@@ -72,4 +72,17 @@ describe('verificación del teléfono con Firebase', () => {
     await expect(verifier.verifyPhoneToken('esto.no.es-un-token')).rejects.toThrow(UnauthorizedError);
     await expect(verifier.verifyPhoneToken('')).rejects.toThrow(UnauthorizedError);
   });
+
+  const googleClaims = { email: 'Rosa@Correo.com', email_verified: true, name: 'Rosa Pérez', firebase: { sign_in_provider: 'google.com' }, phone_number: undefined };
+
+  it('acepta un token de Google con el correo verificado', async () => {
+    expect(await verifier.verifyGoogleToken(token(googleClaims))).toEqual({ email: 'rosa@correo.com', name: 'Rosa Pérez', uid: 'uid-123' });
+  });
+
+  it('rechaza un token de Google sin correo verificado o de otro proveedor', async () => {
+    await expect(verifier.verifyGoogleToken(token({ ...googleClaims, email_verified: false }))).rejects.toThrow(UnauthorizedError);
+    await expect(verifier.verifyGoogleToken(token({ ...googleClaims, email: undefined }))).rejects.toThrow(UnauthorizedError);
+    await expect(verifier.verifyGoogleToken(token())).rejects.toThrow(UnauthorizedError);
+    await expect(verifier.verifyPhoneToken(token(googleClaims))).rejects.toThrow(UnauthorizedError);
+  });
 });

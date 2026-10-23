@@ -14,7 +14,7 @@ export class DevConsoleSender implements VerificationSender {
     this.logger.log(`SMS a ${phone}: ${text.split('\n')[0]}`);
   }
 
-  async sendEmail(to: string, subject: string): Promise<void> {
+  async sendEmail(to: string, subject: string, _html?: string, _text?: string): Promise<void> {
     this.logger.log(`Correo a ${to}: ${subject}`);
   }
 }

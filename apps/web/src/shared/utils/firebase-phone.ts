@@ -68,7 +68,8 @@ const MESSAGES: Record<string, string> = {
   'auth/invalid-verification-code': 'Ese código no es correcto.',
   'auth/code-expired': 'El código venció. Pide uno nuevo.',
   'auth/captcha-check-failed': 'No pudimos comprobar que eres una persona. Recarga la página e inténtalo de nuevo.',
-  'auth/operation-not-allowed': 'La verificación por SMS no está activada todavía.',
+  'auth/operation-not-allowed': 'Este método de ingreso no está activado todavía en Firebase.',
+  'auth/popup-blocked': 'Tu navegador bloqueó la ventana de Google. Permite las ventanas emergentes e inténtalo de nuevo.',
   'auth/unauthorized-domain': 'Este sitio todavía no está autorizado para enviar SMS.',
   'auth/network-request-failed': 'No hay conexión. Revisa tu internet.',
   'auth/billing-not-enabled': 'Firebase necesita el plan Blaze (facturación) para enviar SMS reales a este número.',
@@ -87,4 +88,23 @@ export function firebaseErrorMessage(error: unknown): string | null {
   console.error('Firebase (verificación del teléfono):', error);
   const detail = (error as { customData?: { _serverResponse?: { error?: { message?: string } } } }).customData?._serverResponse?.error?.message;
   return `No pudimos enviar el SMS (${code}${detail ? `; Google dice: ${detail}` : ''}). Revisa el número e inténtalo de nuevo.`;
+}
+
+/** «Continuar con Google»: abre la ventana de Google y devuelve el ID token de Firebase para el backend. */
+export async function signInWithGoogle(): Promise<string> {
+  const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
+  const instance = await auth();
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const credential = await signInWithPopup(instance, provider);
+  const token = await credential.user.getIdToken();
+  // Igual que con el SMS: la sesión de Firebase no se usa, Parla tiene la suya.
+  await instance.signOut().catch(() => undefined);
+  return token;
+}
+
+/** El usuario cerró la ventana de Google: no es un error que haya que mostrar. */
+export function isGoogleCancelled(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  return code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request';
 }

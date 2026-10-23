@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
-import type { AccountExport, AuthResponse, SessionUser, VerificationProof, VerificationStarted } from '@parla/types';
+import type { AccountExport, AuthResponse, GoogleSignInResponse, SessionUser, VerificationProof, VerificationStarted } from '@parla/types';
 import { CurrentUser, type AuthUser } from '../../../../http/current-user.decorator';
 import { Public } from '../../../../http/public.decorator';
 import {
@@ -10,6 +10,9 @@ import {
   RegisterDto,
   StartEmailDto,
   FirebasePhoneDto,
+  GoogleSignInDto,
+  StartEmailSignupDto,
+  VerifyEmailSignupDto,
   StartPhoneDto,
   UpdateProfileDto,
   VerifyEmailDto,
@@ -20,7 +23,14 @@ import { MAX_AVATAR_BYTES, ReadAvatarUseCase, RemoveAvatarUseCase, UploadAvatarU
 import { StartEmailVerificationUseCase, VerifyEmailUseCase } from './use-cases/email.use-case';
 import { GetSessionUseCase } from './use-cases/get-session.use-case';
 import { LoginUseCase } from './use-cases/login.use-case';
-import { StartPhoneVerificationUseCase, VerifyFirebasePhoneUseCase, VerifyPhoneUseCase } from './use-cases/phone-verification.use-case';
+import {
+  GoogleSignInUseCase,
+  StartEmailRegistrationUseCase,
+  StartPhoneVerificationUseCase,
+  VerifyEmailRegistrationUseCase,
+  VerifyFirebasePhoneUseCase,
+  VerifyPhoneUseCase,
+} from './use-cases/phone-verification.use-case';
 import { RegisterUserUseCase } from './use-cases/register-user.use-case';
 import { UpdateProfileUseCase } from './use-cases/update-profile.use-case';
 
@@ -30,6 +40,9 @@ export class AuthController {
     private readonly startPhone: StartPhoneVerificationUseCase,
     private readonly verifyPhone: VerifyPhoneUseCase,
     private readonly verifyFirebasePhone: VerifyFirebasePhoneUseCase,
+    private readonly googleSignIn: GoogleSignInUseCase,
+    private readonly startEmailSignup: StartEmailRegistrationUseCase,
+    private readonly verifyEmailSignup: VerifyEmailRegistrationUseCase,
     private readonly registerUser: RegisterUserUseCase,
     private readonly login: LoginUseCase,
     private readonly getSession: GetSessionUseCase,
@@ -71,6 +84,33 @@ export class AuthController {
   @Post('auth/phone/firebase')
   phoneFirebase(@Body() body: FirebasePhoneDto): Promise<VerificationProof> {
     return this.verifyFirebasePhone.execute(body.idToken);
+  }
+
+
+  /** «Continuar con Google» (Firebase): entra si el correo ya tiene cuenta o entrega el comprobante para registrarse. */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('auth/google')
+  google(@Body() body: GoogleSignInDto): Promise<GoogleSignInResponse> {
+    return this.googleSignIn.execute(body.idToken);
+  }
+  /** Registro con correo, paso 1: el código llega al correo (Brevo). Límite por IP; cada correo, 1 código por minuto. */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('auth/email-signup/start')
+  emailSignupStart(@Body() body: StartEmailSignupDto): Promise<VerificationStarted> {
+    return this.startEmailSignup.execute(body.email);
+  }
+
+  /** Registro con correo, paso 2: el código correcto entrega el comprobante. */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('auth/email-signup/verify')
+  emailSignupVerify(@Body() body: VerifyEmailSignupDto): Promise<VerificationProof> {
+    return this.verifyEmailSignup.execute(body.email, body.code);
   }
 
   /** Registro, paso 3: nombre, usuario opcional y contraseña. */

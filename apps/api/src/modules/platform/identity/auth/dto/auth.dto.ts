@@ -4,6 +4,7 @@ import type {
   DeleteAccountRequest,
   EncryptedKeyBackup,
   ForgotPasswordRequest,
+  GoogleSignInRequest,
   LoginRequest,
   MatchContactsRequest,
   RegisterRequest,
@@ -41,6 +42,15 @@ export class KeyBackupDto implements EncryptedKeyBackup {
 
 export class StartPhoneDto implements StartPhoneVerificationRequest {
   @IsString() @IsNotEmpty({ message: 'Escribe tu número' }) @MaxLength(24) phone: string;
+}
+
+export class StartEmailSignupDto {
+  @IsString() @IsNotEmpty({ message: 'Escribe tu correo' }) @MaxLength(254) email: string;
+}
+
+export class VerifyEmailSignupDto {
+  @IsString() @IsNotEmpty() @MaxLength(254) email: string;
+  @IsString() @IsNotEmpty({ message: 'Escribe el código' }) @MaxLength(12) code: string;
 }
 
 export class FirebasePhoneDto {
@@ -114,4 +124,8 @@ export class ResetPasswordDto implements ResetPasswordRequest {
 
 export class MatchContactsDto implements MatchContactsRequest {
   @IsArray() @ArrayMaxSize(2000) @IsString({ each: true }) @MaxLength(40, { each: true }) phones: string[];
+}
+
+export class GoogleSignInDto implements GoogleSignInRequest {
+  @IsString() @IsNotEmpty() @MaxLength(4096) idToken: string;
 }
