@@ -28,6 +28,7 @@ export function useCallOverlay() {
     stream: state.remotes[userId],
     name: state.people[userId]?.name ?? 'Participante',
     color: state.people[userId]?.color ?? 'teal',
+    photo: state.people[userId]?.photo ?? null,
   }));
   const caller = state.call ? state.people[state.call.startedBy] : undefined;
 

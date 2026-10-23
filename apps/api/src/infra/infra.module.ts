@@ -18,7 +18,8 @@ import { WebPushSender } from './push/web-push-sender.adapter';
 import { PresenceRegistry } from './realtime/presence.registry';
 import { REALTIME_PUBLISHER } from './realtime/realtime-publisher.port';
 import { ElixirRealtimePublisher } from './realtime/elixir-realtime-publisher.adapter';
-import { FILE_STORAGE } from './storage/file-storage.port';
+import { AVATAR_STORAGE, FILE_STORAGE } from './storage/file-storage.port';
+import { PrismaAvatarStorage } from './storage/prisma-avatar-storage.adapter';
 import { LocalDiskFileStorage } from './storage/local-disk-file-storage.adapter';
 
 const env = loadEnv();
@@ -35,6 +36,7 @@ const env = loadEnv();
     { provide: TOKEN_SERVICE, useClass: JwtTokenService },
     { provide: ACCOUNT_ACCESS, useClass: PrismaAccountAccess },
     { provide: FILE_STORAGE, useClass: LocalDiskFileStorage },
+    { provide: AVATAR_STORAGE, useClass: PrismaAvatarStorage },
     // El tiempo real vive en el servicio de Elixir (services/realtime).
     { provide: REALTIME_PUBLISHER, useClass: ElixirRealtimePublisher },
     { provide: PUSH_SENDER, useClass: WebPushSender },
@@ -57,6 +59,7 @@ const env = loadEnv();
     TOKEN_SERVICE,
     ACCOUNT_ACCESS,
     FILE_STORAGE,
+    AVATAR_STORAGE,
     REALTIME_PUBLISHER,
     PUSH_SENDER,
     VERIFICATION_SENDER,

@@ -1,5 +1,6 @@
 import type { Product, StoreSummary } from '@parla/types';
-import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { cartCount, cartEstimateCents, useCartStore } from '@shared/stores/cart.store';
 import { errorMessage, http } from '@shared/utils/http';
@@ -13,6 +14,11 @@ export interface OfferStore {
   name: string;
 }
 
+interface OfferEntry {
+  product: Product;
+  store: OfferStore;
+}
+
 /**
  * Ofertas: los productos rebajados de varias tiendas de Mercado (se compran con el mismo carrito, que es
  * de una sola tienda: al agregar algo de otra tienda, el carrito anterior se reemplaza).
@@ -22,39 +28,25 @@ export function useOffers() {
   const cartService = useCartStore((s) => s.service);
   const items = useCartStore((s) => s.items);
   const change = useCartStore((s) => s.change);
-  const [products, setProducts] = useState<Product[] | null>(null);
-  /** De qué tienda es cada producto (por referencia: dos tiendas pueden repetir códigos). */
-  const [storeOf, setStoreOf] = useState<Map<Product, OfferStore>>(new Map());
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let alive = true;
-    setError(null);
-    setProducts(null);
-    (async () => {
+  const query = useQuery({
+    queryKey: ['offers'],
+    queryFn: async (): Promise<OfferEntry[]> => {
       const stores = (await http.get<StoreSummary[]>('/stores?service=mercado')).filter((s) => s.open).slice(0, MAX_STORES);
       const results = await Promise.allSettled(stores.map((s) => http.get<Product[]>(`/services/${encodeURIComponent(s.id)}/products?q=`)));
       // Si todas fallaron, es un error; si solo falló alguna, se muestran las demás.
       if (stores.length > 0 && results.every((r) => r.status === 'rejected')) throw (results[0] as PromiseRejectedResult).reason;
-      const owners = new Map<Product, OfferStore>();
-      const all: Product[] = [];
+      const all: OfferEntry[] = [];
       results.forEach((r, i) => {
         if (r.status !== 'fulfilled') return;
-        for (const product of r.value) {
-          owners.set(product, { id: stores[i]!.id, name: stores[i]!.name });
-          all.push(product);
-        }
+        for (const product of r.value) all.push({ product, store: { id: stores[i]!.id, name: stores[i]!.name } });
       });
-      if (alive) {
-        setStoreOf(owners);
-        setProducts(all);
-      }
-    })().catch((err) => alive && setError(errorMessage(err)));
-    return () => {
-      alive = false;
-    };
-  }, [attempt]);
+      return all;
+    },
+  });
+  const products = useMemo(() => (query.data ? query.data.map((e) => e.product) : null), [query.data]);
+  /** De qué tienda es cada producto (por referencia: dos tiendas pueden repetir códigos). */
+  const storeOf = useMemo(() => new Map((query.data ?? []).map((e) => [e.product, e.store] as const)), [query.data]);
+  const error = products ? null : query.error ? errorMessage(query.error) : null;
 
   /** Productos en oferta, del mayor descuento al menor. */
   const offers = useMemo(
@@ -87,7 +79,7 @@ export function useOffers() {
       const store = storeOf.get(product);
       if (store) change(product, -1, store.id);
     },
-    retry: () => setAttempt((n) => n + 1),
+    retry: () => void query.refetch(),
     goToCart: () => navigate(cartService ? `/app/servicios/${cartService}/carrito` : '/app/servicios'),
   };
 }

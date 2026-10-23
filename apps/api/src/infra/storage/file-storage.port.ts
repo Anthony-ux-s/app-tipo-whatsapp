@@ -8,3 +8,6 @@ export interface FileStorage {
 }
 
 export const FILE_STORAGE = Symbol('FILE_STORAGE');
+
+/** Fotos de perfil: aparte del resto de archivos porque se guardan en la base de datos. */
+export const AVATAR_STORAGE = Symbol('AVATAR_STORAGE');

@@ -1,5 +1,6 @@
 import type { Product } from '@parla/types';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { cartCount, cartEstimateCents, useCartStore } from '@shared/stores/cart.store';
 import { errorMessage, http } from '@shared/utils/http';
@@ -27,25 +28,19 @@ export function useMarket(storeId: string) {
   const change = useCartStore((s) => s.change);
   const [query, setQuery] = useState('');
   const [terms, setTerms] = useState<string[]>([]);
-  const [groups, setGroups] = useState<ProductGroup[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let alive = true;
-    const searchProducts = (q: string) => http.get<Product[]>(`/services/${encodeURIComponent(storeId)}/products?q=${encodeURIComponent(q)}`);
-    setGroups(null);
-    setError(null);
-    const requests = terms.length
-      ? terms.map(async (term) => ({ term, products: await searchProducts(term) }))
-      : [searchProducts('').then((products) => ({ term: null, products }))];
-    Promise.all(requests)
-      .then((found) => alive && setGroups(found))
-      .catch((err) => alive && setError(errorMessage(err)));
-    return () => {
-      alive = false;
-    };
-  }, [terms, attempt, storeId]);
+  const products = useQuery({
+    queryKey: ['products', storeId, terms],
+    queryFn: async (): Promise<ProductGroup[]> => {
+      const searchProducts = (q: string) => http.get<Product[]>(`/services/${encodeURIComponent(storeId)}/products?q=${encodeURIComponent(q)}`);
+      return terms.length
+        ? Promise.all(terms.map(async (term) => ({ term, products: await searchProducts(term) })))
+        : [{ term: null, products: await searchProducts('') }];
+    },
+    // Mientras llega otra búsqueda no se muestra la anterior, como antes.
+    staleTime: 60_000,
+  });
+  const groups = products.data ?? null;
+  const error = groups ? null : products.error ? errorMessage(products.error) : null;
 
   const count = cartCount(items);
   const estimate = useMemo(() => cartEstimateCents(items), [items]);
@@ -72,7 +67,7 @@ export function useMarket(storeId: string) {
     },
     add: (product: Product) => change(product, 1, storeId),
     subtract: (product: Product) => change(product, -1, storeId),
-    retry: () => setAttempt((n) => n + 1),
+    retry: () => void products.refetch(),
     goToCart: () => navigate(`/app/servicios/${storeId}/carrito`),
     back: (category?: string) => navigate(category ? `/app/servicios/c/${category}` : '/app/servicios'),
   };

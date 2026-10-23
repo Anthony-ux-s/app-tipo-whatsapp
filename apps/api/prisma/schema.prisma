@@ -451,6 +451,14 @@ model UploadedPhoto {
   @@index([uploaderId])
 }
 
+/// Foto de perfil. Los bytes viven en la base (no en el disco del contenedor, que muchos hostings borran en cada
+/// despliegue); el nombre es impredecible y cambia con cada foto nueva.
+model AvatarImage {
+  id        String   @id
+  data      Bytes
+  createdAt DateTime @default(now())
+}
+
 /// Reclamo de un pedido entregado (como en Rappi): faltó algo, llegó mal o no llegó. Soporte lo
 /// resuelve con una devolución parcial (vía gateway y PagaYa) o lo rechaza.
 model Claim {

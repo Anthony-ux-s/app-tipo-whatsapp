@@ -36,7 +36,7 @@ export function CallOverlay() {
         <div className="flex w-full max-w-md animate-rise items-center gap-4 rounded-3xl bg-gradient-to-br from-teal-800 to-cyan-900 p-4 text-white shadow-pop ring-1 ring-white/10">
           <span className="relative shrink-0">
             <span className="absolute inset-0 animate-ping rounded-full bg-emerald-300/40" />
-            <Avatar name={call.call.title} color={call.call.avatarColor} group={call.call.isGroup} size="lg" />
+            <Avatar name={call.call.title} color={call.call.avatarColor} photo={call.call.avatarUrl} group={call.call.isGroup} size="lg" />
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate font-display text-lg font-bold" data-testid="incoming-title">
@@ -74,14 +74,14 @@ export function CallOverlay() {
         {connected ? (
           <div className={`grid size-full max-w-6xl gap-3 ${call.gridClass}`}>
             {call.tiles.map((tile) => (
-              <VideoTile key={tile.userId} stream={tile.stream} name={tile.name} color={tile.color} showVideo={call.isVideo && tile.stream.getVideoTracks().length > 0} />
+              <VideoTile key={tile.userId} stream={tile.stream} name={tile.name} color={tile.color} photo={tile.photo} showVideo={call.isVideo && tile.stream.getVideoTracks().length > 0} />
             ))}
           </div>
         ) : (
           <div className="flex flex-col items-center gap-5">
             <span className="relative">
               {call.phase !== 'ended' && <span className="absolute -inset-4 animate-ping rounded-full bg-emerald-400/15" />}
-              <Avatar name={call.call.title} color={call.call.avatarColor} group={call.call.isGroup} size="xl" />
+              <Avatar name={call.call.title} color={call.call.avatarColor} photo={call.call.avatarUrl} group={call.call.isGroup} size="xl" />
             </span>
           </div>
         )}

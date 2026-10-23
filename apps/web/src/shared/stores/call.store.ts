@@ -9,6 +9,7 @@ export interface CallPeer {
   userId: string;
   name: string;
   color: string;
+  photo: string | null;
 }
 
 export interface CallView {
@@ -17,6 +18,7 @@ export interface CallView {
   kind: CallKind;
   title: string;
   avatarColor: string;
+  avatarUrl: string | null;
   isGroup: boolean;
   startedBy: string;
 }
@@ -75,7 +77,7 @@ async function getMedia(kind: CallKind): Promise<MediaStream> {
 
 function peopleOf(conversation: ConversationSummary): Record<string, CallPeer> {
   return Object.fromEntries(
-    conversation.participants.map((p) => [p.user.id, { userId: p.user.id, name: p.user.displayName, color: p.user.avatarColor }]),
+    conversation.participants.map((p) => [p.user.id, { userId: p.user.id, name: p.user.displayName, color: p.user.avatarColor, photo: p.user.avatarUrl }]),
   );
 }
 
@@ -86,6 +88,7 @@ function viewOf(conversation: ConversationSummary, kind: CallKind, callId: strin
     kind,
     title: conversation.title,
     avatarColor: conversation.avatarColor,
+    avatarUrl: conversation.avatarUrl,
     isGroup: conversation.kind === 'group',
     startedBy,
   };

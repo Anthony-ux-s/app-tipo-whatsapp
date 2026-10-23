@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import { NotFoundError, ValidationError } from '../../../../../kernel/domain-error';
 import { isJpeg } from '../../../../../kernel/images';
-import { FILE_STORAGE, type FileStorage } from '../../../../../infra/storage/file-storage.port';
+import { AVATAR_STORAGE, type FileStorage } from '../../../../../infra/storage/file-storage.port';
 import { toSessionUser } from '../../user.mapper';
 import { AUTH_REPOSITORY, type AuthRepository } from '../auth.repository';
 import { ProfileEvents } from './update-profile.use-case';
@@ -17,7 +17,7 @@ const AVATAR_ID = /^av[a-f0-9]{32}$/;
 export class UploadAvatarUseCase {
   constructor(
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
-    @Inject(FILE_STORAGE) private readonly storage: FileStorage,
+    @Inject(AVATAR_STORAGE) private readonly storage: FileStorage,
     private readonly events: ProfileEvents,
   ) {}
 
@@ -50,7 +50,7 @@ export class RemoveAvatarUseCase {
 
 @Injectable()
 export class ReadAvatarUseCase {
-  constructor(@Inject(FILE_STORAGE) private readonly storage: FileStorage) {}
+  constructor(@Inject(AVATAR_STORAGE) private readonly storage: FileStorage) {}
 
   async execute(fileId: string): Promise<Readable> {
     if (!AVATAR_ID.test(fileId) || !(await this.storage.exists(fileId))) throw new NotFoundError('Foto no encontrada');

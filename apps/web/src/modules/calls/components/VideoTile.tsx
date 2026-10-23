@@ -6,6 +6,7 @@ interface VideoTileProps {
   stream: MediaStream | null;
   name: string;
   color: string;
+  photo?: string | null;
   showVideo: boolean;
   muted?: boolean;
   /** Mi propia imagen: espejada y sin sonido (para no oírme). */
@@ -14,7 +15,7 @@ interface VideoTileProps {
 }
 
 /** Recuadro de una persona en la llamada: su video, o su avatar si es solo voz o apagó la cámara. */
-export function VideoTile({ stream, name, color, showVideo, muted = false, self = false, className = '' }: VideoTileProps) {
+export function VideoTile({ stream, name, color, photo = null, showVideo, muted = false, self = false, className = '' }: VideoTileProps) {
   const videoRef = useMediaStream<HTMLVideoElement>(stream);
   const audioRef = useMediaStream<HTMLAudioElement>(self ? null : stream);
   return (
@@ -32,7 +33,7 @@ export function VideoTile({ stream, name, color, showVideo, muted = false, self 
         <div className="flex flex-col items-center gap-3">
           <span className="relative">
             <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400/20" />
-            <Avatar name={name} color={color} size="xl" />
+            <Avatar name={name} color={color} photo={photo} size="xl" />
           </span>
         </div>
       )}

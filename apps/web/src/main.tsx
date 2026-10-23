@@ -1,9 +1,11 @@
 import { StrictMode } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { RouterProvider } from 'react-router';
 import { router } from './app/router';
 import { useSessionStore } from './shared/stores/session.store';
+import { queryClient } from './shared/utils/query-client';
 import { Toaster } from './shared/ui/Toaster';
 import './index.css';
 
@@ -23,7 +25,9 @@ registerSW({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
-    <Toaster />
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+      <Toaster />
+    </QueryClientProvider>
   </StrictMode>,
 );
