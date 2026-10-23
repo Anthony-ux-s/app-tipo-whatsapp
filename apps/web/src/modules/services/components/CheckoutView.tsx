@@ -2,6 +2,7 @@ import { Bike, HandCoins, LocateFixed, MapPin, Minus, Plus, QrCode, ShoppingBask
 import { Button } from '@shared/ui/Button';
 import { Field, FieldError } from '@shared/ui/Field';
 import { LazyDeliveryMap } from '@shared/ui/LazyDeliveryMap';
+import { PlaceSearch } from '@shared/ui/PlaceSearch';
 import { EmptyState } from '@shared/ui/States';
 import { EmptyChatsIllustration } from '@shared/ui/illustrations';
 import { formatDistance } from '@shared/utils/geo';
@@ -84,6 +85,7 @@ export function CheckoutView() {
               Usar mi ubicación
             </Button>
           </div>
+          <PlaceSearch onSelect={c.onPlaceFound} placeholder="Busca tu dirección para ubicarla en el mapa" />
           <LazyDeliveryMap destination={c.address.location} onPick={c.onPickLocation} label="Mapa para marcar el punto de entrega" />
         </div>
       </section>

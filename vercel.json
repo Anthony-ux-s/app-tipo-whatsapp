@@ -5,7 +5,7 @@
   "buildCommand": "npm run build:packages && npm run build -w @parla/web",
   "outputDirectory": "apps/web/dist",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://api.kronito.com/api/:path*" },
+    { "source": "/api/:path*", "destination": "https://app-tipo-whatsapp.onrender.com/api/:path*" },
     { "source": "/((?!assets/|icons/|products/|services/|sw\\.js|manifest\\.webmanifest|workbox-.*|favicon\\.svg|theme-init\\.js).*)", "destination": "/index.html" }
   ],
   "headers": [

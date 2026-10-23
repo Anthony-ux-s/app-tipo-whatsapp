@@ -4,7 +4,9 @@
 // Los valores de tipo enum se guardan como texto y están tipados en @parla/types.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // relationLoadStrategy: "join" trae las relaciones en UNA consulta (con la base lejos, cada ida y vuelta pesa).
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {

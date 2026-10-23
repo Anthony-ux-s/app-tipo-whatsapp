@@ -124,6 +124,7 @@ export class PrismaConversationsRepository implements ConversationsRepository {
 
   async listForUser(userId: string): Promise<ConversationRecord[]> {
     const rows = await this.prisma.conversation.findMany({
+      relationLoadStrategy: 'join',
       where: { participants: { some: { userId } } },
       orderBy: { updatedAt: 'desc' },
       take: 200,
@@ -134,12 +135,16 @@ export class PrismaConversationsRepository implements ConversationsRepository {
   }
 
   async findForUser(conversationId: string, userId: string): Promise<ConversationRecord | null> {
-    const row = await this.prisma.conversation.findFirst({
-      where: { id: conversationId, participants: { some: { userId } } },
-      include: conversationInclude,
-    });
+    // La conversación y sus contadores no dependen entre sí: van en paralelo (una sola espera).
+    const [row, countersOf] = await Promise.all([
+      this.prisma.conversation.findFirst({
+        relationLoadStrategy: 'join',
+        where: { id: conversationId, participants: { some: { userId } } },
+        include: conversationInclude,
+      }),
+      this.counters(userId, [conversationId]),
+    ]);
     if (!row) return null;
-    const countersOf = await this.counters(userId, [conversationId]);
     return toConversationRecord(row, countersOf(conversationId));
   }
 
@@ -197,16 +202,11 @@ export class PrismaConversationsRepository implements ConversationsRepository {
   }
 
   async createMessage(input: NewMessage): Promise<MessageRecord> {
-    const existing = await this.prisma.message.findUnique({
-      where: { senderId_clientId: { senderId: input.senderId, clientId: input.clientId } },
-      include: messageInclude,
-    });
-    if (existing) return toMessageRecord(existing);
-
     const { recipientIds, media, mentions = [], replyToId = null, ...data } = input;
     const now = new Date();
-    const [row] = await this.prisma.$transaction([
-      this.prisma.message.create({
+    try {
+      const row = await this.prisma.message.create({
+        relationLoadStrategy: 'join',
         data: {
           ...data,
           replyToId,
@@ -220,14 +220,27 @@ export class PrismaConversationsRepository implements ConversationsRepository {
           },
         },
         include: messageInclude,
-      }),
-      this.prisma.conversation.update({ where: { id: input.conversationId }, data: { updatedAt: now } }),
-    ]);
-    return toMessageRecord(row);
+      });
+      // La conversación sube en la lista, pero no hace falta esperar a que termine para contestar.
+      void this.prisma.conversation.update({ where: { id: input.conversationId }, data: { updatedAt: now } }).catch(() => undefined);
+      return toMessageRecord(row);
+    } catch (error) {
+      // Reintento del mismo mensaje (mismo clientId): se devuelve el que ya está guardado.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const existing = await this.prisma.message.findUnique({
+          relationLoadStrategy: 'join',
+          where: { senderId_clientId: { senderId: input.senderId, clientId: input.clientId } },
+          include: messageInclude,
+        });
+        if (existing) return toMessageRecord(existing);
+      }
+      throw error;
+    }
   }
 
   async listMessages(conversationId: string, before: string | null, take: number): Promise<MessageRecord[]> {
     const rows = await this.prisma.message.findMany({
+      relationLoadStrategy: 'join',
       where: { conversationId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,

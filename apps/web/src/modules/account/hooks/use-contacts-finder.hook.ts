@@ -1,5 +1,5 @@
 import type { ContactMatch, PublicUser } from '@parla/types';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
@@ -21,6 +21,15 @@ function contactsApi(): ContactsManager | null {
   return 'ContactsManager' in window && nav.contacts ? nav.contacts : null;
 }
 
+/** Un contacto de la libreta que todavía no está en Parla. */
+export interface OtherContact {
+  name: string | null;
+  phone: string;
+}
+
+/** Los últimos 8 dígitos identifican el número aunque venga con o sin indicativo. */
+const tail = (phone: string) => phone.replace(/D/g, '').slice(-8);
+
 export interface FoundContact extends ContactMatch {
   /** Nombre con el que está guardado en la libreta (si lo hay). */
   contactName: string | null;
@@ -36,6 +45,7 @@ export function useContactsFinder(onOpenChat?: () => void) {
   const startDirect = useChatStore((s) => s.startDirect);
   const [found, setFound] = useState<FoundContact[] | null>(null);
   const [checked, setChecked] = useState(0);
+  const [entries, setEntries] = useState<{ phone: string; name: string | null }[]>([]);
   const [manual, setManual] = useState('');
   const [busy, setBusy] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
@@ -50,6 +60,7 @@ export function useContactsFinder(onOpenChat?: () => void) {
       const names = new Map(entries.map((e) => [e.phone, e.name]));
       const matches = await http.post<ContactMatch[]>('/people/match', { phones: entries.map((e) => e.phone) });
       setChecked(entries.length);
+      setEntries(entries);
       setFound(matches.map((m) => ({ ...m, contactName: names.get(m.phone) ?? null })));
     } catch (err) {
       toast(errorMessage(err), 'error');
@@ -58,7 +69,23 @@ export function useContactsFinder(onOpenChat?: () => void) {
     }
   };
 
+  // Todos los contactos que no están en Parla (sin repetir), para invitarlos.
+  const others = useMemo<OtherContact[]>(() => {
+    if (!found) return [];
+    const inParla = new Set(found.map((f) => tail(f.phone)));
+    const seen = new Set<string>();
+    return entries
+      .filter((e) => {
+        const key = tail(e.phone);
+        if (key.length < 6 || inParla.has(key) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => (a.name ?? a.phone).localeCompare(b.name ?? b.phone, 'es'));
+  }, [found, entries]);
+
   return {
+    others,
     phoneBookSupported: contactsApi() !== null,
     found,
     checked,

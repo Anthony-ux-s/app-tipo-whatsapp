@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@shared/ui/Button';
 import { Field, FieldError, TextAreaField } from '@shared/ui/Field';
 import { LazyDeliveryMap } from '@shared/ui/LazyDeliveryMap';
+import { PlaceSearch } from '@shared/ui/PlaceSearch';
 import { SERVICE_IDS, SERVICE_VISUALS } from '../../services/const/services.const';
 import type { StoreDraft } from '../hooks/use-store-form.hook';
 
@@ -67,6 +68,7 @@ export function StoreForm({ draft, onChange, onPickLocation, onUseMyLocation, lo
             Usar mi ubicación
           </Button>
         </div>
+        <PlaceSearch onSelect={(point, label) => onChange({ location: point, address: draft.address.trim() ? draft.address : label.slice(0, 200) })} placeholder="Busca la dirección de tu tienda" />
         <LazyDeliveryMap destination={draft.location} onPick={onPickLocation} label="Mapa para marcar la ubicación de la tienda" />
       </div>
 

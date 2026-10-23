@@ -151,6 +151,8 @@ export function useCheckout() {
     },
     /** El punto de entrega en el mapa (para que el repartidor llegue y el cliente lo siga). */
     onPickLocation: (location: GeoPoint) => setAddress({ ...address, location }),
+    /** Eligió un lugar en el buscador: el pin va ahí y, si aún no escribió la dirección, se completa. */
+    onPlaceFound: (location: GeoPoint, label: string) => setAddress({ ...address, location, line: address.line.trim() ? address.line : label.slice(0, 200) }),
     locating,
     useMyLocation: () => {
       if (!navigator.geolocation) return toast('Tu navegador no comparte la ubicación. Marca el punto en el mapa.', 'error');

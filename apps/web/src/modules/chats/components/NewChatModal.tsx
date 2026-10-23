@@ -50,7 +50,7 @@ export function NewChatModal({ mode, onClose }: NewChatModalProps) {
       </div>
 
       {chat.mode === 'contacts' ? (
-        <ContactsFinder onOpenChat={onClose} />
+        <ContactsFinder onOpenChat={onClose} autoStart />
       ) : (
         <>
 
