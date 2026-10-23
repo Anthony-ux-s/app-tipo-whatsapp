@@ -4,6 +4,7 @@ import { Button } from '@shared/ui/Button';
 import { CodeInput } from '@shared/ui/CodeInput';
 import { Field, FieldError } from '@shared/ui/Field';
 import { useRegister } from '../hooks/use-register.hook';
+import { firebaseEnabled } from '@shared/utils/firebase-phone';
 import { AuthLayout } from './AuthLayout';
 
 const STRENGTH_LABELS = ['Muy débil', 'Débil', 'Buena', 'Fuerte'];
@@ -205,8 +206,21 @@ export function RegisterView() {
           Entra aquí
         </Link>
       </p>
-      {/* Lugar del reCAPTCHA invisible de Firebase (no se ve). */}
+      {/* Lugar del reCAPTCHA invisible de Firebase (no se ve) y el aviso que Google pide al ocultar su logo. */}
       <div id="recaptcha-container" />
+      {firebaseEnabled && (
+        <p className="mt-4 text-center text-[11px] leading-snug text-ink-faint">
+          Este sitio está protegido por reCAPTCHA y se aplican la{' '}
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer" className="underline">
+            Política de privacidad
+          </a>{' '}
+          y las{' '}
+          <a href="https://policies.google.com/terms" target="_blank" rel="noreferrer" className="underline">
+            Condiciones del servicio
+          </a>{' '}
+          de Google.
+        </p>
+      )}
     </AuthLayout>
   );
 }

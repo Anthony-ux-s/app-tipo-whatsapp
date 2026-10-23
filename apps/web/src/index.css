@@ -271,6 +271,9 @@ svg .stk-bob, svg .stk-shake, svg .stk-bow, svg .stk-sway, .stk-wave, .stk-spin 
   font-family: var(--chat-font, var(--font-sans));
 }
 
+/* reCAPTCHA invisible de Firebase: se oculta el logo flotante (el aviso legal que Google pide va en el registro). */
+.grecaptcha-badge { visibility: hidden; }
+
 /* Ruleta de descuentos */
 @keyframes bulb-blink {
   0%, 100% { opacity: 1; }
