@@ -30,13 +30,21 @@ async function auth() {
 export async function sendFirebaseCode(phone: string, containerId: string): Promise<void> {
   const { RecaptchaVerifier, signInWithPhoneNumber } = await import('firebase/auth');
   const instance = await auth();
+  // Cada intento usa un recuadro nuevo: reutilizar el mismo da «reCAPTCHA has already been rendered in this element».
   recaptcha?.clear();
-  recaptcha = new RecaptchaVerifier(instance, containerId, { size: 'invisible' });
+  recaptcha = null;
+  const container = document.getElementById(containerId);
+  if (!container) throw new Error('Falta el recuadro del reCAPTCHA en la pantalla.');
+  container.innerHTML = '';
+  const slot = document.createElement('div');
+  container.appendChild(slot);
+  recaptcha = new RecaptchaVerifier(instance, slot, { size: 'invisible' });
   try {
     confirmation = await signInWithPhoneNumber(instance, phone, recaptcha);
   } catch (error) {
     recaptcha.clear();
     recaptcha = null;
+    container.innerHTML = '';
     throw error;
   }
 }
@@ -63,11 +71,17 @@ const MESSAGES: Record<string, string> = {
   'auth/operation-not-allowed': 'La verificación por SMS no está activada todavía.',
   'auth/unauthorized-domain': 'Este sitio todavía no está autorizado para enviar SMS.',
   'auth/network-request-failed': 'No hay conexión. Revisa tu internet.',
+  'auth/billing-not-enabled': 'Firebase necesita el plan Blaze (facturación) para enviar SMS reales a este número.',
+  'auth/app-not-authorized': 'Esta app todavía no está autorizada en Firebase (revisa la llave de la app web).',
+  'auth/invalid-app-credential': 'No pudimos comprobar la app. Recarga la página e inténtalo de nuevo.',
+  'auth/missing-client-identifier': 'No pudimos comprobar la app. Recarga la página e inténtalo de nuevo.',
+  'auth/web-storage-unsupported': 'Tu navegador bloquea el almacenamiento: actívalo para poder verificar el número.',
 };
 
 /** Mensaje claro para el error de Firebase (o null si no es de Firebase y se debe mostrar el original). */
 export function firebaseErrorMessage(error: unknown): string | null {
   const code = (error as { code?: string } | null)?.code;
   if (!code?.startsWith('auth/')) return null;
-  return MESSAGES[code] ?? 'No pudimos enviar el SMS. Revisa el número e inténtalo de nuevo.';
+  // Con un error que no conocemos se muestra su código: así se sabe qué falta en Firebase.
+  return MESSAGES[code] ?? `No pudimos enviar el SMS (${code}). Revisa el número e inténtalo de nuevo.`;
 }
