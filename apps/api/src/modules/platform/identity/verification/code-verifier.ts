@@ -103,6 +103,18 @@ export class CodeVerifier {
     return { proof, record: pending! };
   }
 
+  /**
+   * Comprobante para un destino que ya verificó otro proveedor (p. ej. Firebase, que manda y comprueba el
+   * código SMS por su lado): se guarda igual que uno verificado aquí, así el registro funciona igual.
+   */
+  async grantProof(input: { channel: VerificationChannel; purpose: VerificationPurpose; target: string }): Promise<string> {
+    const now = new Date();
+    const record = await this.codes.create({ ...input, userId: null, codeHash: hashSecret(generateProof(), this.env.jwtSecret), expiresAt: now });
+    const proof = generateProof();
+    await this.codes.markVerified(record.id, hashSecret(proof, this.env.jwtSecret), now);
+    return proof;
+  }
+
   /** Usa el comprobante una sola vez; devuelve a qué destino corresponde. */
   async consumeProof(proof: string, purpose: VerificationPurpose): Promise<VerificationRecord> {
     const record = await this.codes.findByProof(hashSecret(proof, this.env.jwtSecret));

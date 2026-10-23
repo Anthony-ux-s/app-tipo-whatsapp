@@ -2,6 +2,7 @@ import type { VerificationProof, VerificationStarted } from '@parla/types';
 import { useEffect, useState, type FormEvent } from 'react';
 import { COUNTRIES, defaultCountry, toE164, type Country } from '@shared/const/countries.const';
 import { useSessionStore } from '@shared/stores/session.store';
+import { confirmFirebaseCode, firebaseEnabled, firebaseErrorMessage, sendFirebaseCode } from '@shared/utils/firebase-phone';
 import { errorMessage, http } from '@shared/utils/http';
 import { passwordStrength, validatePassword, validateUsername } from '@shared/utils/validators';
 import type { RegisterErrors, RegisterStep } from '../types/auth.types';
@@ -46,13 +47,20 @@ export function useRegister() {
     }
     setLoading(true);
     try {
-      const started = await http.post<VerificationStarted>('/auth/phone/start', { phone });
+      let started: VerificationStarted;
+      if (firebaseEnabled) {
+        // Firebase manda el SMS; el contenedor del reCAPTCHA invisible está en la pantalla de registro.
+        await sendFirebaseCode(phone, 'recaptcha-container');
+        started = { sentTo: `${phone.slice(0, 3)} *** *** ${phone.slice(-4)}`, expiresInSeconds: 600, resendInSeconds: 60 };
+      } else {
+        started = await http.post<VerificationStarted>('/auth/phone/start', { phone });
+      }
       setSent(started);
       setResendIn(started.resendInSeconds);
       setCode('');
       setStep('code');
     } catch (err) {
-      setErrors({ phone: errorMessage(err) });
+      setErrors({ phone: firebaseErrorMessage(err) ?? errorMessage(err) });
     } finally {
       setLoading(false);
     }
@@ -63,11 +71,13 @@ export function useRegister() {
     setLoading(true);
     setErrors({});
     try {
-      const { verificationToken } = await http.post<VerificationProof>('/auth/phone/verify', { phone, code: value });
+      const { verificationToken } = firebaseEnabled
+        ? await http.post<VerificationProof>('/auth/phone/firebase', { idToken: await confirmFirebaseCode(value) })
+        : await http.post<VerificationProof>('/auth/phone/verify', { phone, code: value });
       setProof(verificationToken);
       setStep('details');
     } catch (err) {
-      setErrors({ code: errorMessage(err) });
+      setErrors({ code: firebaseErrorMessage(err) ?? errorMessage(err) });
       setCode('');
     } finally {
       setLoading(false);

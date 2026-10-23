@@ -15,10 +15,35 @@ import { CodeVerifier } from '../../verification/code-verifier';
 import { StartEmailVerificationUseCase, VerifyEmailUseCase } from './email.use-case';
 import { LoginUseCase } from './login.use-case';
 import { MatchContactsUseCase } from './match-contacts.use-case';
-import { StartPhoneVerificationUseCase, VerifyPhoneUseCase } from './phone-verification.use-case';
+import type { FirebaseTokenVerifier } from '../../../../../infra/auth/firebase-token.verifier';
+import { StartPhoneVerificationUseCase, VerifyFirebasePhoneUseCase, VerifyPhoneUseCase } from './phone-verification.use-case';
 import { RegisterUserUseCase } from './register-user.use-case';
 import { ProfileEvents, UpdateProfileUseCase } from './update-profile.use-case';
 import { UploadAvatarUseCase } from './avatar.use-case';
+
+describe('registro con el teléfono verificado por Firebase', () => {
+  const users = new InMemoryAuthRepository();
+  const codes = new InMemoryVerificationCodes();
+  const verifier = new CodeVerifier(codes, new RecordingVerificationSender(), testEnv);
+  const firebase = { verifyPhoneToken: async (t: string) => (t === 'bueno' ? { phone: '+51 930 889 106', uid: 'u1' } : Promise.reject(new UnauthorizedError('No pudimos verificar tu número.'))) } as unknown as FirebaseTokenVerifier;
+  const register = new RegisterUserUseCase(users, fakeHasher, fakeTokens, verifier);
+
+  it('el token de Firebase entrega un comprobante y con él se crea la cuenta (una sola vez)', async () => {
+    const { verificationToken } = await new VerifyFirebasePhoneUseCase(users, verifier, firebase).execute('bueno');
+    const session = await register.execute({ verificationToken, displayName: 'Rosa', password: 'Clave2026x', ...keys });
+    expect(session.user.phone).toBe('+51930889106');
+    await expect(register.execute({ verificationToken, displayName: 'Otra', password: 'Clave2026x', ...keys })).rejects.toThrow(UnauthorizedError);
+  });
+
+  it('un token inválido no entrega comprobante, y sin Firebase configurado se rechaza', async () => {
+    await expect(new VerifyFirebasePhoneUseCase(users, verifier, firebase).execute('malo')).rejects.toThrow(UnauthorizedError);
+    await expect(new VerifyFirebasePhoneUseCase(users, verifier, null).execute('bueno')).rejects.toThrow(/Firebase/);
+  });
+
+  it('si el número ya tiene cuenta, pide iniciar sesión', async () => {
+    await expect(new VerifyFirebasePhoneUseCase(users, verifier, firebase).execute('bueno')).rejects.toThrow(ConflictError);
+  });
+});
 
 const keys = { publicKey: '{"kty":"EC"}', keyBackup: { ciphertext: 'c', iv: 'i', salt: 's', iterations: 1000 }, acceptTerms: true };
 

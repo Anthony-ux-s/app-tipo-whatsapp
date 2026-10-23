@@ -19,6 +19,8 @@ export interface AppEnv {
   webDist: string | null;
   /** App Android (APK): con esto la API publica /.well-known/assetlinks.json y la app se abre sin barra del navegador. */
   androidApp: { packageId: string; fingerprints: string[] } | null;
+  /** Proyecto de Firebase para verificar el teléfono por SMS (Firebase Authentication); null = se usa OneSignal. */
+  firebaseProjectId: string | null;
   /** Claves VAPID para Web Push; si faltan, el adaptador las genera y las guarda. */
   vapid: { publicKey: string; privateKey: string } | null;
   vapidSubject: string;
@@ -113,6 +115,7 @@ export function loadEnv(): AppEnv {
     storageDir: resolve(process.cwd(), env.STORAGE_DIR ?? './storage'),
     routingUrl: (env.ROUTING_URL ?? 'https://router.project-osrm.org').replace(/\/$/, ''),
     webDist: webDistPath && existsSync(resolve(webDistPath, 'index.html')) ? webDistPath : null,
+    firebaseProjectId: env.FIREBASE_PROJECT_ID?.trim() || null,
     androidApp:
       env.APK_PACKAGE_ID && env.APK_SHA256_CERT_FINGERPRINTS
         ? { packageId: env.APK_PACKAGE_ID.trim(), fingerprints: env.APK_SHA256_CERT_FINGERPRINTS.split(',').map((f) => f.trim()).filter(Boolean) }

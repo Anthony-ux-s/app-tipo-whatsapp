@@ -205,6 +205,8 @@ export function RegisterView() {
           Entra aquí
         </Link>
       </p>
+      {/* Lugar del reCAPTCHA invisible de Firebase (no se ve). */}
+      <div id="recaptcha-container" />
     </AuthLayout>
   );
 }

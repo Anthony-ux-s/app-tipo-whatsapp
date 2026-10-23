@@ -126,6 +126,11 @@ export interface VerifyPhoneRequest {
   code: string;
 }
 
+/** Registro con Firebase: el ID token que recibe la app al confirmar el código SMS. */
+export interface FirebasePhoneRequest {
+  idToken: string;
+}
+
 /** Comprobante de un solo uso: el teléfono (o correo) quedó verificado. */
 export interface VerificationProof {
   verificationToken: string;

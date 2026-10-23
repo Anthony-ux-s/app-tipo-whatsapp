@@ -9,6 +9,7 @@ import {
   LoginDto,
   RegisterDto,
   StartEmailDto,
+  FirebasePhoneDto,
   StartPhoneDto,
   UpdateProfileDto,
   VerifyEmailDto,
@@ -19,7 +20,7 @@ import { MAX_AVATAR_BYTES, ReadAvatarUseCase, RemoveAvatarUseCase, UploadAvatarU
 import { StartEmailVerificationUseCase, VerifyEmailUseCase } from './use-cases/email.use-case';
 import { GetSessionUseCase } from './use-cases/get-session.use-case';
 import { LoginUseCase } from './use-cases/login.use-case';
-import { StartPhoneVerificationUseCase, VerifyPhoneUseCase } from './use-cases/phone-verification.use-case';
+import { StartPhoneVerificationUseCase, VerifyFirebasePhoneUseCase, VerifyPhoneUseCase } from './use-cases/phone-verification.use-case';
 import { RegisterUserUseCase } from './use-cases/register-user.use-case';
 import { UpdateProfileUseCase } from './use-cases/update-profile.use-case';
 
@@ -28,6 +29,7 @@ export class AuthController {
   constructor(
     private readonly startPhone: StartPhoneVerificationUseCase,
     private readonly verifyPhone: VerifyPhoneUseCase,
+    private readonly verifyFirebasePhone: VerifyFirebasePhoneUseCase,
     private readonly registerUser: RegisterUserUseCase,
     private readonly login: LoginUseCase,
     private readonly getSession: GetSessionUseCase,
@@ -60,6 +62,15 @@ export class AuthController {
   @Post('auth/phone/verify')
   phoneVerify(@Body() body: VerifyPhoneDto): Promise<VerificationProof> {
     return this.verifyPhone.execute(body.phone, body.code);
+  }
+
+  /** Registro con Firebase (SMS que manda y comprueba Firebase): su ID token entrega el comprobante. */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('auth/phone/firebase')
+  phoneFirebase(@Body() body: FirebasePhoneDto): Promise<VerificationProof> {
+    return this.verifyFirebasePhone.execute(body.idToken);
   }
 
   /** Registro, paso 3: nombre, usuario opcional y contraseña. */

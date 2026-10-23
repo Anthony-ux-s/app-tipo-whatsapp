@@ -9,6 +9,8 @@ import type { AppEnv } from '../config/env.validation';
  * contenido (CSP) estricta: solo scripts propios, fuentes de Google y conexiones al mismo origen.
  */
 export function applySecurityHeaders(app: NestExpressApplication, env: AppEnv): void {
+  // Verificación del teléfono con Firebase: el reCAPTCHA y las APIs de Google necesitan estos orígenes.
+  const firebase = env.firebaseProjectId !== null;
   app.use(
     helmet({
       crossOriginEmbedderPolicy: false,
@@ -17,14 +19,15 @@ export function applySecurityHeaders(app: NestExpressApplication, env: AppEnv): 
             useDefaults: false,
             directives: {
               defaultSrc: ["'self'"],
-              scriptSrc: ["'self'"],
+              scriptSrc: ["'self'", ...(firebase ? ['https://www.google.com/recaptcha/', 'https://www.gstatic.com/recaptcha/', 'https://apis.google.com'] : [])],
               styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
               fontSrc: ["'self'", 'https://fonts.gstatic.com'],
               // Teselas del mapa de OpenStreetMap (seguimiento del delivery).
               imgSrc: ["'self'", 'data:', 'blob:', 'https://tile.openstreetmap.org'],
               mediaSrc: ["'self'", 'blob:'],
               // Rutas por las calles del mapa del delivery (OSRM de OpenStreetMap).
-              connectSrc: ["'self'", 'ws:', 'wss:', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://router.project-osrm.org'],
+              connectSrc: ["'self'", 'ws:', 'wss:', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://router.project-osrm.org', ...(firebase ? ['https://identitytoolkit.googleapis.com', 'https://securetoken.googleapis.com', 'https://www.google.com/recaptcha/'] : [])],
+              ...(firebase ? { frameSrc: ['https://www.google.com/recaptcha/', 'https://recaptcha.google.com', `https://${env.firebaseProjectId}.firebaseapp.com`] } : {}),
               workerSrc: ["'self'"],
               manifestSrc: ["'self'"],
               objectSrc: ["'none'"],

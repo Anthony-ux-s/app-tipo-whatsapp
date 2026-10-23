@@ -9,7 +9,9 @@ import { StartEmailVerificationUseCase, VerifyEmailUseCase } from './use-cases/e
 import { GetSessionUseCase } from './use-cases/get-session.use-case';
 import { LoginUseCase } from './use-cases/login.use-case';
 import { MatchContactsUseCase } from './use-cases/match-contacts.use-case';
-import { StartPhoneVerificationUseCase, VerifyPhoneUseCase } from './use-cases/phone-verification.use-case';
+import { APP_ENV, type AppEnv } from '../../../../config/env.validation';
+import { FirebaseTokenVerifier } from '../../../../infra/auth/firebase-token.verifier';
+import { FIREBASE_VERIFIER, StartPhoneVerificationUseCase, VerifyFirebasePhoneUseCase, VerifyPhoneUseCase } from './use-cases/phone-verification.use-case';
 import { RegisterUserUseCase } from './use-cases/register-user.use-case';
 import { SearchPeopleUseCase } from './use-cases/search-people.use-case';
 import { ProfileEvents, UpdateProfileUseCase } from './use-cases/update-profile.use-case';
@@ -19,8 +21,11 @@ import { ProfileEvents, UpdateProfileUseCase } from './use-cases/update-profile.
   controllers: [AuthController],
   providers: [
     { provide: AUTH_REPOSITORY, useClass: PrismaAuthRepository },
+    // Verificación del teléfono con Firebase (opcional): solo si hay FIREBASE_PROJECT_ID.
+    { provide: FIREBASE_VERIFIER, inject: [APP_ENV], useFactory: (env: AppEnv) => (env.firebaseProjectId ? new FirebaseTokenVerifier(env.firebaseProjectId) : null) },
     StartPhoneVerificationUseCase,
     VerifyPhoneUseCase,
+    VerifyFirebasePhoneUseCase,
     RegisterUserUseCase,
     LoginUseCase,
     GetSessionUseCase,

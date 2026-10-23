@@ -43,6 +43,10 @@ export class StartPhoneDto implements StartPhoneVerificationRequest {
   @IsString() @IsNotEmpty({ message: 'Escribe tu número' }) @MaxLength(24) phone: string;
 }
 
+export class FirebasePhoneDto {
+  @IsString() @IsNotEmpty() @MaxLength(4096) idToken: string;
+}
+
 export class VerifyPhoneDto implements VerifyPhoneRequest {
   @IsString() @IsNotEmpty() @MaxLength(24) phone: string;
   @IsString() @IsNotEmpty({ message: 'Escribe el código' }) @MaxLength(12) code: string;
