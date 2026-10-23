@@ -82,6 +82,9 @@ const MESSAGES: Record<string, string> = {
 export function firebaseErrorMessage(error: unknown): string | null {
   const code = (error as { code?: string } | null)?.code;
   if (!code?.startsWith('auth/')) return null;
-  // Con un error que no conocemos se muestra su código: así se sabe qué falta en Firebase.
-  return MESSAGES[code] ?? `No pudimos enviar el SMS (${code}). Revisa el número e inténtalo de nuevo.`;
+  if (MESSAGES[code]) return MESSAGES[code];
+  // Con un error que no conocemos se muestra su código y lo que respondió Google: así se sabe qué falta o qué falla.
+  console.error('Firebase (verificación del teléfono):', error);
+  const detail = (error as { customData?: { _serverResponse?: { error?: { message?: string } } } }).customData?._serverResponse?.error?.message;
+  return `No pudimos enviar el SMS (${code}${detail ? `; Google dice: ${detail}` : ''}). Revisa el número e inténtalo de nuevo.`;
 }
