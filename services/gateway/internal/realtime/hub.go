@@ -28,6 +28,13 @@ const (
 	closeSessionExpired websocket.StatusCode = 4401
 )
 
+// heartbeatEvery: cada cuánto el gateway le dice al navegador que sigue vivo (trama «hb») y comprueba que el
+// navegador responde (ping del protocolo). Mantiene abierta la conexión a través de los proxies (Render, redes móviles)
+// y cierra las que murieron en silencio, para que el navegador se reconecte y recupere lo pendiente.
+var heartbeatEvery = 20 * time.Second
+
+const pongTimeout = 10 * time.Second
+
 type client struct {
 	id   string
 	user string
@@ -122,10 +129,27 @@ func (h *Hub) read(ctx context.Context, c *client) {
 }
 
 func (h *Hub) write(ctx context.Context, c *client) {
+	beat := time.NewTicker(heartbeatEvery)
+	defer beat.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-beat.C:
+			pingCtx, cancel := context.WithTimeout(ctx, pongTimeout)
+			err := c.conn.Ping(pingCtx)
+			cancel()
+			if err != nil {
+				c.conn.CloseNow()
+				return
+			}
+			writeCtx, cancelWrite := context.WithTimeout(ctx, 10*time.Second)
+			err = c.conn.Write(writeCtx, websocket.MessageText, []byte(`{"t":"hb"}`))
+			cancelWrite()
+			if err != nil {
+				c.conn.CloseNow()
+				return
+			}
 		case data, ok := <-c.send:
 			if !ok {
 				c.conn.Close(websocket.StatusServiceRestart, "reconectando")

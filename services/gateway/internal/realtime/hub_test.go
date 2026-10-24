@@ -177,3 +177,27 @@ func TestSiSeCaeElEnlaceSeCierranLosNavegadoresParaQueSeReconecten(t *testing.T)
 		t.Fatalf("quedaron %d conexiones", hub.Count())
 	}
 }
+
+func TestElGatewayManda_latidos_para_que_el_navegador_sepa_que_sigue_vivo(t *testing.T) {
+	old := heartbeatEvery
+	heartbeatEvery = 40 * time.Millisecond
+	t.Cleanup(func() { heartbeatEvery = old })
+
+	_, gateway, _, _ := setup(t)
+	browser, _, err := dial(t, gateway, token(t, "laura", time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer browser.CloseNow()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	for i := 0; i < 2; i++ {
+		_, data, err := browser.Read(ctx)
+		if err != nil {
+			t.Fatalf("esperaba un latido, obtuve %v", err)
+		}
+		if string(data) != `{"t":"hb"}` {
+			t.Fatalf("latido inesperado: %s", data)
+		}
+	}
+}

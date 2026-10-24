@@ -117,8 +117,21 @@ export function useRealtime(userId: string | undefined) {
     };
     window.addEventListener('focus', onFocus);
 
+    // Si la pestaña estuvo oculta un rato (el navegador pausa el tiempo real), al volver se recupera lo que llegó.
+    let hiddenAt: number | null = null;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now();
+        return;
+      }
+      if (hiddenAt !== null && Date.now() - hiddenAt > 15_000 && socket.connected) onConnect();
+      hiddenAt = null;
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
       socket.removeAllListeners();
       pendingTeardown = window.setTimeout(() => {
         pendingTeardown = null;

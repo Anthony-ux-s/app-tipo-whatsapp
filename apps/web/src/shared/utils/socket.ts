@@ -1,6 +1,6 @@
 import type { ClientToServerEvents, ServerToClientEvents } from '@parla/types';
 import type { ConnectionState } from '../types/chat.types';
-import { notifySessionExpired } from './http';
+import { notifySessionExpired, tokenStorage } from './http';
 
 /**
  * Cliente del tiempo real. Habla con el gateway (Go) por WebSocket en `/ws` con tramas
@@ -37,6 +37,9 @@ export const subscribeConnection = (listener: () => void): (() => void) => {
 /** Cierre del gateway cuando el token vence. */
 const SESSION_EXPIRED = 4401;
 const MAX_BACKOFF_MS = 5000;
+/** El gateway manda un latido («hb») cada 20 s. Si pasa más del doble sin recibir nada, la conexión murió en silencio. */
+const SILENCE_LIMIT_MS = 50_000;
+const WATCHDOG_EVERY_MS = 10_000;
 
 interface Pending {
   resolve: (value: unknown) => void;
@@ -51,12 +54,29 @@ export class ParlaSocket {
   private attempts = 0;
   private retryTimer: number | null = null;
   private nextRef = 0;
+  private lastReceivedAt = Date.now();
+  /** Solo se vigila el silencio si este servidor ya mandó algún latido (con un gateway anterior no habría). */
+  private sawHeartbeat = false;
+  private watchdog: number | null = null;
   private readonly pending = new Map<string, Pending>();
   private readonly listeners = new Map<string, Set<(data: never) => void>>();
 
-  constructor(private readonly token: string) {
+  constructor(private token: string) {
     setConnectionState('connecting');
     this.open();
+    this.watchdog = window.setInterval(() => this.checkAlive(), WATCHDOG_EVERY_MS);
+    document.addEventListener('visibilitychange', this.onWake);
+    window.addEventListener('online', this.onWake);
+  }
+
+  /** Al volver a la pestaña o recuperar internet: si la conexión no da señales, se reabre ya (sin esperar al reintento). */
+  private readonly onWake = (): void => {
+    if (document.visibilityState === 'visible') this.checkAlive(25_000);
+  };
+
+  private checkAlive(limit = SILENCE_LIMIT_MS): void {
+    if (this.closed || !this.sawHeartbeat || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (Date.now() - this.lastReceivedAt > limit) this.ws.close(4000, 'sin señales');
   }
 
   on<E extends ServerEvent>(event: E, fn: (data: Payload<E>) => void): void;
@@ -92,6 +112,9 @@ export class ParlaSocket {
   close(): void {
     this.closed = true;
     if (this.retryTimer) window.clearTimeout(this.retryTimer);
+    if (this.watchdog) window.clearInterval(this.watchdog);
+    document.removeEventListener('visibilitychange', this.onWake);
+    window.removeEventListener('online', this.onWake);
     this.ws?.close(1000);
     this.ws = null;
     this.setDisconnected();
@@ -101,10 +124,14 @@ export class ParlaSocket {
     // Con la web en Vercel (que no reenvía WebSockets) el tiempo real va directo al backend: VITE_WS_URL=wss://api.tudominio.com
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
     const base = (import.meta.env.VITE_WS_URL as string | undefined)?.replace(/\/$/, '') || `${scheme}://${location.host}`;
+    // Siempre con el token más reciente: la sesión se renueva sola y el anterior puede estar por vencer.
+    this.token = tokenStorage.get() ?? this.token;
     const ws = new WebSocket(`${base}/ws?token=${encodeURIComponent(this.token)}`);
     this.ws = ws;
     ws.onopen = () => {
       this.attempts = 0;
+      this.lastReceivedAt = Date.now();
+      this.sawHeartbeat = false;
       this.connected = true;
       setConnectionState('online');
       this.dispatch('connect', undefined);
@@ -115,8 +142,14 @@ export class ParlaSocket {
       this.ws = null;
       this.setDisconnected();
       if (this.closed) return;
+      // El gateway cierra con 4401 cuando vence el token con que se abrió. Si la sesión ya se renovó, se vuelve a abrir con el nuevo.
+      if (event.code === SESSION_EXPIRED && tokenStorage.get() && tokenStorage.get() !== this.token) {
+        this.scheduleReconnect();
+        return;
+      }
       if (event.code === SESSION_EXPIRED) {
         this.closed = true;
+        if (this.watchdog) window.clearInterval(this.watchdog);
         notifySessionExpired();
         return;
       }
@@ -153,6 +186,7 @@ export class ParlaSocket {
 
   private receive(raw: unknown): void {
     if (typeof raw !== 'string') return;
+    this.lastReceivedAt = Date.now();
     let frame: { t?: string; d?: unknown; ref?: string };
     try {
       frame = JSON.parse(raw);
@@ -165,6 +199,10 @@ export class ParlaSocket {
       this.pending.delete(frame.ref);
       window.clearTimeout(pending.timer);
       pending.resolve(frame.d);
+      return;
+    }
+    if (frame.t === 'hb') {
+      this.sawHeartbeat = true;
       return;
     }
     if (frame.t) this.dispatch(frame.t, frame.d);
