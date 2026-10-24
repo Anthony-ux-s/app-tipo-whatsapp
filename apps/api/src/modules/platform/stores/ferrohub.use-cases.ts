@@ -52,6 +52,9 @@ export const webhookUrlFor = (env: AppEnv, storeId: string): string =>
 /** Hora de apertura y cierre con el formato de Parla (HH:MM); si no sirven, quedan las de siempre. */
 const validTime = (value: string | undefined, fallback: string): string => (value && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : fallback);
 
+/** La ficha de la tienda en FerroHub ya trae dirección y ubicación (si la dueña la configuró allá). */
+export const isStoreConfigured = (b: BusinessRecord): boolean => b.location !== null && b.address.trim().length >= 6 && b.address !== 'Por confirmar';
+
 /** Una tienda «provisional» para tener su id mientras se canjea el código; si falla, se borra. */
 async function ownOrProvisional(businesses: BusinessesRepository, userId: string): Promise<{ business: BusinessRecord; created: boolean }> {
   const existing = await businesses.findByOwner(userId);
@@ -165,7 +168,8 @@ export class ProvisionFerrohubUseCase {
         parla: { parlaStoreId: business.id, webhookUrl: webhookUrlFor(this.env, business.id), webhookSecret },
       });
       tenantId = made.tenantId;
-      let updated = await this.businesses.update(business.id, { name, address: city, description: '' });
+      // La ciudad solo va a FerroHub (segmentación): la dirección exacta la configura la dueña allá y Parla la lee.
+      let updated = await this.businesses.update(business.id, { name, description: '' });
       updated = await this.businesses.setSource(updated.id, 'api', { format: 'redwiiil', baseUrl: made.apiBaseUrl, prefix: '', apiKey: made.apiKey, adminKey: '' });
       updated = await this.businesses.setConnector(updated.id, { kind: 'ferrohub', origin: 'provision', tenantId: made.tenantId, webhookSecret, connectedAt: new Date(), verifiedAt: null });
       return { business: toBusinessInfo(updated), ssoUrl: made.ssoUrl };
@@ -190,6 +194,35 @@ export class FerrohubSsoUseCase {
     const business = await this.businesses.findByOwner(userId);
     if (!business?.connector?.tenantId) throw new NotFoundError('Tu tienda no está conectada a un panel de FerroHub.');
     return { url: (await this.client.sso(business.connector.tenantId, userId)).ssoUrl };
+  }
+}
+
+/**
+ * «Actualizar desde FerroHub»: los datos de la tienda (nombre, dirección, ubicación, horario, si acepta pedidos) se
+ * configuran en FerroHub; Parla solo los lee. Se llama al entrar a «Mi negocio» y cuando FerroHub avisa un cambio.
+ */
+@Injectable()
+export class SyncFerrohubStoreUseCase {
+  constructor(
+    @Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository,
+    @Inject(FERROHUB_CLIENT) private readonly client: FerrohubClient,
+  ) {}
+
+  async execute(userId: string): Promise<ReturnType<typeof toBusinessInfo>> {
+    const business = await this.businesses.findByOwner(userId);
+    if (!business?.connector) throw new NotFoundError('Tu tienda no está conectada a FerroHub.');
+    return toBusinessInfo(await this.syncBusiness(business));
+  }
+
+  async syncBusiness(business: BusinessRecord): Promise<BusinessRecord> {
+    if (!business.api.baseUrl || !business.api.apiKey) return business;
+    const info = await this.client.storeInfo(business.api.baseUrl, business.api.apiKey);
+    if (!info) return business;
+    let updated = await applyStoreInfo(this.businesses, business, info, business.name);
+    updated = await this.businesses.setBigOrderRules(updated.id, { totalCents: Math.round(info.umbralPedidoGrande * 100), units: Math.round(info.umbralUnidades), whatsapp: info.whatsappAdmin ?? '' });
+    // Si FerroHub dice que acepta pedidos y Parla la tenía pausada por falta de configuración, se reanuda.
+    if (info.aceptaPedidos && !updated.acceptingOrders) updated = await this.businesses.update(updated.id, { acceptingOrders: true });
+    return updated;
   }
 }
 
@@ -227,7 +260,10 @@ const SEEN_LIMIT = 5_000;
 export class FerrohubWebhookUseCase {
   private readonly seen = new Set<string>();
 
-  constructor(@Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository) {}
+  constructor(
+    @Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository,
+    @Inject(FERROHUB_CLIENT) private readonly client: FerrohubClient,
+  ) {}
 
   async execute(storeId: string, raw: string, signature: string | undefined, timestamp: string | undefined, now = Date.now()): Promise<{ ok: true; duplicate?: boolean }> {
     const business = await this.businesses.findById(storeId);
@@ -258,6 +294,10 @@ export class FerrohubWebhookUseCase {
         await this.businesses.setSource(business.id, 'native', NO_API);
         await this.businesses.setConnector(business.id, null);
         await this.businesses.update(business.id, { acceptingOrders: false });
+        break;
+      case 'tienda.actualizada':
+        // Cambió algo de la tienda en FerroHub (nombre, dirección, horario…): se vuelve a leer su ficha.
+        await new SyncFerrohubStoreUseCase(this.businesses, this.client).syncBusiness(business);
         break;
       case 'tienda.cerrada':
         await this.businesses.update(business.id, { acceptingOrders: false });

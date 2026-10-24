@@ -116,7 +116,7 @@ export function loadEnv(): AppEnv {
     // En el .env de ejemplo viene vacío: entonces vale el origen de la web.
     publicWebUrl: (env.PUBLIC_WEB_URL || webOrigin[0]).replace(/\/$/, ''),
     jwtSecret: env.JWT_SECRET!,
-    jwtExpiresIn: env.JWT_EXPIRES_IN ?? '7d',
+    jwtExpiresIn: env.JWT_EXPIRES_IN ?? '30d',
     storageDir: resolve(process.cwd(), env.STORAGE_DIR ?? './storage'),
     routingUrl: (env.ROUTING_URL ?? 'https://router.project-osrm.org').replace(/\/$/, ''),
     webDist: webDistPath && existsSync(resolve(webDistPath, 'index.html')) ? webDistPath : null,

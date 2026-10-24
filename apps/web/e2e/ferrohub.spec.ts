@@ -62,20 +62,20 @@ test('conectar con código: categoría → Ferretería → código → tienda ve
   await page.getByTestId('ferrohub-connect').click();
   await expect(page.getByRole('alert')).toContainText('No existe ese código');
 
-  // Con uno bueno (aunque se escriba sin guiones ni mayúsculas) conecta y deja los datos precargados para confirmar.
+  // Con uno bueno (aunque se escriba sin guiones ni mayúsculas) conecta: Mi negocio muestra la conexión y los datos que Parla leyó de FerroHub.
   const code = await newCode(request);
   await input.fill(code.replace(/-/g, '').toLowerCase());
   await expect(input).toHaveValue(code);
   await page.getByTestId('ferrohub-connect').click();
-  await expect(page).toHaveURL(/\/app\/negocio\/tienda\?confirmar=1$/);
-  await expect(page.getByTestId('confirm-ferrohub')).toBeVisible();
-  await expect(page.getByLabel('Nombre de la tienda')).toHaveValue('Ferretería El Maestro');
-  await expect(page.getByLabel('Dirección')).toHaveValue('Jr. Pizarro 745, Trujillo');
-
-  // Mi negocio: conectada y verificada.
-  await page.goto('/app/negocio');
+  await expect(page).toHaveURL(/\/app\/negocio$/);
   await expect(page.getByTestId('ferrohub-card')).toContainText('Conectado a FerroHub');
   await expect(page.getByTestId('verified-badge')).toBeVisible();
+  // Los datos de la tienda se configuran en FerroHub: ya vino la dirección y no hay formulario de datos en Parla.
+  await expect(page.getByTestId('ferrohub-setup')).toHaveCount(0);
+  await expect(page.getByTestId('open-ferrohub-data')).toBeVisible();
+  await expect(page.getByTestId('open-store-edit')).toHaveCount(0);
+  await page.goto('/app/negocio/tienda');
+  await expect(page).toHaveURL(/\/app\/negocio$/);
 
   // Un código ya usado no sirve otra vez (y una tienda conectada no se conecta dos veces).
   const api = await request.post(`${API}/api/stores/ferrohub/connect`, { headers: { authorization: `Bearer ${await token(page)}` }, data: { code } });

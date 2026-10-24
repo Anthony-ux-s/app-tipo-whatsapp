@@ -44,6 +44,13 @@ services:
         value: Parla
       - key: FIREBASE_PROJECT_ID
         sync: false
+      # Ferreterías con FerroHub: la llave la entrega FerroHub; la dirección pública es donde FerroHub avisa de cambios.
+      - key: FERROHUB_API_URL
+        value: https://api.ferrohub.pe
+      - key: FERROHUB_PLATFORM_KEY
+        sync: false
+      - key: FERROHUB_WEBHOOK_BASE
+        sync: false
       # De la web (datos públicos de Firebase): se incrustan al construir la imagen.
       - key: VITE_FIREBASE_API_KEY
         sync: false

@@ -11,6 +11,8 @@ import { StoreForm } from './StoreForm';
 export function StoreEditView() {
   const business = useBusinessStore((s) => s.business);
   if (business === null) return <Navigate to="/app/negocio/abrir" replace />;
+  // Las ferreterías conectadas configuran sus datos en FerroHub (Mi negocio los lee de allá).
+  if (business?.connector === 'ferrohub') return <Navigate to="/app/negocio" replace />;
   if (!business) {
     return (
       <ServicePage>

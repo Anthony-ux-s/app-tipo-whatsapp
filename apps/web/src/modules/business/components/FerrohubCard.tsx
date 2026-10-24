@@ -1,12 +1,12 @@
 import type { BusinessInfo } from '@parla/types';
-import { BadgeCheck, ExternalLink, Link2Off, PlugZap } from 'lucide-react';
+import { BadgeCheck, ExternalLink, Link2Off, PlugZap, RefreshCw, Settings2 } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
 import { useFerrohubLink } from '../hooks/use-ferrohub.hook';
 
 /** «Mi negocio» de una tienda conectada a FerroHub: estado de la conexión, su panel y «Desvincular». */
 export function FerrohubCard({ business }: { business: BusinessInfo }) {
-  const f = useFerrohubLink(business);
+  const f = useFerrohubLink(business, true);
   if (!f.connected) return null;
   return (
     <section className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Conexión con FerroHub" data-testid="ferrohub-card">
@@ -24,9 +24,23 @@ export function FerrohubCard({ business }: { business: BusinessInfo }) {
           </span>
         )}
       </div>
+      {f.needsSetup && (
+        <div className="flex flex-col gap-2 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-800" data-testid="ferrohub-setup" role="status">
+          <p className="flex items-start gap-2 text-sm font-semibold text-ink">
+            <Settings2 className="mt-0.5 size-4 shrink-0" /> Configura tu tienda en FerroHub
+          </p>
+          <p className="text-sm text-ink-soft">Pon el nombre, la dirección exacta, la ubicación en el mapa y el horario de tu ferretería. Parla los toma de ahí para cobrar el delivery por la ruta real.</p>
+          <Button icon={<ExternalLink className="size-4" />} loading={f.openingPanel} onClick={f.openPanel} data-testid="ferrohub-setup-open">
+            Configurar mi tienda
+          </Button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" icon={<ExternalLink className="size-4" />} loading={f.openingPanel} onClick={f.openPanel} data-testid="ferrohub-panel">
           Abrir mi panel FerroHub
+        </Button>
+        <Button variant="ghost" icon={<RefreshCw className="size-4" />} loading={f.syncing} onClick={f.refresh} data-testid="ferrohub-refresh">
+          Actualizar datos
         </Button>
         <Button variant="ghost" icon={<Link2Off className="size-4" />} onClick={f.askUnlink} data-testid="ferrohub-unlink">
           Desvincular

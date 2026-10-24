@@ -19,7 +19,16 @@ export function FerrohubCreateView() {
         noValidate
       >
         <Field label="Nombre de la ferretería" icon={<Building2 className="size-5" />} value={p.form.name} onChange={(e) => p.onChange({ name: e.target.value })} disabled={p.busy} maxLength={120} data-testid="ferre-name" />
-        <Field label="Ciudad" icon={<MapPin className="size-5" />} value={p.form.city} onChange={(e) => p.onChange({ city: e.target.value })} disabled={p.busy} maxLength={80} data-testid="ferre-city" />
+        <Field
+          label="Ciudad"
+          icon={<MapPin className="size-5" />}
+          value={p.form.city}
+          onChange={(e) => p.onChange({ city: e.target.value })}
+          disabled={p.busy}
+          maxLength={80}
+          hint="Solo la ciudad, para mostrarte a los clientes de tu zona. La dirección exacta la pones después en FerroHub, en Configuración → Datos de la tienda."
+          data-testid="ferre-city"
+        />
 
         <fieldset className="flex flex-col gap-2" disabled={p.busy}>
           <legend className="mb-1 text-sm font-medium text-ink">Rubros que vendes</legend>

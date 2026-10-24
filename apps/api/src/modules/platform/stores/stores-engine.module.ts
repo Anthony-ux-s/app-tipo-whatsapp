@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../identity/auth/auth.module';
 import { OrdersEngineModule } from '../services/orders-engine.module';
 import { FERROHUB_CLIENT, HttpFerrohubClient } from './ferrohub.client';
-import { ConnectFerrohubUseCase, DisconnectFerrohubUseCase, FerrohubSsoUseCase, FerrohubWebhookUseCase, ProvisionFerrohubUseCase } from './ferrohub.use-cases';
+import { ConnectFerrohubUseCase, DisconnectFerrohubUseCase, FerrohubSsoUseCase, FerrohubWebhookUseCase, ProvisionFerrohubUseCase, SyncFerrohubStoreUseCase } from './ferrohub.use-cases';
 import { PRODUCTS_REPOSITORY } from './products.repository';
 import { PrismaProductsRepository } from './prisma-products.repository';
 import { StoreApiUseCase } from './store-api.use-cases';
@@ -32,6 +32,7 @@ const USE_CASES = [
   ConnectFerrohubUseCase,
   ProvisionFerrohubUseCase,
   FerrohubSsoUseCase,
+  SyncFerrohubStoreUseCase,
   DisconnectFerrohubUseCase,
   FerrohubWebhookUseCase,
 ];

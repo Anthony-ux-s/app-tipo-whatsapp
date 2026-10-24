@@ -3,15 +3,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppEnv } from '../../../config/env.validation';
 import { ConflictError, ForbiddenError, NotFoundError, TooManyRequestsError, UnauthorizedError, ValidationError } from '../../../kernel/domain-error';
 import { open, seal } from '../../../kernel/secret-box';
+import { UpdateMyBusinessUseCase } from '../services/use-cases/business-orders.use-cases';
 import { InMemoryAuthRepository, InMemoryBusinessesRepository, makeBusiness, makeUser } from '../../../testing/in-memory.fakes';
+import { normalizeStoreInfo } from './ferrohub.client';
 import type { FerrohubClient, FerrohubProvisionInput, FerrohubProvisionResult, FerrohubRedeemInput, FerrohubRedeemResult, FerrohubStoreInfo } from './ferrohub.client';
 import {
   ConnectFerrohubUseCase,
   DisconnectFerrohubUseCase,
   FerrohubSsoUseCase,
   FerrohubWebhookUseCase,
+  isStoreConfigured,
   normalizeFerrohubCode,
   ProvisionFerrohubUseCase,
+  SyncFerrohubStoreUseCase,
   webhookUrlFor,
 } from './ferrohub.use-cases';
 
@@ -257,6 +261,7 @@ describe('avisos de FerroHub (webhook)', () => {
   const NOW = Date.UTC(2026, 9, 25, 12, 0, 0);
   let businesses: InMemoryBusinessesRepository;
   let webhook: FerrohubWebhookUseCase;
+  let ferrohub: FakeFerrohub;
   const connector = (origin: 'code' | 'provision' = 'code') => ({ kind: 'ferrohub' as const, origin, tenantId: 't_1', webhookSecret: SECRET, connectedAt: new Date(NOW), verifiedAt: null });
   const sign = (body: string, secret = SECRET) => createHmac('sha256', secret).update(body).digest('hex');
   const send = (body: object, over: { signature?: string; timestamp?: number } = {}) => {
@@ -267,7 +272,8 @@ describe('avisos de FerroHub (webhook)', () => {
   beforeEach(() => {
     businesses = new InMemoryBusinessesRepository();
     businesses.businesses.push(makeBusiness({ id: 'biz_1', service: 'ferreteria', status: 'approved', source: 'api', connector: connector() }));
-    webhook = new FerrohubWebhookUseCase(businesses);
+    ferrohub = new FakeFerrohub();
+    webhook = new FerrohubWebhookUseCase(businesses, ferrohub);
   });
 
   it('acepta un aviso firmado y reciente', async () => {
@@ -275,6 +281,18 @@ describe('avisos de FerroHub (webhook)', () => {
     expect((await businesses.findById('biz_1'))!.acceptingOrders).toBe(false);
     await send({ eventId: 'e2', tipo: 'tienda.abierta' });
     expect((await businesses.findById('biz_1'))!.acceptingOrders).toBe(true);
+  });
+
+  it('«tienda.actualizada» vuelve a leer nombre, dirección, ubicación y horario de FerroHub', async () => {
+    await businesses.update('biz_1', { address: 'Por confirmar' });
+    await businesses.setSource('biz_1', 'api', { format: 'redwiiil', baseUrl: 'https://api.ferrohub.pe', prefix: '', apiKey: 'k', adminKey: '' });
+    await send({ eventId: 'u1', tipo: 'tienda.actualizada' });
+    const b = (await businesses.findById('biz_1'))!;
+    expect(b.name).toBe('Ferretería El Maestro');
+    expect(b.address).toBe('Jr. Pizarro 745, Trujillo');
+    expect(b.location).toEqual({ lat: -8.11, lng: -79.03 });
+    expect(b.opensAt).toBe('08:00');
+    expect(isStoreConfigured(b)).toBe(true);
   });
 
   it('rechaza firma mala, otro secreto, aviso viejo o tienda sin conexión (siempre la misma respuesta)', async () => {
@@ -339,5 +357,51 @@ describe('dirección de los avisos', () => {
     vi.stubEnv('FERROHUB_WEBHOOK_BASE', 'https://tunel.ngrok.app/');
     expect(webhookUrlFor(env, 'biz_9')).toBe('https://tunel.ngrok.app/api/stores/biz_9/ferrohub-events');
     vi.unstubAllEnvs();
+  });
+});
+
+describe('datos de la tienda desde FerroHub', () => {
+  it('«actualizar» trae los datos del panel y el dueño no puede editarlos en Parla', async () => {
+    const businesses = new InMemoryBusinessesRepository();
+    const ferrohub = new FakeFerrohub();
+    businesses.businesses.push(
+      makeBusiness({ id: 'biz_1', ownerId: 'u1', service: 'ferreteria', status: 'approved', source: 'api', address: 'Por confirmar', location: null, connector: { kind: 'ferrohub', origin: 'provision', tenantId: 't_1', webhookSecret: 's', connectedAt: new Date(), verifiedAt: null } }),
+    );
+    await businesses.setSource('biz_1', 'api', { format: 'redwiiil', baseUrl: 'https://api.ferrohub.pe', prefix: '', apiKey: 'k', adminKey: '' });
+    expect(isStoreConfigured((await businesses.findById('biz_1'))!)).toBe(false);
+    const info = await new SyncFerrohubStoreUseCase(businesses, ferrohub).execute('u1');
+    expect(info.address).toBe('Jr. Pizarro 745, Trujillo');
+    expect(info.location).toEqual({ lat: -8.11, lng: -79.03 });
+    await expect(new UpdateMyBusinessUseCase(businesses).execute('u1', { name: 'Otro nombre' })).rejects.toThrow(ValidationError);
+    await expect(new UpdateMyBusinessUseCase(businesses).execute('u1', { acceptingOrders: false })).resolves.toBeDefined();
+  });
+
+  it('sin conexión a FerroHub no hay nada que actualizar', async () => {
+    const businesses = new InMemoryBusinessesRepository();
+    businesses.businesses.push(makeBusiness({ id: 'biz_2', ownerId: 'u2' }));
+    await expect(new SyncFerrohubStoreUseCase(businesses, new FakeFerrohub()).execute('u2')).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe('la ficha de la tienda de FerroHub', () => {
+  it('la dirección y el punto del mapa de la ficha mandan sobre las sucursales de relleno', () => {
+    const info = normalizeStoreInfo({
+      nombre: 'Ferretería',
+      direccion: 'Jr. Leoncio Prado 263, Cajamarca',
+      lat: -7.1638,
+      lng: -78.5003,
+      sucursales: [{ nombre: 'Central', direccion: 'Av. Principal 100', lat: null, lng: null }],
+    });
+    expect(info.sucursales).toEqual([{ nombre: 'Principal', direccion: 'Jr. Leoncio Prado 263, Cajamarca', lat: -7.1638, lng: -78.5003 }]);
+  });
+
+  it('una tienda recién creada (ficha sin dirección) no toma la dirección de relleno', () => {
+    const info = normalizeStoreInfo({ nombre: 'Nueva', direccion: '', lat: null, lng: null, sucursales: [{ nombre: 'Central', direccion: 'Av. Principal 100', lat: null, lng: null }] });
+    expect(info.sucursales).toEqual([]);
+  });
+
+  it('con una API anterior (solo sucursales) usa la primera sucursal', () => {
+    const info = normalizeStoreInfo({ nombre: 'Vieja', sucursales: [{ nombre: 'Centro', direccion: 'Jr. Pizarro 745', lat: -8.11, lng: -79.03 }] });
+    expect(info.sucursales[0]).toEqual({ nombre: 'Centro', direccion: 'Jr. Pizarro 745', lat: -8.11, lng: -79.03 });
   });
 });

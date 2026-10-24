@@ -209,7 +209,7 @@ function normalizeProvision(body: unknown): FerrohubProvisionResult {
   };
 }
 
-function normalizeStoreInfo(body: unknown): FerrohubStoreInfo {
+export function normalizeStoreInfo(body: unknown): FerrohubStoreInfo {
   const b = body as Record<string, unknown>;
   const horario = b.horario as Record<string, unknown> | undefined;
   const sucursales = Array.isArray(b.sucursales) ? (b.sucursales as Record<string, unknown>[]) : [];
@@ -220,7 +220,15 @@ function normalizeStoreInfo(body: unknown): FerrohubStoreInfo {
     umbralPedidoGrande: num(b.umbralPedidoGrande, 600),
     umbralUnidades: num(b.umbralUnidades, 25),
     horario: horario && str(horario.abre) && str(horario.cierra) ? { abre: str(horario.abre), cierra: str(horario.cierra), dias: Array.isArray(horario.dias) ? horario.dias.map(String) : [] } : null,
-    sucursales: sucursales.map((s) => ({ nombre: str(s.nombre), direccion: str(s.direccion), lat: typeof s.lat === 'number' ? s.lat : null, lng: typeof s.lng === 'number' ? s.lng : null })),
+    // La dirección y el punto del mapa que la dueña configuró en FerroHub vienen en la ficha (direccion, lat, lng). Si la
+    // ficha los trae (aunque vacíos), manda ella: las sucursales de una tienda recién creada son direcciones de relleno.
+    // Una API anterior solo manda las sucursales (con su lat/lng): entonces se usan esas.
+    sucursales:
+      'direccion' in b || 'lat' in b
+        ? str(b.direccion) || typeof b.lat === 'number'
+          ? [{ nombre: 'Principal', direccion: str(b.direccion), lat: typeof b.lat === 'number' ? b.lat : null, lng: typeof b.lng === 'number' ? b.lng : null }]
+          : []
+        : sucursales.map((s) => ({ nombre: str(s.nombre), direccion: str(s.direccion), lat: typeof s.lat === 'number' ? s.lat : null, lng: typeof s.lng === 'number' ? s.lng : null })),
     estado: str(b.estado) || null,
     tenantId: str(b.tenantId) || null,
   };

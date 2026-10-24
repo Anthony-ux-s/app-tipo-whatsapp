@@ -11,6 +11,7 @@ import {
   FerrohubSsoUseCase,
   FerrohubWebhookUseCase,
   ProvisionFerrohubUseCase,
+  SyncFerrohubStoreUseCase,
 } from '../../platform/stores/ferrohub.use-cases';
 
 class ConnectDto {
@@ -53,7 +54,15 @@ export class BusinessFerrohubController {
   constructor(
     private readonly sso: FerrohubSsoUseCase,
     private readonly disconnect: DisconnectFerrohubUseCase,
+    private readonly syncStore: SyncFerrohubStoreUseCase,
   ) {}
+
+  /** Vuelve a leer los datos de la tienda desde FerroHub (nombre, dirección, ubicación, horario). */
+  @Post('sync')
+  @HttpCode(200)
+  sync(@CurrentUser() user: AuthUser): Promise<BusinessInfo> {
+    return this.syncStore.execute(user.userId);
+  }
 
   @Post('sso')
   @HttpCode(200)

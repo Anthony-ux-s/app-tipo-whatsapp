@@ -1,6 +1,6 @@
 import type { BusinessInfo, FerrohubConnectResult, FerrohubProvisionRequest, FerrohubProvisionResult, FerrohubSsoResult } from '@parla/types';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useBusinessStore } from '@shared/stores/business.store';
 import { useSessionStore } from '@shared/stores/session.store';
@@ -31,8 +31,8 @@ export function useConnectFerrohub() {
     onSuccess: (result) => {
       setBusiness(result.business);
       toast(result.verified ? '¡Listo! Tu ferretería ya está en Parla.' : 'Conectada. Soporte la revisará pronto.', 'success');
-      // Los datos vienen de FerroHub: la persona solo revisa y confirma.
-      navigate('/app/negocio/tienda?confirmar=1', { replace: true });
+      // Los datos de la tienda se configuran en FerroHub: Parla ya los leyó y «Mi negocio» dice si falta algo.
+      navigate('/app/negocio', { replace: true });
     },
   });
 
@@ -94,7 +94,7 @@ export function useProvisionFerrohub() {
 }
 
 /** «Mi negocio» de una tienda conectada: abrir su panel de FerroHub o desvincular. */
-export function useFerrohubLink(business: BusinessInfo) {
+export function useFerrohubLink(business: BusinessInfo, autoSync = false) {
   const setBusiness = useBusinessStore((s) => s.setBusiness);
   const [confirming, setConfirming] = useState(false);
   const panel = useMutation({
@@ -112,8 +112,26 @@ export function useFerrohubLink(business: BusinessInfo) {
     onError: (err) => toast(errorMessage(err), 'error'),
   });
 
+  const sync = useMutation({
+    mutationFn: () => http.post<BusinessInfo>('/business/ferrohub/sync'),
+    onSuccess: (updated) => setBusiness(updated),
+  });
+  const connected = business.connector === 'ferrohub';
+  // Al entrar a «Mi negocio» se vuelve a leer la ficha de FerroHub (una vez), por si la configuró allá.
+  const synced = useRef(false);
+  useEffect(() => {
+    if (!autoSync || !connected || synced.current) return;
+    synced.current = true;
+    sync.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, autoSync]);
+
   return {
-    connected: business.connector === 'ferrohub',
+    /** Falta la dirección o la ubicación: se configuran en FerroHub. */
+    needsSetup: connected && (business.location === null || business.address.trim().length < 6 || business.address === 'Por confirmar'),
+    syncing: sync.isPending,
+    refresh: () => sync.mutate(undefined, { onSuccess: () => toast('Datos actualizados desde FerroHub.', 'success'), onError: (err) => toast(errorMessage(err), 'error') }),
+    connected,
     verified: business.verified,
     openPanel: () => panel.mutate(),
     openingPanel: panel.isPending,

@@ -33,6 +33,10 @@ export class UpdateMyBusinessUseCase {
   async execute(userId: string, changes: UpdateBusinessRequest): Promise<BusinessInfo> {
     const business = await this.businesses.findByOwner(userId);
     if (!business) throw new NotFoundError('No tienes un negocio en Parla');
+    // Una ferretería conectada a FerroHub configura sus datos allá (nombre, dirección, ubicación y horario): Parla solo los lee.
+    if (business.connector?.kind === 'ferrohub' && ['name', 'description', 'address', 'location', 'opensAt', 'closesAt'].some((k) => (changes as Record<string, unknown>)[k] !== undefined)) {
+      throw new ValidationError('Los datos de tu tienda se configuran en FerroHub. Ábrelo desde «Mi negocio» y Parla los actualiza solo.');
+    }
     if (changes.opensAt !== undefined) assertHour(changes.opensAt, 'Abre');
     if (changes.closesAt !== undefined) assertHour(changes.closesAt, 'Cierra');
     const patch: UpdateBusinessRequest = {};
