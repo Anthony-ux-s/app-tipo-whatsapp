@@ -7,7 +7,9 @@ import { Modal } from '@shared/ui/Modal';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatTime } from '@shared/utils/date';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
+import { whatsappLink } from '@shared/utils/big-order';
 import { AmountRow, OrderStatusBadge, OrderTimeline, PageHeader, ServicePage } from '../../services/components/ServicesUi';
+import { BigOrderTag } from './BigOrderTag';
 import { LiveTracking } from '../../services/components/LiveTracking';
 import { useOrderChat } from '../../services/hooks/use-order-chat.hook';
 import { CLAIM_REASON_LABEL, CLAIM_STATUS_LABEL } from '../../services/const/services.const';
@@ -38,10 +40,19 @@ export function BusinessOrderDetailView() {
     <ServicePage>
       <PageHeader
         title={`Pedido · ${formatSoles(order.totalCents)}`}
-        subtitle={`${order.business?.name ?? 'Mi negocio'} · ${formatLongDate(order.createdAt)}`}
+        subtitle={`${order.business?.name ?? 'Mi negocio'} · ${formatLongDate(order.createdAt)}${order.big ? ' · GRANDE' : ''}`}
         onBack={d.back}
         action={<OrderStatusBadge status={order.status} />}
       />
+
+      {order.big && order.status === 'paid' && (
+        <section className="flex flex-col gap-2 rounded-2xl bg-rose-50 p-4 ring-1 ring-rose-200 md:p-5 dark:bg-rose-950/40 dark:ring-rose-900" aria-label="Pedido grande" data-testid="big-order-alert">
+          <p className="flex items-center gap-2 font-bold text-ink">
+            <BigOrderTag /> Confírmalo con el cliente antes de prepararlo
+          </p>
+          <p className="text-sm text-ink-soft">Revisa el stock físico, el tiempo y si hace falta una camioneta. Háblale ahora: el pedido ya está pagado.</p>
+        </section>
+      )}
 
       {delivered && (
         <section className="flex items-center gap-4 rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200 md:p-5 dark:bg-emerald-950/40 dark:ring-emerald-900" aria-label="Entrega confirmada" data-testid="delivery-proof">
@@ -91,9 +102,22 @@ export function BusinessOrderDetailView() {
             </span>
           </p>
         </div>
-        <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={() => chat.open('customer')} loading={chat.opening === 'customer'} data-testid="chat-customer">
-          Escribir
-        </Button>
+        <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
+          <Button variant="ghost" icon={<MessageCircle className="size-4" />} onClick={() => chat.open('customer')} loading={chat.opening === 'customer'} data-testid="chat-customer">
+            Escribir
+          </Button>
+          {order.big && order.customer.phone && (
+            <a
+              href={whatsappLink(order.customer.phone, `Hola ${order.customer.displayName}, te escribo de ${order.business?.name ?? 'la tienda'} por tu pedido grande en Parla (${formatSoles(order.totalCents)}).`)}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="whatsapp-customer"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-3"
+            >
+              WhatsApp
+            </a>
+          )}
+        </div>
       </section>
 
       {(order.status === 'cancelled' || order.status === 'rejected') && (

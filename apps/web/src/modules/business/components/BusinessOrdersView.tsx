@@ -8,7 +8,10 @@ import { formatSoles } from '@shared/utils/money';
 import { OrderStatusBadge, PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { BUSINESS_TABS } from '../const/business.const';
 import { useBusinessOrders } from '../hooks/use-business.hook';
+import { BigOrderTag } from './BigOrderTag';
+import { FerrohubCard } from './FerrohubCard';
 import { StoreLinks } from './StoreLinks';
+import { StoreWalletCard } from './StoreWalletCard';
 import { StoreSettingsCard } from './StoreSettingsCard';
 import { StoreStatusNotice } from './StoreStatusNotice';
 
@@ -23,6 +26,7 @@ export function BusinessOrdersView() {
       <ServicePage>
         <PageHeader title="Mi negocio" subtitle={b.business.name} onBack={b.back} />
         <StoreStatusNotice business={b.business} />
+        <FerrohubCard business={b.business} />
         <section className="rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Mi tienda">
           <StoreLinks business={b.business} />
         </section>
@@ -33,7 +37,9 @@ export function BusinessOrdersView() {
     <ServicePage>
       <PageHeader title="Mi negocio" subtitle={b.business ? `${b.business.name} · pedidos con delivery Rapidito` : 'Pedidos con delivery Rapidito'} onBack={b.back} />
 
+      {b.business && <FerrohubCard business={b.business} />}
       <StoreSettingsCard />
+      <StoreWalletCard />
 
       <div className="-mt-2 flex flex-wrap gap-1.5" role="tablist" aria-label="Filtrar pedidos del negocio">
         {BUSINESS_TABS.map((t) => (
@@ -43,7 +49,7 @@ export function BusinessOrdersView() {
             role="tab"
             aria-selected={b.tab === t.id}
             onClick={() => b.selectTab(t.id)}
-            className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition-colors duration-200 ${b.tab === t.id ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200' : 'bg-surface text-ink-soft shadow-float hover:text-ink'}`}
+            className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition-colors duration-200 ${b.tab === t.id ? 'bg-teal-100 text-ink dark:bg-teal-900/60 dark:text-ink' : 'bg-surface text-ink-soft shadow-float hover:text-ink'}`}
           >
             {t.label}
             {b.counts[t.id] > 0 && ` · ${b.counts[t.id]}`}
@@ -74,8 +80,11 @@ export function BusinessOrdersView() {
               >
                 <Avatar name={order.customer.displayName} color={order.customer.avatarColor} photo={order.customer.avatarUrl} size="sm" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px] font-semibold text-ink">
-                    {order.customer.displayName} · {formatSoles(order.totalCents)}
+                  <span className="flex items-center gap-2 text-[15px] font-semibold text-ink">
+                    {order.big && <BigOrderTag />}
+                    <span className="min-w-0 truncate">
+                      {order.customer.displayName} · {formatSoles(order.totalCents)}
+                    </span>
                   </span>
                   <span className="block truncate text-sm text-ink-soft">
                     {order.lines.map((l) => `${l.quantity}× ${l.name}`).join(', ')} · {formatListTimestamp(order.createdAt)}

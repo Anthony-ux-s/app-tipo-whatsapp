@@ -1,5 +1,6 @@
 import type { BusinessInfo } from '@parla/types';
-import { Navigate } from 'react-router';
+import { BadgeCheck } from 'lucide-react';
+import { Navigate, useSearchParams } from 'react-router';
 import { useBusinessStore } from '@shared/stores/business.store';
 import { ListSkeleton } from '@shared/ui/States';
 import { PageHeader, ServicePage } from '../../services/components/ServicesUi';
@@ -22,9 +23,16 @@ export function StoreEditView() {
 
 function EditStoreForm({ business }: { business: BusinessInfo }) {
   const e = useEditStore(business);
+  const [params] = useSearchParams();
   return (
     <ServicePage>
       <PageHeader title="Datos de mi tienda" subtitle={business.name} onBack={e.back} />
+      {params.get('confirmar') === '1' && (
+        <p className="flex items-start gap-2 rounded-2xl bg-teal-50 p-3 text-sm text-ink dark:bg-teal-950/50" role="status" data-testid="confirm-ferrohub">
+          <BadgeCheck className="mt-0.5 size-5 shrink-0 text-brand dark:text-teal-300" />
+          Estos datos vienen de FerroHub. Revísalos y toca «Guardar cambios» para confirmar tu tienda.
+        </p>
+      )}
       <StoreForm
         draft={e.draft}
         onChange={e.onChange}

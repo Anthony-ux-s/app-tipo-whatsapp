@@ -35,7 +35,7 @@ export function CatalogSourceSwitch({ current, source }: { current: CatalogSourc
           >
             <span className="flex items-center gap-2 text-[15px] font-bold text-ink">
               <Icon className="size-[18px] text-brand dark:text-teal-300" /> {option.title}
-              {option.source === source && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-200">En uso</span>}
+              {option.source === source && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-ink dark:bg-emerald-900/50 dark:text-ink">En uso</span>}
             </span>
             <span className="text-xs text-ink-soft">{option.description}</span>
           </Link>

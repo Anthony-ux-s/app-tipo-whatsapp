@@ -139,7 +139,7 @@ export function CatalogImportModal({ open, onClose, onFinished }: CatalogImportM
                 )}
 
                 {rowsWithErrors.length > 0 && (
-                  <div className="rounded-xl bg-rose-50 p-3 text-xs text-rose-900 dark:bg-rose-950/40 dark:text-rose-200" data-testid="import-errors">
+                  <div className="rounded-xl bg-rose-50 p-3 text-xs text-ink dark:bg-rose-950/40 dark:text-ink" data-testid="import-errors">
                     <p className="mb-1 flex items-center gap-1.5 font-bold">
                       <TriangleAlert className="size-4" /> Corrige estas filas en tu archivo y vuelve a subirlo (o importa solo las listas)
                     </p>

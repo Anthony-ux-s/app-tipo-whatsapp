@@ -73,7 +73,7 @@ function CatalogManager({ source }: { source: 'native' | 'api' }) {
             onChange={(e) => c.onQuery(e.target.value)}
             placeholder="Buscar por nombre o código"
             aria-label="Buscar en mis productos"
-            className="h-11 w-full rounded-2xl bg-surface pr-4 pl-11 text-[15px] text-ink shadow-float outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-teal-500/40"
+            className="h-11 w-full rounded-2xl bg-surface pr-4 pl-11 text-[15px] text-ink shadow-float outline-none placeholder:text-ink-faint/60 focus:ring-2 focus:ring-teal-500/40"
           />
         </label>
         {c.categories.length > 1 && (

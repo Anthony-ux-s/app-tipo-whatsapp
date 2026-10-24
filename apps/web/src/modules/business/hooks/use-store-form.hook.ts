@@ -1,9 +1,10 @@
 import type { BusinessInfo, GeoPoint, ServiceId } from '@parla/types';
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useBusinessStore } from '@shared/stores/business.store';
 import { toast } from '@shared/stores/toast.store';
 import { errorMessage } from '@shared/utils/http';
+import { isServiceId } from '../../services/const/services.const';
 
 export interface StoreDraft {
   name: string;
@@ -74,12 +75,14 @@ function useStoreDraft(initial: StoreDraft) {
 /** «Abrir mi tienda»: registra la tienda y la deja en revisión hasta que soporte la apruebe. */
 export function useOpenStore() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const registerStore = useBusinessStore((s) => s.registerStore);
-  const form = useStoreDraft(EMPTY_DRAFT);
+  const chosen = params.get('service');
+  const form = useStoreDraft(isServiceId(chosen ?? undefined) ? { ...EMPTY_DRAFT, service: chosen as ServiceId } : EMPTY_DRAFT);
 
   return {
     ...form,
-    back: () => navigate('/app/servicios'),
+    back: () => navigate('/app/negocio/nueva'),
     submit: async () => {
       const problem = validateStoreDraft(form.draft);
       if (problem) return form.setError(problem);

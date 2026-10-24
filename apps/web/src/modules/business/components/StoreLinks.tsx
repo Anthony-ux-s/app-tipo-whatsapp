@@ -1,5 +1,5 @@
 import type { BusinessInfo } from '@parla/types';
-import { ChevronRight, Pencil, Plug, Tags } from 'lucide-react';
+import { ChevronRight, Link2, Pencil, Plug, Tags } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 
@@ -21,6 +21,9 @@ export function StoreLinks({ business }: { business: BusinessInfo }) {
   return (
     <div className="flex flex-col" data-testid="store-links">
       <Row to="/app/negocio/tienda" icon={<Pencil className="size-[18px]" />} title="Datos de mi tienda" description="Nombre, dirección, ubicación y horario" testId="open-store-edit" />
+      {business.service === 'ferreteria' && business.connector === null && (
+        <Row to="/app/negocio/nueva/ferreteria/conectar" icon={<Link2 className="size-[18px]" />} title="Conectar con FerroHub" description="Escribe el código de enlace y tus productos llegan solos" testId="open-ferrohub-connect" />
+      )}
       {business.source === 'native' ? (
         <Row to="/app/negocio/catalogo" icon={<Tags className="size-[18px]" />} title="Mis productos" description="Precios, ofertas y stock; también puedes importar un archivo" testId="open-catalog" />
       ) : (

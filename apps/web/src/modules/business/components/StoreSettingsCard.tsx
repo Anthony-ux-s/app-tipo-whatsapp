@@ -17,7 +17,7 @@ export function StoreSettingsCard() {
     <section className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Mi tienda" data-testid="store-settings">
       <div className="flex items-center gap-3">
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${open ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-200' : 'bg-rose-100 text-rose-900 dark:bg-rose-900/50 dark:text-rose-200'}`}
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${open ? 'bg-emerald-100 text-ink dark:bg-emerald-900/50 dark:text-ink' : 'bg-rose-100 text-ink dark:bg-rose-900/50 dark:text-ink'}`}
           data-testid="store-open"
           data-open={open}
         >

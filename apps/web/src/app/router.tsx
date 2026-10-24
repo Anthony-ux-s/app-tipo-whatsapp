@@ -1,80 +1,65 @@
 import { createBrowserRouter, Navigate } from 'react-router';
-import { WelcomeView } from '../modules/account/components/WelcomeView';
-import { AdminView } from '../modules/admin/components/AdminView';
-import { DriverOrderDetailView } from '../modules/driver/components/DriverOrderDetailView';
-import { DriverOrdersView } from '../modules/driver/components/DriverOrdersView';
-import { DriverProfileView } from '../modules/driver/components/DriverProfileView';
-import { DriverRegisterView } from '../modules/driver/components/DriverRegisterView';
-import { DriverRoutesView } from '../modules/driver/components/DriverRoutesView';
-import { ForgotPasswordView } from '../modules/auth/components/ForgotPasswordView';
 import { LoginView } from '../modules/auth/components/LoginView';
-import { RegisterView } from '../modules/auth/components/RegisterView';
-import { BusinessCatalogView } from '../modules/business/components/BusinessCatalogView';
-import { BusinessOrderDetailView } from '../modules/business/components/BusinessOrderDetailView';
-import { BusinessOrdersView } from '../modules/business/components/BusinessOrdersView';
-import { ConnectSystemView } from '../modules/business/components/ConnectSystemView';
-import { OpenStoreView } from '../modules/business/components/OpenStoreView';
-import { StoreEditView } from '../modules/business/components/StoreEditView';
 import { ConversationView } from '../modules/chats/components/ConversationView';
 import { NoChatSelected } from '../modules/chats/components/NoChatSelected';
-import { LegalView } from '../modules/legal/components/LegalView';
-import { CheckoutView } from '../modules/services/components/CheckoutView';
-import { MarketView } from '../modules/services/components/MarketView';
-import { OffersView } from '../modules/services/components/OffersView';
-import { OrderDetailView } from '../modules/services/components/OrderDetailView';
-import { OrdersView } from '../modules/services/components/OrdersView';
-import { ServicesHomeView } from '../modules/services/components/ServicesHomeView';
-import { StoresListView } from '../modules/services/components/StoresListView';
-import { SettingsSectionView } from '../modules/settings/components/SettingsSectionView';
-import { SettingsView } from '../modules/settings/components/SettingsView';
-import { AppShellView } from '../modules/shell/components/AppShellView';
+import { AppRoot } from './AppRoot';
 import { NotFoundView } from './NotFoundView';
-import { GuestOnly, RequireAuth } from './route-guards';
+import { GuestOnly, RequireAuth, UsersOnly } from './route-guards';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/app" replace /> },
-  { path: '/legal/terminos', element: <LegalView slug="terminos" /> },
-  { path: '/legal/privacidad', element: <LegalView slug="privacidad" /> },
+  { path: '/legal/terminos', lazy: () => import('../modules/legal/components/LegalView').then((m) => ({ Component: () => <m.LegalView slug="terminos" /> })) },
+  { path: '/legal/privacidad', lazy: () => import('../modules/legal/components/LegalView').then((m) => ({ Component: () => <m.LegalView slug="privacidad" /> })) },
   {
     element: <GuestOnly />,
     children: [
       { path: '/entrar', element: <LoginView /> },
-      { path: '/registro', element: <RegisterView /> },
-      { path: '/recuperar', element: <ForgotPasswordView /> },
+      { path: '/registro', lazy: () => import('../modules/auth/components/RegisterView').then((m) => ({ Component: m.RegisterView })) },
+      { path: '/recuperar', lazy: () => import('../modules/auth/components/ForgotPasswordView').then((m) => ({ Component: m.ForgotPasswordView })) },
     ],
   },
   {
     element: <RequireAuth />,
     children: [
-      { path: '/bienvenida', element: <WelcomeView /> },
+      { path: '/bienvenida', lazy: () => import('../modules/account/components/WelcomeView').then((m) => ({ Component: m.WelcomeView })) },
       {
         path: '/app',
-        element: <AppShellView />,
+        element: <AppRoot />,
         children: [
           { index: true, element: <NoChatSelected /> },
           { path: 'c/:conversationId', element: <ConversationView /> },
-          { path: 'servicios', element: <ServicesHomeView /> },
+          { path: 'servicios', lazy: () => import('../modules/services/components/ServicesHomeView').then((m) => ({ Component: m.ServicesHomeView })) },
           // «c/:category» va antes de «:storeId» para que «c» no se tome como el id de una tienda.
-          { path: 'servicios/c/:category', element: <StoresListView /> },
-          { path: 'servicios/:storeId', element: <MarketView /> },
-          { path: 'servicios/:storeId/carrito', element: <CheckoutView /> },
-          { path: 'ofertas', element: <OffersView /> },
-          { path: 'pedidos', element: <OrdersView /> },
-          { path: 'pedidos/:orderId', element: <OrderDetailView /> },
-          { path: 'negocio', element: <BusinessOrdersView /> },
-          { path: 'negocio/abrir', element: <OpenStoreView /> },
-          { path: 'negocio/tienda', element: <StoreEditView /> },
-          { path: 'negocio/catalogo', element: <BusinessCatalogView /> },
-          { path: 'negocio/conectar', element: <ConnectSystemView /> },
-          { path: 'negocio/pedidos/:orderId', element: <BusinessOrderDetailView /> },
-          { path: 'rapidito', element: <DriverOrdersView /> },
-          { path: 'rapidito/registro', element: <DriverRegisterView /> },
-          { path: 'rapidito/perfil', element: <DriverProfileView /> },
-          { path: 'rapidito/rutas', element: <DriverRoutesView /> },
-          { path: 'rapidito/pedidos/:orderId', element: <DriverOrderDetailView /> },
-          { path: 'admin', element: <AdminView /> },
-          { path: 'ajustes', element: <SettingsView /> },
-          { path: 'ajustes/:section', element: <SettingsSectionView /> },
+          { path: 'servicios/c/:category', lazy: () => import('../modules/services/components/StoresListView').then((m) => ({ Component: m.StoresListView })) },
+          { path: 'servicios/:storeId', lazy: () => import('../modules/services/components/MarketView').then((m) => ({ Component: m.MarketView })) },
+          { path: 'servicios/:storeId/carrito', lazy: () => import('../modules/services/components/CheckoutView').then((m) => ({ Component: m.CheckoutView })) },
+          { path: 'ofertas', lazy: () => import('../modules/services/components/OffersView').then((m) => ({ Component: m.OffersView })) },
+          { path: 'pedidos', lazy: () => import('../modules/services/components/OrdersView').then((m) => ({ Component: m.OrdersView })) },
+          { path: 'pedidos/:orderId', lazy: () => import('../modules/services/components/OrderDetailView').then((m) => ({ Component: m.OrderDetailView })) },
+          {
+            // Tienda y reparto son de los clientes; soporte, que solo administra, vuelve a su inicio.
+            element: <UsersOnly />,
+            children: [
+              { path: 'negocio', lazy: () => import('../modules/business/components/BusinessOrdersView').then((m) => ({ Component: m.BusinessOrdersView })) },
+              { path: 'negocio/nueva', lazy: () => import('../modules/business/components/StoreCategoryView').then((m) => ({ Component: m.StoreCategoryView })) },
+              { path: 'negocio/nueva/ferreteria', lazy: () => import('../modules/business/components/FerreteriaStartView').then((m) => ({ Component: m.FerreteriaStartView })) },
+              { path: 'negocio/nueva/ferreteria/conectar', lazy: () => import('../modules/business/components/FerrohubConnectView').then((m) => ({ Component: m.FerrohubConnectView })) },
+              { path: 'negocio/nueva/ferreteria/crear', lazy: () => import('../modules/business/components/FerrohubCreateView').then((m) => ({ Component: m.FerrohubCreateView })) },
+              { path: 'negocio/abrir', lazy: () => import('../modules/business/components/OpenStoreView').then((m) => ({ Component: m.OpenStoreView })) },
+              { path: 'negocio/tienda', lazy: () => import('../modules/business/components/StoreEditView').then((m) => ({ Component: m.StoreEditView })) },
+              { path: 'negocio/catalogo', lazy: () => import('../modules/business/components/BusinessCatalogView').then((m) => ({ Component: m.BusinessCatalogView })) },
+              { path: 'negocio/conectar', lazy: () => import('../modules/business/components/ConnectSystemView').then((m) => ({ Component: m.ConnectSystemView })) },
+              { path: 'negocio/pedidos/:orderId', lazy: () => import('../modules/business/components/BusinessOrderDetailView').then((m) => ({ Component: m.BusinessOrderDetailView })) },
+              { path: 'rapidito', lazy: () => import('../modules/driver/components/DriverOrdersView').then((m) => ({ Component: m.DriverOrdersView })) },
+              { path: 'rapidito/registro', lazy: () => import('../modules/driver/components/DriverRegisterView').then((m) => ({ Component: m.DriverRegisterView })) },
+              { path: 'rapidito/perfil', lazy: () => import('../modules/driver/components/DriverProfileView').then((m) => ({ Component: m.DriverProfileView })) },
+              { path: 'rapidito/rutas', lazy: () => import('../modules/driver/components/DriverRoutesView').then((m) => ({ Component: m.DriverRoutesView })) },
+              { path: 'rapidito/pedidos/:orderId', lazy: () => import('../modules/driver/components/DriverOrderDetailView').then((m) => ({ Component: m.DriverOrderDetailView })) },
+            ],
+          },
+          { path: 'admin/:section?', lazy: () => import('../modules/admin/components/AdminView').then((m) => ({ Component: m.AdminView })) },
+          { path: 'ajustes', lazy: () => import('../modules/settings/components/SettingsView').then((m) => ({ Component: m.SettingsView })) },
+          { path: 'ajustes/:section', lazy: () => import('../modules/settings/components/SettingsSectionView').then((m) => ({ Component: m.SettingsSectionView })) },
         ],
       },
     ],

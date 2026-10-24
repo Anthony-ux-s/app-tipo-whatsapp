@@ -89,7 +89,7 @@ function ConnectForm({ onBack, source }: { onBack: () => void; source: 'native' 
 
           {i.result && (
             <div
-              className={`flex items-start gap-2 rounded-xl p-3 text-sm ${i.result.ok ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200' : 'bg-rose-50 text-rose-900 dark:bg-rose-950/50 dark:text-rose-200'}`}
+              className={`flex items-start gap-2 rounded-xl p-3 text-sm ${i.result.ok ? 'bg-emerald-50 text-ink dark:bg-emerald-950/50 dark:text-ink' : 'bg-rose-50 text-ink dark:bg-rose-950/50 dark:text-ink'}`}
               role="status"
               data-testid="integration-test-result"
             >
