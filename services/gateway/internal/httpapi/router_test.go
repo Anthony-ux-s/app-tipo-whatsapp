@@ -85,3 +85,40 @@ func TestWebSocketYSalud(t *testing.T) {
 		t.Fatalf("socket.io debía responder 410, obtuve %d", resp.StatusCode)
 	}
 }
+
+func TestLaPaginaDePagoDePruebaSoloSePublicaSiSeActiva(t *testing.T) {
+	sim := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "pagina:"+r.Method+":"+r.URL.Path)
+	}))
+	t.Cleanup(sim.Close)
+	simURL, _ := url.Parse(sim.URL)
+	core := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "core") }))
+	t.Cleanup(core.Close)
+	coreURL, _ := url.Parse(core.URL)
+	build := func(pay *url.URL) *httptest.Server {
+		gw := httptest.NewServer(New(Options{Core: coreURL, Realtime: stubRealtime{}, LinkUp: func() bool { return true }, Limiter: ratelimit.New(100), PayPage: pay}))
+		t.Cleanup(gw.Close)
+		return gw
+	}
+
+	// Apagada (lo normal en producción): la ruta cae al core, nunca llega al simulador.
+	if _, body := get(t, build(nil).URL+"/pagaya/pagar/abc"); body != "core" {
+		t.Fatalf("apagada, debía ir al core; obtuve %q", body)
+	}
+	// Encendida: solo la página de pago (GET y POST), nada más del simulador.
+	on := build(simURL)
+	if _, body := get(t, on.URL+"/pagaya/pagar/abc"); body != "pagina:GET:/pagaya/pagar/abc" {
+		t.Fatalf("encendida, debía ir al simulador; obtuve %q", body)
+	}
+	resp, err := http.Post(on.URL+"/pagaya/pagar/abc", "application/x-www-form-urlencoded", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if b, _ := io.ReadAll(resp.Body); string(b) != "pagina:POST:/pagaya/pagar/abc" {
+		t.Fatalf("el POST debía llegar al simulador; obtuve %q", b)
+	}
+	if _, body := get(t, on.URL+"/pagaya/cobros/abc"); body != "core" {
+		t.Fatalf("la API de cobros no debe quedar pública; obtuve %q", body)
+	}
+}

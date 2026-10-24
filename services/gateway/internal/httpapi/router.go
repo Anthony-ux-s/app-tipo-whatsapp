@@ -34,6 +34,10 @@ type Options struct {
 	JWTSecret string
 	// Services, si existe, atiende /api/services/* y los avisos /hooks/* de los proveedores.
 	Services *orders.HTTP
+	// PayPage, si existe, publica SOLO la página de pago de la billetera de prueba (GET/POST /pagaya/pagar/{id}) para que
+	// el QR se pueda escanear y pagar desde el celular. Es un simulador: cualquiera con el enlace "paga" sin dinero real.
+	// Debe quedar apagado cuando se conecte una billetera real.
+	PayPage *url.URL
 }
 
 // New devuelve el handler del gateway.
@@ -105,6 +109,14 @@ func New(opts Options) http.Handler {
 		// Soporte destraba un pedido: cancelarlo devuelve el pago en PagaYa.
 		mux.HandleFunc("POST /api/admin/orders/{id}/cancel", authed(svc.CancelBySupport))
 		mux.HandleFunc("POST /hooks/pagaya", svc.PagayaHook)
+	}
+	if opts.PayPage != nil {
+		pay := &httputil.ReverseProxy{Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(opts.PayPage)
+			r.Out.Header.Del("Authorization")
+		}}
+		mux.Handle("GET /pagaya/pagar/{id}", pay)
+		mux.Handle("POST /pagaya/pagar/{id}", pay)
 	}
 	mux.HandleFunc("/api/", limited(proxy.ServeHTTP))
 	mux.Handle("/", proxy)

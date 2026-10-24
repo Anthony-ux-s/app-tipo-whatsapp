@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -58,16 +59,16 @@ func main() {
 	core := orders.HTTPCore{BaseURL: cfg.CoreURL, Token: cfg.InternalToken, HTTP: client}
 	wallet := pagaya.Client{BaseURL: cfg.ProvidersURL, HTTP: client, APIKey: cfg.PagayaAPIKey}
 	orch := &orders.Orchestrator{
-		Stores:    &orders.CoreStores{Core: core, HTTP: client},
-		Delivery:  orders.CoreDelivery{Core: core, Fallback: rapidito.Client{BaseURL: cfg.ProvidersURL, HTTP: client}},
-		Payments:  wallet,
-		Core:      core,
-		Payouts:   core,
+		Stores:       &orders.CoreStores{Core: core, HTTP: client},
+		Delivery:     orders.CoreDelivery{Core: core, Fallback: rapidito.Client{BaseURL: cfg.ProvidersURL, HTTP: client}},
+		Payments:     wallet,
+		Core:         core,
+		Payouts:      core,
 		StorePayouts: orders.StorePayoutCore{HTTPCore: core},
-		Wallet:    wallet,
-		Claims:    core,
-		Refunds:   wallet,
-		PublicURL: cfg.PublicURL,
+		Wallet:       wallet,
+		Claims:       core,
+		Refunds:      wallet,
+		PublicURL:    cfg.PublicURL,
 	}
 	servicesAPI := &orders.HTTP{Orch: orch, PagayaSecret: cfg.PagayaSecret}
 	if err := orch.StartPayoutScheduler(ctx, cfg.PayoutAt); err != nil {
@@ -75,11 +76,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	var payPage *url.URL
+	if cfg.PagayaSimulatorPublic {
+		if u, err := url.Parse(cfg.ProvidersURL); err == nil {
+			payPage = u
+			slog.Warn("la página de pago de la billetera de PRUEBA está pública (PAGAYA_SIMULATOR_PUBLIC): apágala con pagos reales")
+		}
+	}
 	server := &http.Server{
 		Addr: fmt.Sprintf(":%d", cfg.Port),
 		Handler: httpapi.New(httpapi.Options{
 			Core: cfg.CoreURL, Realtime: hub, LinkUp: link.Connected, Limiter: limiter, TrustProxy: cfg.Production,
-			JWTSecret: cfg.JWTSecret, Services: servicesAPI,
+			JWTSecret: cfg.JWTSecret, Services: servicesAPI, PayPage: payPage,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

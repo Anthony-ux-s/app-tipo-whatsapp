@@ -38,6 +38,8 @@ type Config struct {
 	MercayaAdminKey string
 	// PagayaAPIKey: clave de la API de transferencias de la billetera (retiros de los repartidores).
 	PagayaAPIKey string
+	// PagayaSimulatorPublic: publica la página de pago de la billetera de prueba (PAGAYA_SIMULATOR_PUBLIC=true). Solo para pruebas.
+	PagayaSimulatorPublic bool
 	// PayoutAt: hora de Lima («HH:MM») del retiro automático diario a los repartidores; vacío = apagado.
 	PayoutAt string
 }
@@ -75,19 +77,20 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		Production:      production,
-		Port:            port,
-		CoreURL:         core,
-		RealtimeLinkURL: env("REALTIME_LINK_URL", "ws://localhost:4102/link"),
-		InternalToken:   env("INTERNAL_TOKEN", devInternalToken),
-		JWTSecret:       env("JWT_SECRET", devJWTSecret),
-		AllowedOrigins:  originHosts(env("WEB_ORIGIN", "http://localhost:3100")),
-		RatePerMinute:   rate,
-		ProvidersURL:    strings.TrimRight(providers.String(), "/"),
-		PublicURL:       strings.TrimRight(public.String(), "/"),
-		PagayaSecret:    env("PAGAYA_WEBHOOK_SECRET", devPagayaSecret),
-		MercayaAdminKey: env("MERCAYA_ADMIN_KEY", devMercayaKey),
-		PagayaAPIKey:    env("PAGAYA_API_KEY", devPagayaAPIKey),
+		Production:            production,
+		Port:                  port,
+		CoreURL:               core,
+		RealtimeLinkURL:       env("REALTIME_LINK_URL", "ws://localhost:4102/link"),
+		InternalToken:         env("INTERNAL_TOKEN", devInternalToken),
+		JWTSecret:             env("JWT_SECRET", devJWTSecret),
+		AllowedOrigins:        originHosts(env("WEB_ORIGIN", "http://localhost:3100")),
+		RatePerMinute:         rate,
+		ProvidersURL:          strings.TrimRight(providers.String(), "/"),
+		PublicURL:             strings.TrimRight(public.String(), "/"),
+		PagayaSimulatorPublic: strings.EqualFold(env("PAGAYA_SIMULATOR_PUBLIC", ""), "true"),
+		PagayaSecret:          env("PAGAYA_WEBHOOK_SECRET", devPagayaSecret),
+		MercayaAdminKey:       env("MERCAYA_ADMIN_KEY", devMercayaKey),
+		PagayaAPIKey:          env("PAGAYA_API_KEY", devPagayaAPIKey),
 		// Se lee tal cual: RAPIDITO_PAYOUT_AT="" (definida y vacía) apaga el retiro automático.
 		PayoutAt: payoutAt(),
 	}
