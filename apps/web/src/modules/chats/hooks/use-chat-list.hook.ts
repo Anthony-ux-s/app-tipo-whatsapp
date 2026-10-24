@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { sortConversations, useChatStore } from '@shared/stores/chat.store';
+import { useConversationMap } from '@shared/stores/chat.queries';
 import { useMenuStore } from '@shared/stores/menu.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { formatListTimestamp } from '@shared/utils/date';
@@ -14,8 +15,7 @@ export function useChatList() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const user = useSessionStore((s) => s.user)!;
-  const conversations = useChatStore((s) => s.conversations);
-  const listStatus = useChatStore((s) => s.listStatus);
+  const { conversations, status: listStatus } = useConversationMap();
   const texts = useChatStore((s) => s.texts);
   const typing = useChatStore((s) => s.typing);
   const loadConversations = useChatStore((s) => s.loadConversations);

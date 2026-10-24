@@ -2,8 +2,9 @@ import { decryptPrivateKey, encryptPrivateKey, generateIdentityKeyPair } from '@
 import type { AuthResponse, GoogleSignInResponse, PublicUser, SessionUser, ThemePreference, UpdateProfileRequest, UserPreferences } from '@parla/types';
 import { CHAT_FONT_FAMILIES, CHAT_FONT_SIZES } from '../const/chat-text.const';
 import { create } from 'zustand';
-import { lockVault, restoreVault, unlockVault } from '../utils/crypto-vault';
+import { deviceKeyMatches, lockVault, restoreVault, unlockVault } from '../utils/crypto-vault';
 import { http, setUnauthorizedHandler, tokenStorage } from '../utils/http';
+import { queryClient } from '../utils/query-client';
 import { disconnectSocket } from '../utils/socket';
 
 export type SessionStatus = 'booting' | 'anonymous' | 'ready';
@@ -30,6 +31,8 @@ interface SessionState {
   googleSignIn: (idToken: string) => Promise<GoogleSignInResponse>;
   /** Abre las claves de cifrado con la contraseña y deja la sesión iniciada. */
   unlockSession: (response: AuthResponse, password: string) => Promise<void>;
+  /** Abre la sesión con la clave que este dispositivo ya tiene (sin contraseña). `false` si no la tiene o ya no sirve. */
+  unlockWithDevice: (response: AuthResponse) => Promise<boolean>;
   /** Contraseña nueva con el comprobante del correo: claves nuevas creadas en este dispositivo. */
   resetPassword: (verificationToken: string, password: string) => Promise<void>;
   /** La sesión cambió en el servidor (correo verificado, foto nueva…). */
@@ -63,10 +66,7 @@ export function applyChatText({ chatFontSize, chatFont }: Pick<UserPreferences, 
 }
 
 export const useSessionStore = create<SessionState>((set, get) => {
-  const startSession = async ({ token, user }: AuthResponse, password: string) => {
-    // La clave privada se descifra en el navegador con la contraseña: el servidor nunca la ve.
-    const privateKeyJwk = await decryptPrivateKey(user.keyBackup, password);
-    await unlockVault(user.id, privateKeyJwk);
+  const openSession = ({ token, user }: AuthResponse) => {
     tokenStorage.set(token);
     // Quien tiene tienda aterriza en «Mi negocio» al entrar (lo resuelve el layout principal cuando carga su negocio).
     sessionStorage.setItem(LANDING_KEY, '1');
@@ -76,15 +76,25 @@ export const useSessionStore = create<SessionState>((set, get) => {
     set({ status: 'ready', user });
   };
 
-  const logout = () => {
-    lockVault(get().user?.id ?? localStorage.getItem(LAST_USER_KEY));
+  const startSession = async (auth: AuthResponse, password: string) => {
+    // La clave privada se descifra en el navegador con la contraseña: el servidor nunca la ve.
+    const privateKeyJwk = await decryptPrivateKey(auth.user.keyBackup, password);
+    await unlockVault(auth.user.id, privateKeyJwk);
+    openSession(auth);
+  };
+
+  /** Cierra la sesión. La clave de cifrado queda guardada en este dispositivo (salvo `forget`) para volver a entrar con Google sin contraseña. */
+  const logout = (forget = false) => {
+    lockVault(get().user?.id ?? localStorage.getItem(LAST_USER_KEY), forget);
     tokenStorage.clear();
     localStorage.removeItem(LAST_USER_KEY);
     disconnectSocket();
+    // Nada de lo que vio esta persona queda en la caché para quien entre después.
+    queryClient.clear();
     set({ status: 'anonymous', user: null, onboarding: false });
   };
 
-  setUnauthorizedHandler(logout);
+  setUnauthorizedHandler(() => logout());
 
   return {
     status: 'booting',
@@ -117,6 +127,12 @@ export const useSessionStore = create<SessionState>((set, get) => {
     googleSignIn: (idToken) => http.post<GoogleSignInResponse>('/auth/google', { idToken }),
 
     unlockSession: startSession,
+
+    unlockWithDevice: async (auth) => {
+      if (!deviceKeyMatches(auth.user.id, auth.user.publicKey) || !(await restoreVault(auth.user.id))) return false;
+      openSession(auth);
+      return true;
+    },
 
     register: async (input) => {
       const pair = await generateIdentityKeyPair();
@@ -165,11 +181,11 @@ export const useSessionStore = create<SessionState>((set, get) => {
       set({ user: await http.delete<SessionUser>('/auth/me/avatar') });
     },
 
-    logout,
+    logout: () => logout(),
 
     deleteAccount: async (password) => {
       await http.delete('/auth/me', { password });
-      logout();
+      logout(true);
     },
 
     updateProfile: async (changes) => {

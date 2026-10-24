@@ -37,7 +37,7 @@ export function SavedAddresses({ current, onPick }: { current: DeliveryAddress; 
               type="button"
               aria-pressed={on}
               onClick={() => onPick({ line: a.line, reference: a.reference, location: a.location })}
-              className={`flex max-w-56 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition-colors duration-200 ${on ? 'bg-teal-100 text-teal-900 ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-teal-100' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
+              className={`flex max-w-56 shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition-colors duration-200 ${on ? 'bg-teal-100 text-ink ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-ink' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
             >
               <Icon className="size-4 shrink-0" />
               <span className="min-w-0">

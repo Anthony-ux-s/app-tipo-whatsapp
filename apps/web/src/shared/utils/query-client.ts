@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { ApiError } from './http';
+import { ApiError, http } from './http';
 
 /**
  * Caché de lecturas del servidor: al volver a una pantalla se muestra al instante lo último que se vio
@@ -15,3 +15,10 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+/**
+ * Lectura GET con la caché de Query para los stores de Zustand (que además reciben eventos en tiempo real):
+ * las peticiones iguales que llegan a la vez se juntan en una sola. `staleTime` 0 = siempre pide lo último.
+ */
+export const fetchQ = <T>(queryKey: readonly unknown[], path: string, staleTime = 0) =>
+  queryClient.fetchQuery({ queryKey, queryFn: () => http.get<T>(path), staleTime });

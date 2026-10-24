@@ -201,7 +201,7 @@ function History() {
             type="button"
             aria-pressed={days === r.days}
             onClick={() => setDays(r.days)}
-            className={`h-8 shrink-0 rounded-full px-3 text-xs font-semibold ${days === r.days ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200' : 'bg-surface text-ink-soft shadow-float'}`}
+            className={`h-8 shrink-0 rounded-full px-3 text-xs font-semibold ${days === r.days ? 'bg-teal-100 text-ink dark:bg-teal-900/60 dark:text-ink' : 'bg-surface text-ink-soft shadow-float'}`}
           >
             {r.label}
           </button>
@@ -276,7 +276,7 @@ function StepChip({ label, done, active }: { label: string; done: boolean; activ
   const tone = done
     ? 'bg-surface-3 text-ink-faint'
     : active
-      ? 'bg-teal-100 text-teal-800 ring-1 ring-teal-500 dark:bg-teal-900/60 dark:text-teal-200'
+      ? 'bg-teal-100 text-ink ring-1 ring-teal-500 dark:bg-teal-900/60 dark:text-ink'
       : 'bg-surface-3 text-ink-soft';
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${tone}`}>

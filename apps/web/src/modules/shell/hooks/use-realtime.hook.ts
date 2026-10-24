@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useBusinessStore } from '@shared/stores/business.store';
 import { useCallStore } from '@shared/stores/call.store';
-import { useChatStore } from '@shared/stores/chat.store';
+import { chatKeys, getConversations, useChatStore } from '@shared/stores/chat.store';
+import { queryClient } from '@shared/utils/query-client';
 import { useDriverStore } from '@shared/stores/driver.store';
 import { useEffectsStore } from '@shared/stores/effects.store';
 import { useSessionStore } from '@shared/stores/session.store';
@@ -42,21 +43,18 @@ export function useRealtime(userId: string | undefined) {
     }
     useChatStore.getState().setIdentity(userId);
     const socket = connectSocket(token);
-    if (socket.connected) useChatStore.getState().setConnection('online');
 
     const onConnect = () => {
-      useChatStore.getState().setConnection('online');
-      // Al reconectar se recupera lo que llegó mientras no había conexión.
+      // Al reconectar se recupera lo que llegó mientras no había conexión. Si la lista se está pidiendo o se
+      // acaba de pedir (primera conexión al entrar), no se repite: sería la misma petición dos veces.
       const { activeId } = useChatStore.getState();
-      void useChatStore.getState().loadConversations().catch(() => undefined);
+      const list = queryClient.getQueryState(chatKeys.list);
+      const recent = list?.fetchStatus === 'fetching' || (list?.status === 'success' && Date.now() - list.dataUpdatedAt < 5000);
+      if (!recent) void useChatStore.getState().loadConversations().catch(() => undefined);
       if (activeId) void useChatStore.getState().loadMessages(activeId).catch(() => undefined);
     };
-    const onDisconnect = () => useChatStore.getState().setConnection('offline');
-    const onReconnecting = () => useChatStore.getState().setConnection('connecting');
 
     socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    socket.on('reconnecting', onReconnecting);
     socket.on('message:new', async (message) => {
       const result = await useChatStore.getState().receiveMessage(message, { focused: isFocused() });
       // En el chat abierto, el efecto (confeti, corazones…) se calcula con el mensaje ya descifrado.
@@ -74,8 +72,8 @@ export function useRealtime(userId: string | undefined) {
       const sound = useSessionStore.getState().user?.preferences.notificationSound;
       if (result === 'background' && sound) playMessageSound();
       // Con la pestaña oculta, aviso del sistema con el texto ya descifrado en el navegador.
-      const { conversations, texts, myId } = useChatStore.getState();
-      const conversation = conversations[message.conversationId];
+      const { texts, myId } = useChatStore.getState();
+      const conversation = getConversations()[message.conversationId];
       if (result === 'background' && document.visibilityState === 'hidden' && conversation && myId) {
         const notice = localNotificationFor(message, conversation, texts, myId);
         void showLocalNotification(notice.title, notice.body, notice.url, notice.tag).catch(() => undefined);
@@ -114,8 +112,8 @@ export function useRealtime(userId: string | undefined) {
 
     // Al volver a la pestaña, lo que está abierto queda leído.
     const onFocus = () => {
-      const { activeId, conversations } = useChatStore.getState();
-      if (activeId && conversations[activeId]?.unreadCount) void useChatStore.getState().markRead(activeId);
+      const { activeId } = useChatStore.getState();
+      if (activeId && getConversations()[activeId]?.unreadCount) void useChatStore.getState().markRead(activeId);
     };
     window.addEventListener('focus', onFocus);
 

@@ -1,29 +1,26 @@
 import type { AdminClaim, AdminDriver, DriverStatus } from '@parla/types';
-import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
 import { errorMessage, http } from '@shared/utils/http';
+import { ADMIN_TABS, DEFAULT_ADMIN_TAB } from '../const/admin-nav.const';
 
 export type AdminTab = 'pedidos' | 'personas' | 'trafico' | 'tarifas' | 'tiendas' | 'repartidores' | 'reclamos' | 'cupones' | 'marketing';
 export type ClaimsView = 'open' | 'resolved';
 
-/** Datos del panel de soporte que se vuelven a pedir al cambiar el filtro (o tras una acción). */
+/**
+ * Datos del panel de soporte: se muestra al instante lo último que se vio y se vuelve a pedir por detrás
+ * (siempre «viejo» para que el soporte vea datos frescos). `reload` los refresca tras una acción.
+ */
 export function useAdminData<T>(path: string) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const reload = useCallback(() => {
-    setError(null);
-    http
-      .get<T>(path)
-      .then(setData)
-      .catch((err) => setError(errorMessage(err)));
-  }, [path]);
-  useEffect(() => {
-    setData(null);
-    reload();
-  }, [reload]);
-  return { data, error, reload };
+  const query = useQuery({ queryKey: ['admin', path], queryFn: () => http.get<T>(path), staleTime: 0 });
+  return {
+    data: query.data ?? null,
+    error: query.data === undefined && query.error ? errorMessage(query.error) : null,
+    reload: () => void query.refetch(),
+  };
 }
 
 /** Lista del panel de soporte. */
@@ -36,7 +33,8 @@ export function useAdminList<T>(path: string) {
 export function useAdmin() {
   const navigate = useNavigate();
   const isAdmin = useSessionStore((s) => !!s.user?.isAdmin);
-  const [tab, setTab] = useState<AdminTab>('pedidos');
+  const { section } = useParams();
+  const tab: AdminTab = ADMIN_TABS.find((id) => id === section) ?? DEFAULT_ADMIN_TAB;
   const [driverStatus, setDriverStatus] = useState<DriverStatus>('pending');
   const [claimsView, setClaimsView] = useState<ClaimsView>('open');
   const drivers = useAdminList<AdminDriver>(`/admin/drivers?status=${driverStatus}`);
@@ -61,7 +59,7 @@ export function useAdmin() {
   return {
     isAdmin,
     tab,
-    selectTab: setTab,
+    selectTab: (id: AdminTab) => navigate(`/app/admin/${id}`),
     back: () => navigate('/app/ajustes'),
     busy,
     driverStatus,

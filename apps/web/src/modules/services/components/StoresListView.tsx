@@ -1,5 +1,5 @@
 import type { ServiceId, StoreSummary } from '@parla/types';
-import { ChevronRight, Clock, MapPin, Moon, Star } from 'lucide-react';
+import { BadgeCheck, ChevronRight, Clock, MapPin, Moon, Star } from 'lucide-react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { EmptyState, ErrorState } from '@shared/ui/States';
 import { NoResultsIllustration } from '@shared/ui/illustrations';
@@ -65,8 +65,13 @@ function StoreCard({ store, onOpen }: { store: StoreSummary; onOpen: () => void 
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-base font-bold text-ink">{store.name}</span>
+          {store.verified && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-xs font-bold text-ink dark:bg-teal-950/60" data-testid="store-verified" title="FerroHub validó esta ferretería">
+              <BadgeCheck className="size-3.5 text-brand dark:text-teal-300" /> Ferretería verificada
+            </span>
+          )}
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${store.open ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-200' : 'bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200'}`}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${store.open ? 'bg-emerald-100 text-ink dark:bg-emerald-900/50 dark:text-ink' : 'bg-amber-100 text-ink dark:bg-amber-900/50 dark:text-ink'}`}
           >
             {!store.open && <Moon className="size-3" />}
             {store.open ? 'Abierta' : 'Cerrada'}
@@ -88,7 +93,7 @@ function StoreCard({ store, onOpen }: { store: StoreSummary; onOpen: () => void 
               {store.ratingAvg !== null ? `${store.ratingAvg.toFixed(1)} (${store.ratingCount})` : 'Sin calificaciones'}
             </span>
           </span>
-          {!store.open && store.closedMessage && <span className="font-semibold text-amber-800 dark:text-amber-300">{store.closedMessage}</span>}
+          {!store.open && store.closedMessage && <span className="font-semibold text-ink dark:text-amber-300">{store.closedMessage}</span>}
         </span>
       </span>
       <ChevronRight className="mt-1 size-5 shrink-0 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5" />

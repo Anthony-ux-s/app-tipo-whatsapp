@@ -23,15 +23,15 @@ export function ConversationHeader({ conversation, subtitle, typing, online, cal
       <button type="button" onClick={onOpenInfo} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1 pr-2 text-left">
         <Avatar name={conversation.title} color={conversation.avatarColor} photo={conversation.avatarUrl} group={conversation.kind === 'group'} online={online} size="sm" />
         <span className="min-w-0">
-          <span className="block truncate font-display text-base font-bold text-ink" data-testid="conversation-title">
+          <span className="block truncate font-display text-[15px] font-bold text-ink" data-testid="conversation-title">
             {conversation.title}
           </span>
-          <span className={`block truncate text-xs ${typing ? 'font-medium text-emerald-600 dark:text-emerald-400' : 'text-ink-soft'}`}>
+          <span className={`block truncate text-[11px] ${typing ? 'font-medium text-emerald-600 dark:text-emerald-400' : 'text-ink-soft'}`}>
             {typing ?? subtitle}
           </span>
         </span>
       </button>
-      <span className="hidden items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-800 xl:flex dark:bg-teal-950/60 dark:text-teal-200">
+      <span className="hidden items-center gap-1 rounded-full bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-ink xl:flex dark:bg-teal-950/60 dark:text-ink">
         <Lock className="size-3" /> Cifrado E2E
       </span>
       <IconButton label="Videollamada" onClick={() => onCall('video')} disabled={callBusy}>

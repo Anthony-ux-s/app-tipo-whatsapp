@@ -17,7 +17,7 @@ export function MessageText({ text, mentioned, myId, className = '' }: MessageTe
           <span
             key={i}
             data-testid="mention"
-            className={`rounded px-0.5 font-semibold ${segment.mention.self ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/70 dark:text-cyan-100' : 'text-teal-700 dark:text-teal-300'}`}
+            className={`rounded px-0.5 font-semibold ${segment.mention.self ? 'bg-cyan-100 text-ink dark:bg-cyan-900/70 dark:text-ink' : 'text-teal-700 dark:text-teal-300'}`}
           >
             {segment.text}
           </span>

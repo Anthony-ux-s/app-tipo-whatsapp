@@ -7,7 +7,7 @@ import { VideoTile } from './VideoTile';
 function RoundButton({ label, onClick, children, tone = 'glass', testId }: { label: string; onClick: () => void; children: ReactNode; tone?: 'glass' | 'on' | 'hang' | 'accept'; testId?: string }) {
   const tones = {
     glass: 'bg-white/15 text-white hover:bg-white/25',
-    on: 'bg-white text-teal-900 hover:bg-teal-50',
+    on: 'bg-white text-ink hover:bg-teal-50',
     hang: 'bg-teal-950 text-white ring-2 ring-white/30 hover:bg-black',
     accept: 'bg-emerald-500 text-white hover:bg-emerald-600',
   };
@@ -42,7 +42,7 @@ export function CallOverlay() {
             <p className="truncate font-display text-lg font-bold" data-testid="incoming-title">
               {call.call.isGroup ? call.call.title : call.callerName}
             </p>
-            <p className="truncate text-sm text-teal-100">
+            <p className="truncate text-sm text-white">
               {call.call.isGroup ? `${call.callerName} · ${call.status}` : call.status}
             </p>
           </div>
@@ -61,11 +61,11 @@ export function CallOverlay() {
   return (
     <div className="fixed inset-0 z-[70] flex animate-fade-in flex-col bg-gradient-to-br from-teal-950 via-teal-900 to-cyan-950 text-white" role="dialog" aria-label="Llamada en curso" data-testid="call-screen" data-phase={call.phase}>
       <header className="safe-bottom flex flex-col items-center gap-1 px-4 pt-6 pb-3 text-center">
-        <p className="flex items-center gap-1.5 text-xs text-teal-200">
+        <p className="flex items-center gap-1.5 text-xs text-white">
           <Lock className="size-3" /> Cifrada de extremo a extremo
         </p>
         <h2 className="font-display text-xl font-bold md:text-2xl">{call.call.title}</h2>
-        <p className="text-sm text-teal-100 tabular-nums" data-testid="call-status">
+        <p className="text-sm text-white tabular-nums" data-testid="call-status">
           {call.status}
         </p>
       </header>

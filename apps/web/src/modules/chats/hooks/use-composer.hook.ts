@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type SyntheticEvent } from 'react';
 import { useChatStore } from '@shared/stores/chat.store';
+import { useConversationById } from '@shared/stores/chat.queries';
 import { useEffectsStore } from '@shared/stores/effects.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
@@ -27,7 +28,7 @@ const TYPING_PING_MS = 2500;
 export function useComposer(conversationId: string, threadRootId: string | null = null) {
   const myId = useSessionStore((s) => s.user!.id);
   const enterToSend = useSessionStore((s) => s.user?.preferences.enterToSend ?? true);
-  const participants = useChatStore((s) => s.conversations[conversationId]?.participants);
+  const participants = useConversationById(conversationId)?.participants;
   const replyDraft = useChatStore((s) => (threadRootId ? null : (s.replyDraft[conversationId] ?? null)));
   const texts = useChatStore((s) => s.texts);
   const { sendText, sendSticker, sendMedia, emitTyping, setReplyDraft } = useChatStore.getState();

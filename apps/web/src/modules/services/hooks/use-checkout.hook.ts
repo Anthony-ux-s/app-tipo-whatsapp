@@ -1,4 +1,5 @@
 import type { GeoPoint, MyCoupon, Order, OrderQuote, Product, QuoteRequest } from '@parla/types';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { cartCount, cartEstimateCents, useCartStore } from '@shared/stores/cart.store';
@@ -8,6 +9,7 @@ import { ApiError, errorMessage, http } from '@shared/utils/http';
 
 const QUOTE_DEBOUNCE_MS = 400;
 const MIN_ADDRESS = 6;
+const NO_COUPONS: MyCoupon[] = [];
 
 /**
  * Carrito y pago: el gateway cotiza con los precios de la tienda y la tarifa del delivery, y suma
@@ -35,12 +37,8 @@ export function useCheckout() {
   const [couponDraft, setCouponDraft] = useState('');
   const [couponCode, setCouponCode] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
-  const [myCoupons, setMyCoupons] = useState<MyCoupon[]>([]);
-
   // Los cupones que ganó en la ruleta aparecen listos para tocar.
-  useEffect(() => {
-    http.get<MyCoupon[]>('/coupons/mine').then(setMyCoupons).catch(() => undefined);
-  }, []);
+  const myCoupons = useQuery({ queryKey: ['coupons', 'mine'], queryFn: () => http.get<MyCoupon[]>('/coupons/mine') }).data ?? NO_COUPONS;
 
   const lines = Object.values(items);
 

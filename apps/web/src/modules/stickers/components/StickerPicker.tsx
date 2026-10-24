@@ -144,7 +144,7 @@ export function StickerPicker({ emojis, onEmoji, onSticker }: StickerPickerProps
                 onChange={(e) => setPhrase(e.target.value)}
                 placeholder="Escribe tu frase"
                 aria-label="Frase del sticker"
-                className="h-10 min-w-0 flex-1 rounded-full border border-line bg-surface px-4 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
+                className="h-10 min-w-0 flex-1 rounded-full border border-line bg-surface px-4 text-sm text-ink outline-none placeholder:text-ink-faint/60 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
               />
               <button
                 type="submit"

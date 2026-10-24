@@ -57,6 +57,21 @@ export default defineConfig({
       '@parla/crypto': fileURLToPath(new URL('../../packages/crypto/src/index.ts', import.meta.url)),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Librerías aparte: el navegador las cachea y un cambio de código no las invalida.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react';
+          if (id.includes('react-router')) return 'router';
+          if (id.includes('@tanstack')) return 'query';
+          if (id.includes('lucide-react')) return 'icons';
+          return undefined;
+        },
+      },
+    },
+  },
   optimizeDeps: {
     include: ['react', 'react-dom/client', 'react-router', 'zustand', 'lucide-react', 'workbox-core', 'workbox-precaching', 'workbox-routing'],
   },

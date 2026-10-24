@@ -46,7 +46,7 @@ export function ConversationView() {
           data-testid="message-list"
         >
           <div className="mx-auto mb-3 flex max-w-md justify-center px-4">
-            <p className="flex items-start gap-2 rounded-lg bg-cyan-50/95 px-3 py-2 text-center text-xs text-cyan-900 shadow-float dark:bg-cyan-950/70 dark:text-cyan-100">
+            <p className="flex items-start gap-2 rounded-lg bg-cyan-50/95 px-3 py-2 text-center text-xs text-ink shadow-float dark:bg-cyan-950/70 dark:text-ink">
               <Lock className="mt-px size-3.5 shrink-0" />
               Los mensajes están cifrados de extremo a extremo. Nadie fuera de este chat, ni siquiera Parla, puede leerlos.
             </p>

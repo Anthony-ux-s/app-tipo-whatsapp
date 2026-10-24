@@ -1,5 +1,5 @@
 import type { AdminClaim, AdminDriver, DriverStatus } from '@parla/types';
-import { BarChart3, Bike, Dices, Check, FileImage, HandCoins, LifeBuoy, Package, RefreshCw, Route, ShieldCheck, Store, Ticket, Users, X, type LucideIcon } from 'lucide-react';
+import { Check, FileImage, HandCoins, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router';
 import { Button, IconButton } from '@shared/ui/Button';
@@ -9,8 +9,10 @@ import { PrivatePhoto } from '@shared/ui/PrivatePhoto';
 import { EmptyState, ErrorState, ListSkeleton } from '@shared/ui/States';
 import { EmptyChatsIllustration } from '@shared/ui/illustrations';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
-import { PageHeader } from '../../services/components/ServicesUi';
 import { CLAIM_REASON_LABEL, CLAIM_STATUS_LABEL } from '../../services/const/services.const';
+import { PageHeader } from '../../services/components/ServicesUi';
+import { ADMIN_ITEMS } from '../const/admin-nav.const';
+import { useMediaQuery } from '@shared/utils/use-media-query';
 import { useAdmin, type ClaimsView } from '../hooks/use-admin.hook';
 import { AdminCoupons } from './AdminCoupons';
 import { AdminDeliverySettings } from './AdminDeliverySettings';
@@ -30,36 +32,27 @@ const CLAIM_FILTERS: { id: ClaimsView; label: string }[] = [
   { id: 'resolved', label: 'Resueltos' },
 ];
 
-const SECTIONS = [
-  ['pedidos', 'Pedidos', 'Todos los pedidos y su estado', Package],
-  ['personas', 'Personas', 'Usuarios, negocios y roles', Users],
-  ['trafico', 'Tráfico', 'Actividad y números del día', BarChart3],
-  ['tarifas', 'Tarifas', 'Precios y reparto del delivery', Route],
-  ['tiendas', 'Tiendas', 'Revisar y aprobar tiendas', Store],
-  ['repartidores', 'Repartidores', 'Revisar y aprobar altas', Bike],
-  ['reclamos', 'Reclamos', 'Devoluciones y casos abiertos', LifeBuoy],
-  ['cupones', 'Cupones', 'Descuentos y promociones', Ticket],
-  ['marketing', 'Marketing', 'Ruletas, rascas, cofres y ofertas', Dices],
-] as const satisfies readonly (readonly [string, string, string, LucideIcon])[];
-
-/** Panel de soporte de Parla: en pantalla grande, menú lateral fijo + contenido ancho; en el celular, rejilla de secciones arriba. */
+/** Contenido de cada sección del panel de soporte: en pantalla grande el menú lateral lo pone el armazón de administración; en pantalla chica, la rejilla de arriba. */
 export function AdminView() {
   const a = useAdmin();
+  // Una sola barra de secciones en pantalla: el menú lateral (grande) o la rejilla de arriba (chica).
+  const large = useMediaQuery('(min-width: 1024px)');
   const [rejecting, setRejecting] = useState<{ kind: 'driver' | 'claim'; id: string; name: string } | null>(null);
   if (!a.isAdmin) return <Navigate to="/app/ajustes" replace />;
   const list = a.tab === 'repartidores' ? a.drivers : a.claims;
   const ownList = a.tab === 'repartidores' || a.tab === 'reclamos';
-  const current = SECTIONS.find((s) => s[0] === a.tab);
+  const current = ADMIN_ITEMS.find((item) => item.id === a.tab);
 
   return (
     <div className="flex min-w-0 flex-1 flex-col bg-canvas">
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 pt-3 pb-8 sm:px-4 md:px-6 md:pt-6 lg:flex-row lg:items-start lg:gap-8 lg:px-8">
-          {/* Menú: rejilla en celular/tableta, columna lateral fija en pantalla grande. */}
-          <nav className="flex flex-col gap-4 lg:sticky lg:top-6 lg:w-64 lg:shrink-0 xl:w-72" aria-label="Panel de soporte">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 pt-3 pb-8 sm:px-4 md:px-6 md:pt-6 lg:px-8">
+          {/* En celular y tableta no hay menú lateral: las secciones van en una rejilla arriba. */}
+          {!large && (
+          <nav className="flex flex-col gap-4" aria-label="Panel de soporte">
             <PageHeader title="Soporte Parla" subtitle="Todo Parla en un solo lugar" onBack={a.back} />
-            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5 lg:grid-cols-1 lg:gap-1" role="tablist" aria-orientation="vertical">
-              {SECTIONS.map(([id, label, hint, Icon]) => {
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5" role="tablist">
+              {ADMIN_ITEMS.map(({ id, label, icon: Icon }) => {
                 const on = a.tab === id;
                 return (
                   <button
@@ -69,25 +62,23 @@ export function AdminView() {
                     aria-selected={on}
                     onClick={() => a.selectTab(id)}
                     data-testid={`admin-tab-${id}`}
-                    className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[11px] leading-tight font-bold transition-colors duration-200 lg:flex-row lg:gap-3 lg:px-3 lg:py-2.5 lg:text-left lg:text-sm ${on ? 'bg-brand text-white shadow-float' : 'bg-surface text-ink-soft shadow-float hover:text-ink lg:bg-transparent lg:shadow-none lg:hover:bg-surface-3'}`}
+                    className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[11px] leading-tight font-bold transition-colors duration-200 ${on ? 'bg-brand text-white shadow-float' : 'bg-surface text-ink-soft shadow-float hover:text-ink'}`}
                   >
                     <Icon className="size-5 shrink-0" />
-                    <span className="min-w-0 lg:flex-1">
-                      <span className="block w-full truncate text-center lg:text-left">{label}</span>
-                      <span className={`hidden truncate text-xs font-medium lg:block ${on ? 'text-white/80' : 'text-ink-faint'}`}>{hint}</span>
-                    </span>
+                    <span className="block w-full truncate text-center">{label}</span>
                   </button>
                 );
               })}
             </div>
           </nav>
+          )}
 
-          <main className="flex min-w-0 flex-1 flex-col gap-4 md:gap-5" aria-live="polite">
-            {current && (
-              <div className="hidden items-center justify-between gap-3 lg:flex">
+          <div className="flex min-w-0 flex-1 flex-col gap-4 md:gap-5" aria-live="polite">
+            {current && large && (
+              <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <h2 className="text-2xl font-extrabold text-ink">{current[1]}</h2>
-                  <p className="text-sm text-ink-soft">{current[2]}</p>
+                  <h2 className="text-2xl font-extrabold text-ink">{current.label}</h2>
+                  <p className="text-sm text-ink-soft">{current.hint}</p>
                 </div>
                 {ownList && (
                   <IconButton label="Actualizar" onClick={list.reload}>
@@ -96,8 +87,9 @@ export function AdminView() {
                 )}
               </div>
             )}
-            {ownList && (
-              <div className="flex justify-end lg:hidden">
+
+            {ownList && !large && (
+              <div className="flex justify-end">
                 <IconButton label="Actualizar" onClick={list.reload}>
                   <RefreshCw className="size-5" />
                 </IconButton>
@@ -193,7 +185,7 @@ export function AdminView() {
           }}
         />
       )}
-          </main>
+          </div>
         </div>
       </div>
     </div>
@@ -209,7 +201,7 @@ function Chip({ on, onClick, children, small = false, role, testId }: { on: bool
       aria-pressed={role ? undefined : on}
       onClick={onClick}
       data-testid={testId}
-      className={`${small ? 'h-8 px-3 text-xs' : 'h-9 px-4 text-sm'} shrink-0 rounded-full font-semibold transition-colors duration-200 ${on ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200' : 'bg-surface text-ink-soft shadow-float hover:text-ink'}`}
+      className={`${small ? 'h-8 px-3 text-xs' : 'h-9 px-4 text-sm'} shrink-0 rounded-full font-semibold transition-colors duration-200 ${on ? 'bg-teal-100 text-ink dark:bg-teal-900/60 dark:text-ink' : 'bg-surface text-ink-soft shadow-float hover:text-ink'}`}
     >
       {children}
     </button>

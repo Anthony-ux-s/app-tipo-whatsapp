@@ -1,4 +1,5 @@
 import type { ClientToServerEvents, ServerToClientEvents } from '@parla/types';
+import type { ConnectionState } from '../types/chat.types';
 import { notifySessionExpired } from './http';
 
 /**
@@ -15,6 +16,23 @@ type AckOf<E extends ClientEvent> = Parameters<ClientToServerEvents[E]> extends 
 type RequestEvent = { [E in ClientEvent]: AckOf<E> extends never ? never : E }[ClientEvent];
 
 export type SocketStatus = 'connect' | 'disconnect' | 'reconnecting';
+
+/**
+ * Estado de la conexión, guardado junto al propio socket (única fuente de verdad): el aviso «Conectando…» lo lee
+ * de aquí, así nunca se queda desfasado si otra parte de la app se reinicia.
+ */
+let connectionState: ConnectionState = 'connecting';
+const connectionListeners = new Set<() => void>();
+function setConnectionState(next: ConnectionState): void {
+  if (connectionState === next) return;
+  connectionState = next;
+  for (const listener of connectionListeners) listener();
+}
+export const getConnectionState = (): ConnectionState => connectionState;
+export const subscribeConnection = (listener: () => void): (() => void) => {
+  connectionListeners.add(listener);
+  return () => void connectionListeners.delete(listener);
+};
 
 /** Cierre del gateway cuando el token vence. */
 const SESSION_EXPIRED = 4401;
@@ -37,6 +55,7 @@ export class ParlaSocket {
   private readonly listeners = new Map<string, Set<(data: never) => void>>();
 
   constructor(private readonly token: string) {
+    setConnectionState('connecting');
     this.open();
   }
 
@@ -87,6 +106,7 @@ export class ParlaSocket {
     ws.onopen = () => {
       this.attempts = 0;
       this.connected = true;
+      setConnectionState('online');
       this.dispatch('connect', undefined);
     };
     ws.onmessage = (message) => this.receive(message.data);
@@ -105,6 +125,7 @@ export class ParlaSocket {
   }
 
   private scheduleReconnect(): void {
+    setConnectionState('connecting');
     this.dispatch('reconnecting', undefined);
     const delay = Math.min(MAX_BACKOFF_MS, 500 * 2 ** this.attempts) * (0.75 + Math.random() * 0.5);
     this.attempts += 1;
@@ -122,6 +143,7 @@ export class ParlaSocket {
     }
     if (!this.connected) return;
     this.connected = false;
+    setConnectionState('offline');
     this.dispatch('disconnect', undefined);
   }
 

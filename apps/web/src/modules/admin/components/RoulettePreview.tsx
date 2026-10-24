@@ -83,7 +83,7 @@ export function RoulettePreview({ roulette, onClose }: { roulette: Pick<Roulette
       {phase === 'result' && won && <Confetti key={round} />}
 
       <div className="relative my-auto flex w-full max-w-md animate-pop flex-col items-center gap-4 py-6 text-center">
-        <div className="flex w-full items-center justify-between gap-2 rounded-full bg-amber-300/95 px-4 py-1.5 text-xs font-bold text-amber-950">
+        <div className="flex w-full items-center justify-between gap-2 rounded-full bg-amber-300/95 px-4 py-1.5 text-xs font-bold text-ink">
           <span className="flex items-center gap-1.5">
             <Eye className="size-4" /> Vista previa: así la ve el cliente. No se guarda nada.
           </span>
@@ -115,7 +115,7 @@ export function RoulettePreview({ roulette, onClose }: { roulette: Pick<Roulette
             <div className="flex w-full animate-rise flex-col items-center gap-3 rounded-3xl bg-surface p-5 text-ink shadow-pop" data-testid="preview-result">
               {won ? (
                 <>
-                  <span className="flex size-12 items-center justify-center rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/60 dark:text-teal-200">
+                  <span className="flex size-12 items-center justify-center rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/60 dark:text-ink">
                     <PartyPopper className="size-6" />
                   </span>
                   <p className="text-lg font-extrabold">¡Ganaste {prize.label}!</p>

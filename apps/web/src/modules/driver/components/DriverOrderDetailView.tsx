@@ -70,7 +70,7 @@ export function DriverOrderDetailView() {
 
       <section className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Ruta">
         <div className="flex items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-ink dark:bg-amber-900/50 dark:text-ink">
             <Store className="size-[18px]" />
           </span>
           <div className="min-w-0 flex-1">
@@ -86,7 +86,7 @@ export function DriverOrderDetailView() {
         </div>
         <div className="ml-[18px] h-4 border-l-2 border-dashed border-line" aria-hidden="true" />
         <div className="flex items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-200">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-ink dark:bg-teal-900/50 dark:text-ink">
             <MapPin className="size-[18px]" />
           </span>
           <div className="min-w-0 flex-1">
@@ -154,7 +154,7 @@ export function DriverOrderDetailView() {
             onChange={(e) => d.onCodeChange(e.target.value)}
             aria-label="Código de entrega"
             placeholder="0000"
-            className="h-14 w-full rounded-2xl bg-surface-3 text-center font-mono text-3xl font-extrabold tracking-[0.5em] text-ink outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-teal-500/40"
+            className="h-14 w-full rounded-2xl bg-surface-3 text-center font-mono text-3xl font-extrabold tracking-[0.5em] text-ink outline-none placeholder:text-ink-faint/60 focus:ring-2 focus:ring-teal-500/40"
           />
               <PhotoPicker key="with-code" label="Foto de la entrega (opcional)" onChange={d.setPhotoId} />
             </>

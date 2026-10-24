@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { countNewOrders, useBusinessStore } from '@shared/stores/business.store';
+import { useSessionStore } from '@shared/stores/session.store';
 import { availableOrders, useDriverStore } from '@shared/stores/driver.store';
 import { sortOrders, useOrdersStore } from '@shared/stores/orders.store';
 import { toast } from '@shared/stores/toast.store';
@@ -14,6 +15,7 @@ export function useOrders() {
   const status = useOrdersStore((s) => s.status);
   const loadOrders = useOrdersStore((s) => s.loadOrders);
   const business = useBusinessStore((s) => s.business);
+  const isSupport = useSessionStore((s) => !!s.user?.isAdmin);
   const newBusinessOrders = useBusinessStore((s) => countNewOrders(s.orders));
   const driver = useDriverStore((s) => s.driver);
   const driverOffers = useDriverStore((s) => availableOrders(s.orders).length);
@@ -37,7 +39,7 @@ export function useOrders() {
     driver: driver ?? null,
     driverOffers,
     /** Aún no reparte (null = ya se sabe que no; undefined = cargando): se le invita a Rapidito. */
-    canBecomeDriver: driver === null,
+    canBecomeDriver: driver === null && !isSupport,
     open: (id: string) => navigate(`/app/pedidos/${id}`),
     back: () => navigate('/app/servicios'),
   };

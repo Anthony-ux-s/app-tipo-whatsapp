@@ -34,7 +34,7 @@ export function ChatListPanel() {
             onChange={(e) => list.onSearchChange(e.target.value)}
             placeholder="Buscar un chat o una persona"
             aria-label="Buscar chats"
-            className="h-10 w-full rounded-[var(--radius-card)] bg-surface-3 pr-9 pl-9 text-sm text-ink placeholder:text-ink-faint outline-none transition-all duration-200 focus:bg-surface focus:ring-2 focus:ring-teal-500/30"
+            className="h-10 w-full rounded-[var(--radius-card)] bg-surface-3 pr-9 pl-9 text-sm text-ink placeholder:text-ink-faint/60 outline-none transition-all duration-200 focus:bg-surface focus:ring-2 focus:ring-teal-500/30"
           />
           {list.search && (
             <button type="button" onClick={list.clearSearch} aria-label="Limpiar búsqueda" className="absolute right-2.5 text-ink-faint hover:text-ink">
@@ -50,7 +50,7 @@ export function ChatListPanel() {
               role="tab"
               aria-selected={list.filter === f.id}
               onClick={() => list.selectFilter(f.id)}
-              className={`h-8 shrink-0 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 ${list.filter === f.id ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
+              className={`h-8 shrink-0 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 ${list.filter === f.id ? 'bg-teal-100 text-ink dark:bg-teal-900/60 dark:text-ink' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
             >
               {f.label}
               {f.id === 'unread' && list.totalUnread > 0 && ` · ${list.totalUnread}`}
@@ -60,7 +60,7 @@ export function ChatListPanel() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {list.status === 'loading' || list.status === 'idle' ? (
+        {list.status === 'loading' ? (
           <ListSkeleton />
         ) : list.status === 'error' ? (
           <ErrorState message={list.error ?? 'No pudimos traer tus chats.'} onRetry={list.retry} />

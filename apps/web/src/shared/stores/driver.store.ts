@@ -1,6 +1,7 @@
 import type { DeliverOrderRequest, DriverEarnings, DriverInfo, DriverOrder, DriverOrders, DriverProfileRequest, DriverWallet, GeoPoint, PayoutResult } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
+import { fetchQ } from '../utils/query-client';
 
 interface DriverState {
   /** undefined = aún no se sabe; null = la persona no reparte para Rapidito. */
@@ -53,7 +54,7 @@ export const useDriverStore = create<DriverState>((set, get) => ({
   myLocation: null,
 
   loadDriver: async () => {
-    const { driver } = await http.get<{ driver: DriverInfo | null }>('/driver');
+    const { driver } = await fetchQ<{ driver: DriverInfo | null }>(['driver', 'me'], '/driver');
     set({ driver });
     return driver;
   },
@@ -61,7 +62,7 @@ export const useDriverStore = create<DriverState>((set, get) => ({
   loadOrders: async () => {
     if (get().status !== 'ready') set({ status: 'loading' });
     try {
-      const { available, mine } = await http.get<DriverOrders>('/driver/orders');
+      const { available, mine } = await fetchQ<DriverOrders>(['driver', 'orders'], '/driver/orders');
       // La lista del servidor manda: una oferta que otro tomó ya no viene.
       set({ orders: Object.fromEntries([...available, ...mine].map((o) => [o.id, o])), status: 'ready' });
     } catch (error) {
@@ -71,7 +72,7 @@ export const useDriverStore = create<DriverState>((set, get) => ({
   },
 
   loadOrder: async (id) => {
-    const order = await http.get<DriverOrder>(path(id));
+    const order = await fetchQ<DriverOrder>(['driver', 'order', id], path(id));
     get().upsert(order);
     return order;
   },
@@ -101,8 +102,8 @@ export const useDriverStore = create<DriverState>((set, get) => ({
     await http.delete('/driver');
     set({ driver: null, orders: {}, status: 'idle', earnings: null });
   },
-  loadEarnings: async () => set({ earnings: await http.get<DriverEarnings>('/driver/earnings') }),
-  loadWallet: async () => set({ wallet: await http.get<DriverWallet>('/driver/wallet') }),
+  loadEarnings: async () => set({ earnings: await fetchQ<DriverEarnings>(['driver', 'earnings'], '/driver/earnings') }),
+  loadWallet: async () => set({ wallet: await fetchQ<DriverWallet>(['driver', 'wallet'], '/driver/wallet') }),
   setPayoutPhone: async (phone) => {
     await http.patch('/driver/payout-account', { phone });
     await get().loadWallet();

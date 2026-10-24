@@ -24,7 +24,7 @@ export function AppearanceSection() {
                 role="radio"
                 aria-checked={active}
                 onClick={() => p.setTheme(t.id)}
-                className={`flex flex-col items-center gap-2 rounded-[var(--radius-card)] border py-4 text-sm font-semibold transition-all duration-200 ${active ? 'border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-200' : 'border-line text-ink-soft hover:border-teal-300 hover:text-ink'}`}
+                className={`flex flex-col items-center gap-2 rounded-[var(--radius-card)] border py-4 text-sm font-semibold transition-all duration-200 ${active ? 'border-teal-500 bg-teal-50 text-ink dark:bg-teal-950/60 dark:text-ink' : 'border-line text-ink-soft hover:border-teal-300 hover:text-ink'}`}
               >
                 <Icon className="size-5" />
                 {t.label}
@@ -38,7 +38,7 @@ export function AppearanceSection() {
 }
 
 const optionClass = (active: boolean) =>
-  `rounded-[var(--radius-card)] border px-2 py-3 text-sm font-semibold transition-all duration-200 ${active ? 'border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-200' : 'border-line text-ink-soft hover:border-teal-300 hover:text-ink'}`;
+  `rounded-[var(--radius-card)] border px-2 py-3 text-sm font-semibold transition-all duration-200 ${active ? 'border-teal-500 bg-teal-50 text-ink dark:bg-teal-950/60 dark:text-ink' : 'border-line text-ink-soft hover:border-teal-300 hover:text-ink'}`;
 
 export function ChatsSection() {
   const p = usePreferences();

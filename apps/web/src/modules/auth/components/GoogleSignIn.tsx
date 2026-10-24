@@ -14,15 +14,15 @@ function GoogleMark() {
   );
 }
 
-/** «Continuar con Google». Con cuenta existente pide la contraseña de Parla. */
+/** «Continuar con Google». Con cuenta existente entra directo si el dispositivo ya la conoce; si no, pide la contraseña una vez. */
 export function GoogleSignIn({ label = 'Continuar con Google' }: { label?: string }) {
   const google = useGoogleAuth();
 
   if (google.pendingName) {
     return (
       <form onSubmit={google.unlock} className="flex flex-col gap-3" noValidate>
-        <p className="rounded-[var(--radius-card)] bg-teal-50 px-3 py-2 text-sm text-teal-900 dark:bg-teal-950/60 dark:text-teal-100">
-          Hola, <span className="font-semibold">{google.pendingName}</span>. Escribe tu contraseña de Parla para abrir tus chats cifrados.
+        <p className="rounded-[var(--radius-card)] bg-teal-50 px-3 py-2 text-sm text-ink dark:bg-teal-950/60 dark:text-ink">
+          Hola, <span className="font-semibold">{google.pendingName}</span>. Este dispositivo es nuevo para tu cuenta: escribe tu contraseña de Parla una vez para abrir tus chats cifrados.
         </p>
         <Field
           label="Contraseña de Parla"

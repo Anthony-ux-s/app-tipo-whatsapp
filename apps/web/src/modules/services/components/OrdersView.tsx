@@ -64,7 +64,7 @@ export function OrdersView() {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-bold">Rapidito · Repartidor</span>
-            <span className="block truncate text-sm text-teal-50">
+            <span className="block truncate text-sm text-white">
               {o.driverOffers > 0 ? `${o.driverOffers} ${o.driverOffers === 1 ? 'pedido listo' : 'pedidos listos'} para recoger` : `${o.driver.vehicle} ${o.driver.plate} · toma pedidos y entrégalos`}
             </span>
           </span>

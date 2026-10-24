@@ -1,6 +1,6 @@
 import type { PresencePayload, PublicUser } from '@parla/types';
 import { create } from 'zustand';
-import { http } from '../utils/http';
+import { fetchQ } from '../utils/query-client';
 
 interface PeopleState {
   /** Personas vistas en el directorio, por id (para recordar a quién se eligió). */
@@ -15,7 +15,7 @@ export const usePeopleStore = create<PeopleState>((set, get) => ({
   known: {},
 
   search: async (query) => {
-    const people = await http.get<PublicUser[]>(`/people?q=${encodeURIComponent(query.trim())}`);
+    const people = await fetchQ<PublicUser[]>(['people', query.trim()], `/people?q=${encodeURIComponent(query.trim())}`, 30_000);
     set({ known: { ...get().known, ...Object.fromEntries(people.map((p) => [p.id, p])) } });
     return people;
   },

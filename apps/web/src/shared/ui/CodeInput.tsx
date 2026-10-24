@@ -32,7 +32,7 @@ export function CodeInput({ value, onChange, onComplete, disabled = false, label
         onChange(code);
         if (code.length === 6) onComplete?.(code);
       }}
-      className="h-16 w-full rounded-[var(--radius-card)] border border-line bg-surface text-center font-mono text-3xl font-bold tracking-[0.5em] text-ink outline-none transition-all duration-200 placeholder:text-ink-faint focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30 disabled:opacity-60"
+      className="h-16 w-full rounded-[var(--radius-card)] border border-line bg-surface text-center font-mono text-3xl font-bold tracking-[0.5em] text-ink outline-none transition-all duration-200 placeholder:text-ink-faint/60 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30 disabled:opacity-60"
     />
   );
 }

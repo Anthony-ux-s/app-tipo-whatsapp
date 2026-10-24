@@ -2,11 +2,15 @@ import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { countNewOrders, useBusinessStore } from '@shared/stores/business.store';
 import { useChatStore } from '@shared/stores/chat.store';
-import { LANDING_KEY } from '@shared/stores/session.store';
+import { useConversationMap } from '@shared/stores/chat.queries';
+import { LANDING_KEY, useSessionStore } from '@shared/stores/session.store';
 import { availableOrders, useDriverStore } from '@shared/stores/driver.store';
 import { useOrdersStore } from '@shared/stores/orders.store';
 import { toast } from '@shared/stores/toast.store';
 import { errorMessage } from '@shared/utils/http';
+import { whenIdle } from '@shared/utils/idle';
+import { queryClient } from '@shared/utils/query-client';
+import { CATEGORIES_KEY, CATEGORIES_STALE_MS, fetchCategories } from '../../services/hooks/use-services.hook';
 import { isFinalStatus } from '../../services/utils/services.utils';
 import { sectionOf } from '../const/navigation.const';
 
@@ -18,7 +22,7 @@ export function useMainLayout() {
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
   const loadConversations = useChatStore((s) => s.loadConversations);
-  const totalUnread = useChatStore((s) => Object.values(s.conversations).reduce((sum, c) => sum + c.unreadCount, 0));
+  const totalUnread = Object.values(useConversationMap().conversations).reduce((sum, c) => sum + c.unreadCount, 0);
   const loadOrders = useOrdersStore((s) => s.loadOrders);
   const loadBusiness = useBusinessStore((s) => s.loadBusiness);
   const loadBusinessOrders = useBusinessStore((s) => s.loadOrders);
@@ -33,6 +37,8 @@ export function useMainLayout() {
   useEffect(() => {
     loadConversations().catch((err) => toast(errorMessage(err), 'error'));
     void loadOrders().catch(() => undefined);
+    // Soporte solo administra: no tiene tienda ni reparte, así que no se piden esos datos.
+    if (useSessionStore.getState().user?.isAdmin) return;
     void loadBusiness()
       .then((business) => {
         // Recién entró y tiene tienda (p. ej. una ferretería): va directo a «Mi negocio» para ver pedidos y agregar productos.
@@ -45,6 +51,18 @@ export function useMainLayout() {
       .then((driver) => driver && loadDriverOrders())
       .catch(() => undefined);
   }, [loadConversations, loadOrders, loadBusiness, loadBusinessOrders, loadDriver, loadDriverOrders]);
+
+  // Con la app ya pintada, se bajan en segundo plano las pantallas que más se abren (Servicios, Ofertas, Pedidos, Ajustes).
+  useEffect(() => {
+    return whenIdle(() => {
+      void import('../../services/components/ServicesHomeView');
+      void import('../../services/components/OffersView');
+      void import('../../services/components/OrdersView');
+      void import('../../settings/components/SettingsView');
+      // Y las categorías de Servicios, para que al abrirlo ya estén.
+      void queryClient.prefetchQuery({ queryKey: CATEGORIES_KEY, queryFn: fetchCategories, staleTime: CATEGORIES_STALE_MS });
+    }, 4000);
+  }, []);
 
   const section = sectionOf(pathname);
   /** Pantallas de primer nivel: llevan la barra inferior en el celular. Las de detalle, no. */

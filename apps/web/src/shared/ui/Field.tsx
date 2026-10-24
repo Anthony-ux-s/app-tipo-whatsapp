@@ -9,7 +9,7 @@ interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 const inputBase =
-  'w-full rounded-[var(--radius-card)] border bg-surface px-3.5 text-[15px] text-ink placeholder:text-ink-faint transition-all duration-200 ease-in-out outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/15';
+  'w-full rounded-[var(--radius-card)] border bg-surface px-3.5 text-[15px] text-ink placeholder:text-ink-faint/60 transition-all duration-200 ease-in-out outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/15';
 
 export function Field({ label, hint, error, icon, trailing, id, className = '', ...rest }: FieldProps) {
   const fieldId = id ?? `f-${label.replace(/\s+/g, '-').toLowerCase()}`;
@@ -48,7 +48,7 @@ export function TextAreaField({ label, id, className = '', ...rest }: TextAreaFi
 /** Mensaje de error de formulario: ícono + texto oscuro (sin colores fuera de la paleta). */
 export function FieldError({ message }: { message: string }) {
   return (
-    <span role="alert" className="flex items-center gap-1.5 text-xs font-medium text-teal-900 dark:text-teal-200">
+    <span role="alert" className="flex items-center gap-1.5 text-xs font-medium text-ink dark:text-ink">
       <svg viewBox="0 0 16 16" className="size-3.5 shrink-0" aria-hidden="true">
         <circle cx="8" cy="8" r="7" fill="currentColor" />
         <path d="M8 4.5v4M8 11v.5" stroke="var(--surface)" strokeWidth="1.8" strokeLinecap="round" />

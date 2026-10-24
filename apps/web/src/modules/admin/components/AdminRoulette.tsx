@@ -184,13 +184,13 @@ function RouletteCard({ roulette: r, segments, busy, onToggle, onEdit, onPreview
               {kindInfo(r.kind).label}
             </span>
             <span className={`rounded-full px-2 py-0.5 font-bold ${SEGMENT_HINT[r.segment].tone}`}>{segmentName(segments, r.segment)}</span>
-            {r.testMode && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">Modo de prueba</span>}
+            {r.testMode && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-ink dark:bg-amber-900/40 dark:text-ink">Modo de prueba</span>}
             <span>llega a {r.audience} {r.audience === 1 ? 'persona' : 'personas'}</span>
             <span>· cada {r.cooldownDays} {r.cooldownDays === 1 ? 'día' : 'días'}</span>
             {r.endsAt && <span>· termina {shortDate(r.endsAt)}</span>}
           </p>
         </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${r.enabled ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200' : 'bg-surface-3 text-ink-soft'}`}>{r.enabled ? 'Encendida' : 'Apagada'}</span>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${r.enabled ? 'bg-emerald-100 text-ink dark:bg-emerald-900/50 dark:text-ink' : 'bg-surface-3 text-ink-soft'}`}>{r.enabled ? 'Encendida' : 'Apagada'}</span>
       </header>
 
       <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -426,7 +426,7 @@ function Editor({ initial, id, segments, onClose, onSaved }: { initial: Roulette
                     <input type="number" min={1} max={1000} className={input} value={p.weight} onChange={(e) => setPrize(i, { weight: Number(e.target.value) })} aria-label={`Peso del premio ${i + 1}`} />
                   </Label>
                   <div className="flex items-center justify-between gap-1 md:col-span-1">
-                    <span className="rounded-full bg-teal-100 px-2 py-1 text-xs font-extrabold text-teal-800 dark:bg-teal-900/60 dark:text-teal-200" title="Probabilidad">
+                    <span className="rounded-full bg-teal-100 px-2 py-1 text-xs font-extrabold text-ink dark:bg-teal-900/60 dark:text-ink" title="Probabilidad">
                       {pct(p.weight)} %
                     </span>
                     <button type="button" onClick={() => setForm((f) => ({ ...f, prizes: f.prizes.filter((_, n) => n !== i) }))} disabled={form.prizes.length <= kind.min} aria-label={`Quitar el premio ${i + 1}`} className="flex size-9 items-center justify-center rounded-full text-ink-soft hover:bg-rose-50 hover:text-rose-700 disabled:opacity-30 dark:hover:bg-rose-950/40">

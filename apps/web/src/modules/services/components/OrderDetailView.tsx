@@ -8,6 +8,7 @@ import { formatTime } from '@shared/utils/date';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { ORDER_STEPS } from '../const/services.const';
 import { useOrderChat } from '../hooks/use-order-chat.hook';
+import { BigOrderNotice } from './BigOrderNotice';
 import { useOrderDetail } from '../hooks/use-orders.hook';
 import { useReorder } from '../hooks/use-reorder.hook';
 import { LiveTracking } from './LiveTracking';
@@ -55,7 +56,7 @@ export function OrderDetailView() {
             return (
               <li key={step.status} className="flex flex-col items-center gap-1.5 text-center">
                 <span
-                  className={`flex size-9 items-center justify-center rounded-full text-sm font-bold transition-colors duration-300 ${done ? 'bg-brand text-white' : current ? 'bg-teal-100 text-teal-900 ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-teal-100' : 'bg-surface-3 text-ink-faint'}`}
+                  className={`flex size-9 items-center justify-center rounded-full text-sm font-bold transition-colors duration-300 ${done ? 'bg-brand text-white' : current ? 'bg-teal-100 text-ink ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-ink' : 'bg-surface-3 text-ink-faint'}`}
                 >
                   {done ? <Check className="size-4" /> : index + 1}
                 </span>
@@ -64,6 +65,15 @@ export function OrderDetailView() {
             );
           })}
         </ol>
+      )}
+
+      {order.big && order.business && (order.status === 'pending_payment' || order.status === 'paid') && (
+        <BigOrderNotice
+          rules={order.business.bigOrder}
+          storeName={order.business.name}
+          stage={order.status === 'paid' ? 'order' : 'quote'}
+          summary={`Hola, te escribo por mi pedido grande en Parla: ${order.lines.map((l) => `${l.quantity}× ${l.name}`).join(', ')}. Total ${formatSoles(order.totalCents)}.`}
+        />
       )}
 
       {order.status === 'pending_payment' && (

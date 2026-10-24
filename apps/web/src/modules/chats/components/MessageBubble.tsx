@@ -32,9 +32,9 @@ const NAME_COLORS: Record<string, string> = {
   teal: 'text-teal-600 dark:text-teal-300',
   emerald: 'text-emerald-600 dark:text-emerald-300',
   cyan: 'text-cyan-600 dark:text-cyan-300',
-  'teal-dark': 'text-teal-800 dark:text-teal-200',
-  'emerald-dark': 'text-emerald-800 dark:text-emerald-200',
-  'cyan-dark': 'text-cyan-800 dark:text-cyan-200',
+  'teal-dark': 'text-ink dark:text-ink',
+  'emerald-dark': 'text-ink dark:text-ink',
+  'cyan-dark': 'text-ink dark:text-ink',
 };
 
 const menuItem = 'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-ink hover:bg-surface-2';
@@ -126,7 +126,7 @@ export function MessageBubble({
         )}
 
         {showSender && firstOfRun && !outgoing && (
-          <p className={`pr-6 text-[13px] font-semibold ${NAME_COLORS[sender.color] ?? NAME_COLORS.teal} ${isMedia ? 'px-2 pt-1 pb-1' : ''}`}>{sender.name}</p>
+          <p className={`pr-6 text-[12px] font-semibold ${NAME_COLORS[sender.color] ?? NAME_COLORS.teal} ${isMedia ? 'px-2 pt-1 pb-1' : ''}`}>{sender.name}</p>
         )}
 
         {message.replyTo && !inThread && (
@@ -151,9 +151,9 @@ export function MessageBubble({
           />
         )}
         {isSticker && <MessageSticker clientId={message.clientId} />}
-        {message.kind === 'text' && !text && <p className="text-[15px] text-ink-faint italic">Descifrando…</p>}
+        {message.kind === 'text' && !text && <p className="text-[14px] text-ink-faint italic">Descifrando…</p>}
         {text && !text.ok && (
-          <p className="flex items-center gap-1.5 text-[14px] text-ink-soft italic">
+          <p className="flex items-center gap-1.5 text-[13px] text-ink-soft italic">
             <Lock className="size-3.5" /> No se pudo descifrar este mensaje
           </p>
         )}
@@ -190,7 +190,7 @@ export function MessageBubble({
         )}
 
         {message.local === 'failed' && (
-          <button type="button" onClick={() => actions.retry(message.clientId)} className="mt-1 flex items-center gap-1 text-xs font-semibold text-teal-800 dark:text-teal-200">
+          <button type="button" onClick={() => actions.retry(message.clientId)} className="mt-1 flex items-center gap-1 text-xs font-semibold text-ink dark:text-ink">
             <RotateCcw className="size-3.5" /> No se envió. Toca para reintentar
           </button>
         )}

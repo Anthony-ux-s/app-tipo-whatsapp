@@ -64,7 +64,7 @@ export function NewChatModal({ mode, onClose }: NewChatModalProps) {
                   key={p.id}
                   type="button"
                   onClick={() => chat.pickPerson(p)}
-                  className="flex animate-pop items-center gap-1.5 rounded-full bg-teal-100 py-1 pr-2.5 pl-1 text-xs font-semibold text-teal-900 dark:bg-teal-900/60 dark:text-teal-100"
+                  className="flex animate-pop items-center gap-1.5 rounded-full bg-teal-100 py-1 pr-2.5 pl-1 text-xs font-semibold text-ink dark:bg-teal-900/60 dark:text-ink"
                 >
                   <Avatar name={p.displayName} color={p.avatarColor} photo={p.avatarUrl} size="xs" />
                   {p.displayName.split(' ')[0]} ✕

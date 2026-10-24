@@ -157,7 +157,7 @@ function CouponForm({ onClose, onCreated }: { onClose: () => void; onCreated: ()
               role="radio"
               aria-checked={kind === k.id}
               onClick={() => setKind(k.id)}
-              className={`rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors duration-200 ${kind === k.id ? 'bg-teal-100 text-teal-900 ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-teal-100' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
+              className={`rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors duration-200 ${kind === k.id ? 'bg-teal-100 text-ink ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-ink' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
             >
               {k.label}
             </button>

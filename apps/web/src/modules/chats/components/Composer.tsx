@@ -46,8 +46,8 @@ export function Composer({ conversationId, threadRootId = null }: ComposerProps)
         <div className="mb-2 flex animate-rise items-center gap-2 rounded-xl border-l-4 border-teal-500 bg-surface px-3 py-2 shadow-float" data-testid="reply-bar">
           <Reply className="size-4 shrink-0 text-teal-600 dark:text-teal-300" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-teal-700 dark:text-teal-300">Respondiendo a {composer.reply.author}</p>
-            <p className="truncate text-sm text-ink-soft">{composer.reply.preview}</p>
+            <p className="text-[11px] font-semibold text-teal-700 dark:text-teal-300">Respondiendo a {composer.reply.author}</p>
+            <p className="truncate text-[13px] text-ink-soft">{composer.reply.preview}</p>
           </div>
           <IconButton label="Cancelar respuesta" onClick={composer.cancelReply} className="size-8">
             <X className="size-4" />
@@ -99,7 +99,7 @@ export function Composer({ conversationId, threadRootId = null }: ComposerProps)
               onKeyUp={composer.onCaretMove}
               placeholder={threadRootId ? 'Responder en el hilo' : 'Escribe un mensaje · @ para mencionar'}
               aria-label={threadRootId ? 'Responder en el hilo' : 'Escribe un mensaje'}
-              className="max-h-36 w-full resize-none bg-transparent chat-text leading-snug text-ink placeholder:text-ink-faint outline-none"
+              className="max-h-36 w-full resize-none bg-transparent chat-text leading-snug text-ink placeholder:text-ink-faint/60 outline-none"
             />
           </div>
           {composer.canSend ? (

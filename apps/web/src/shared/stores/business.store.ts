@@ -1,6 +1,7 @@
 import type { BusinessInfo, BusinessOrder, BusinessStatus, DriverLocation, Order, RegisterStoreRequest, UpdateBusinessRequest } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
+import { fetchQ } from '../utils/query-client';
 
 interface BusinessState {
   /** undefined = aún no se sabe; null = la persona no es dueña de ningún negocio. */
@@ -47,7 +48,7 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   storeStatus: null,
 
   loadBusiness: async () => {
-    const { business } = await http.get<{ business: BusinessInfo | null }>('/business');
+    const { business } = await fetchQ<{ business: BusinessInfo | null }>(['business', 'mine'], '/business');
     set({ business });
     return business;
   },
@@ -55,7 +56,7 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   loadStoreStatus: async () => {
     const storeId = get().business?.id;
     if (!storeId) return;
-    const { status } = await http.get<{ status: BusinessStatus | null }>(`/business/status/${encodeURIComponent(storeId)}`);
+    const { status } = await fetchQ<{ status: BusinessStatus | null }>(['business', 'status', storeId], `/business/status/${encodeURIComponent(storeId)}`);
     set({ storeStatus: status });
   },
 
@@ -75,7 +76,7 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   loadOrders: async () => {
     if (get().status !== 'ready') set({ status: 'loading' });
     try {
-      const list = await http.get<BusinessOrder[]>('/business/orders');
+      const list = await fetchQ<BusinessOrder[]>(['business', 'orders'], '/business/orders');
       set({ orders: { ...get().orders, ...Object.fromEntries(list.map((o) => [o.id, o])) }, status: 'ready' });
     } catch (error) {
       if (get().status !== 'ready') set({ status: 'error' });
@@ -84,7 +85,7 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   },
 
   loadOrder: async (id) => {
-    const order = await http.get<BusinessOrder>(path(id));
+    const order = await fetchQ<BusinessOrder>(['business', 'order', id], path(id));
     get().upsert(order);
     return order;
   },
@@ -120,9 +121,10 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   reset: () => set({ business: undefined, orders: {}, status: 'idle', storeStatus: null }),
 }));
 
-/** Pedidos del más nuevo al más viejo. */
+/** Pedidos del más nuevo al más viejo; los grandes que esperan confirmación van arriba de todo. */
 export function sortBusinessOrders(orders: Record<string, BusinessOrder>): BusinessOrder[] {
-  return Object.values(orders).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const urgent = (o: BusinessOrder) => (o.big && o.status === 'paid' ? 0 : 1);
+  return Object.values(orders).sort((a, b) => urgent(a) - urgent(b) || b.createdAt.localeCompare(a.createdAt));
 }
 
 /** Pedidos pagados que esperan que el dueño los acepte. */

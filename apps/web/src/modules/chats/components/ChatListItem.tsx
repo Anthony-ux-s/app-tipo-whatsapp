@@ -31,20 +31,21 @@ export function ChatListItem({ entry, active, onOpen }: ChatListItemProps) {
         <Avatar name={conversation.title} color={conversation.avatarColor} photo={conversation.avatarUrl} group={conversation.kind === 'group'} online={online} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5 border-b border-line py-1 group-last:border-transparent">
           <span className="flex items-baseline justify-between gap-2">
-            <span className={`truncate text-[15px] text-ink ${unread ? 'font-bold' : 'font-semibold'}`}>{conversation.title}</span>
-            <span className={`shrink-0 text-xs ${unread ? 'font-semibold text-emerald-600 dark:text-emerald-400' : 'text-ink-faint'}`}>
+            <span className={`truncate text-[14px] text-ink ${unread ? 'font-bold' : 'font-semibold'}`}>{conversation.title}</span>
+            <span className={`shrink-0 text-[11px] ${unread ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-ink-faint'}`}>
               {entry.time}
             </span>
           </span>
           <span className="flex items-center justify-between gap-2">
             {typing ? (
-              <span className="truncate text-sm font-medium text-emerald-600 dark:text-emerald-400">{typing}</span>
+              <span className="truncate text-[13px] font-medium text-blue-600 dark:text-blue-400">{typing}</span>
             ) : (
-              <span className={`flex min-w-0 items-center gap-1 text-sm ${unread ? 'text-ink' : 'text-ink-soft'}`}>
-                {mine && conversation.lastMessage && <DeliveryTicks status={conversation.lastMessage.status} className="size-4 shrink-0" />}
-                {preview.author && <span className="shrink-0 font-medium">{preview.author}:</span>}
-                {preview.media && preview.media !== 'text' && preview.media !== 'system' && MEDIA_ICON[preview.media]}
-                <span className="truncate">{preview.text}</span>
+              // Hasta dos renglones del último mensaje; si hay algo sin leer, en azul y más marcado.
+              <span className={`min-w-0 text-[13px] leading-snug break-words line-clamp-2 ${unread ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-ink-soft'}`}>
+                {mine && conversation.lastMessage && <DeliveryTicks status={conversation.lastMessage.status} className="mr-1 inline-block size-4 align-text-bottom" />}
+                {preview.author && <span className="font-medium">{preview.author}: </span>}
+                {preview.media && preview.media !== 'text' && preview.media !== 'system' && <span className="mr-1 inline-block align-text-bottom">{MEDIA_ICON[preview.media]}</span>}
+                {preview.text}
               </span>
             )}
             {conversation.mentionCount > 0 && (
@@ -58,7 +59,7 @@ export function ChatListItem({ entry, active, onOpen }: ChatListItemProps) {
             )}
             {unread && (
               <span
-                className="flex h-5 min-w-5 shrink-0 animate-pop items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold text-white"
+                className="flex h-5 min-w-5 shrink-0 animate-pop items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-bold text-white"
                 aria-label={`${conversation.unreadCount} sin leer`}
               >
                 {conversation.unreadCount}

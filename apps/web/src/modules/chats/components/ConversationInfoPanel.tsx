@@ -130,7 +130,7 @@ export function ConversationInfoPanel({ conversation, open, onClose }: Conversat
                     <span className="block truncate text-xs text-ink-soft">{p.user.about || (p.user.username ? `@${p.user.username}` : '')}</span>
                   </span>
                   {p.role === 'admin' && (
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-ink dark:bg-emerald-900/50 dark:text-ink">
                       Admin
                     </span>
                   )}
@@ -155,7 +155,7 @@ export function ConversationInfoPanel({ conversation, open, onClose }: Conversat
                 </div>
               </div>
             ) : (
-              <button type="button" onClick={info.askLeave} className="flex items-center gap-3 text-[15px] font-semibold text-teal-900 dark:text-teal-200">
+              <button type="button" onClick={info.askLeave} className="flex items-center gap-3 text-[15px] font-semibold text-ink dark:text-ink">
                 <LogOut className="size-5" /> Salir del grupo
               </button>
             )}

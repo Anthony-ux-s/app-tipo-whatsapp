@@ -38,11 +38,12 @@ export async function openSession(browser: Browser, identifier: string, viewport
 
 export async function login(page: Page, identifier: string, password = PASSWORD) {
   await page.goto('/entrar');
-  await page.getByLabel('Usuario o teléfono').fill(identifier);
+  await page.getByLabel('Usuario, correo o teléfono').fill(identifier);
   await page.getByLabel('Contraseña', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar' }).click();
   // La lista de chats, o la bandeja vacía si la cuenta aún no tiene ninguno (p. ej. la tienda).
-  await expect(page.getByTestId('chat-list').or(page.getByRole('heading', { name: '¿No tienes chats aún?' }))).toBeVisible();
+  // Las cuentas de soporte aterrizan en su panel de administración.
+  await expect(page.getByTestId('chat-list').or(page.getByRole('heading', { name: '¿No tienes chats aún?' })).or(page.getByTestId('admin-shell'))).toBeVisible();
 }
 
 export async function openChat(page: Page, title: string) {

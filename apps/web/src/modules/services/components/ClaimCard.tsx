@@ -142,7 +142,7 @@ function ClaimForm({ order, maxCents, onClose }: { order: Order; maxCents: numbe
                 setReason(r.id);
                 setError(null);
               }}
-              className={`rounded-xl px-3.5 py-2.5 text-left text-sm font-semibold transition-colors duration-200 ${reason === r.id ? 'bg-teal-100 text-teal-900 ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-teal-100' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
+              className={`rounded-xl px-3.5 py-2.5 text-left text-sm font-semibold transition-colors duration-200 ${reason === r.id ? 'bg-teal-100 text-ink ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-ink' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
             >
               {r.label}
             </button>

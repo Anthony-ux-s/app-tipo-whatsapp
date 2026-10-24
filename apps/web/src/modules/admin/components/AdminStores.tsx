@@ -24,9 +24,9 @@ const FILTERS: { id: StoreFilter; label: string }[] = [
 
 const STATUS_LABEL: Record<StoreStatus, string> = { pending: 'Por revisar', approved: 'Aprobada', rejected: 'Rechazada', suspended: 'Suspendida' };
 const STATUS_STYLE: Record<StoreStatus, string> = {
-  pending: 'bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200',
-  approved: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-200',
-  rejected: 'bg-rose-100 text-rose-900 dark:bg-rose-900/50 dark:text-rose-200',
+  pending: 'bg-amber-100 text-ink dark:bg-amber-900/50 dark:text-ink',
+  approved: 'bg-emerald-100 text-ink dark:bg-emerald-900/50 dark:text-ink',
+  rejected: 'bg-rose-100 text-ink dark:bg-rose-900/50 dark:text-ink',
   suspended: 'bg-surface-3 text-ink-soft',
 };
 

@@ -128,9 +128,10 @@ export function spawnProviders(env, extra = {}) {
 }
 
 /**
- * Lanza los cinco procesos. `core` indica cómo arrancar NestJS ('start' compilado o 'dev' con recarga).
+ * Lanza los cinco procesos. `core` indica cómo arrancar NestJS ('start' compilado o 'dev' con recarga) y
+ * `web` cómo servir la web ('static' el paquete compilado, rápido; 'dev' el servidor de Vite con recarga).
  */
-export function startServices({ core = 'start' } = {}) {
+export function startServices({ core = 'start', web = 'dev' } = {}) {
   const env = { ...process.env, ...sharedEnv() };
   const children = [
     spawn(npm, ['run', core, '-w', '@parla/api'], {
@@ -156,12 +157,13 @@ export function startServices({ core = 'start' } = {}) {
       },
     }),
     spawnProviders(env),
-    spawn(npm, ['run', 'dev', '-w', '@parla/web'], {
+    // 'dev': servidor de Vite con recarga. 'static': la web ya compilada (scripts/serve-web.mjs), mucho más rápida.
+    (web === 'static' ? spawn(process.execPath, [join(root, 'scripts', 'serve-web.mjs')], { cwd: root, stdio: 'inherit', env: { ...env, PARLA_WEB_PORT: String(ports.web), PARLA_API_URL: `http://localhost:${ports.gateway}` } }) : spawn(npm, ['run', 'dev', '-w', '@parla/web'], {
       cwd: root,
       stdio: 'inherit',
       shell: isWindows,
       env: { ...env, PARLA_WEB_PORT: String(ports.web), PARLA_API_URL: `http://localhost:${ports.gateway}` },
-    }),
+    })),
   ];
   superviseChildren(children);
   return children;

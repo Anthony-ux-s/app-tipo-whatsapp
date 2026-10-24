@@ -2,6 +2,7 @@ import type { ServiceId } from '@parla/types';
 import { ChevronRight, Lock, Store } from 'lucide-react';
 import { Link } from 'react-router';
 import { useBusinessStore } from '@shared/stores/business.store';
+import { useSessionStore } from '@shared/stores/session.store';
 import { ProfileButton } from '@shared/ui/ProfileButton';
 import { ErrorState } from '@shared/ui/States';
 import { formatSoles } from '@shared/utils/money';
@@ -26,6 +27,7 @@ const TILE_TONES: Record<ServiceId, string> = {
 export function ServicesHomeView() {
   const s = useServices();
   const business = useBusinessStore((b) => b.business);
+  const isSupport = useSessionStore((st) => !!st.user?.isAdmin);
   const storesIn = (id: ServiceId) => s.categories?.find((c) => c.service === id)?.stores ?? 0;
   return (
     <ServicePage>
@@ -67,9 +69,9 @@ export function ServicesHomeView() {
         </div>
       </section>
 
-      {business === null && (
+      {business === null && !isSupport && (
         <Link
-          to="/app/negocio/abrir"
+          to="/app/negocio/nueva"
           data-testid="open-store-banner"
           className="group flex items-center gap-3 rounded-2xl bg-gradient-to-br from-teal-50 to-amber-50 p-3 ring-1 ring-teal-100 transition-colors duration-200 hover:ring-teal-300 md:px-4 dark:from-teal-950/50 dark:to-amber-950/20 dark:ring-teal-900"
         >

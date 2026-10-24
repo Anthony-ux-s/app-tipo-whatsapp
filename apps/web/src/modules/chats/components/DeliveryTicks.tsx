@@ -12,7 +12,7 @@ const LABELS: Record<DeliveryStatus, string> = { sent: 'Enviado', delivered: 'En
 /** ✓ enviado · ✓✓ entregado · ✓✓ en cian: leído. */
 export function DeliveryTicks({ status, local, className = 'size-4' }: DeliveryTicksProps) {
   if (local === 'pending') return <Clock3 className={`${className} text-ink-faint`} aria-label="Enviando" />;
-  if (local === 'failed') return <TriangleAlert className={`${className} text-teal-900 dark:text-teal-200`} aria-label="No se envió" />;
+  if (local === 'failed') return <TriangleAlert className={`${className} text-ink dark:text-ink`} aria-label="No se envió" />;
   if (status === 'sent') return <Check className={`${className} text-ink-faint`} aria-label={LABELS.sent} />;
   return (
     <CheckCheck

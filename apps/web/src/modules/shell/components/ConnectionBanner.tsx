@@ -8,7 +8,7 @@ export function ConnectionBanner({ connection }: { connection: ConnectionState }
   return (
     <div
       role="status"
-      className="flex animate-fade-in items-center justify-center gap-2 bg-cyan-50 px-4 py-2 text-xs font-medium text-cyan-900 dark:bg-cyan-950/60 dark:text-cyan-100"
+      className="flex animate-fade-in items-center justify-center gap-2 bg-cyan-50 px-4 py-2 text-xs font-medium text-ink dark:bg-cyan-950/60 dark:text-ink"
     >
       {connection === 'connecting' ? <Spinner className="size-3.5" /> : <WifiOff className="size-3.5" />}
       {connection === 'connecting' ? 'Conectando…' : 'Sin conexión. Tus mensajes se enviarán al reconectar.'}

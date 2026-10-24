@@ -2,10 +2,10 @@ import type { ChatFont, ChatFontSize } from '@parla/types';
 
 /** Tamaño de la letra de los mensajes, en el orden en que se ofrece en Ajustes → Chats. */
 export const CHAT_FONT_SIZES: Record<ChatFontSize, string> = {
-  small: '13px',
-  medium: '15px',
-  large: '17px',
-  xlarge: '20px',
+  small: '12px',
+  medium: '14px',
+  large: '16px',
+  xlarge: '18px',
 };
 
 export const CHAT_FONT_SIZE_OPTIONS: { id: ChatFontSize; label: string }[] = [

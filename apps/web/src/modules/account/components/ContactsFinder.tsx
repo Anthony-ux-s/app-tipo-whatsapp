@@ -33,7 +33,7 @@ export function ContactsFinder({ onOpenChat, autoStart = false }: { onOpenChat?:
             onChange={(e) => c.onManualChange(e.target.value)}
             rows={3}
             placeholder={'+57 300 555 0101\n987 654 321'}
-            className="w-full resize-none rounded-[var(--radius-card)] border border-line bg-surface p-3 text-[15px] text-ink outline-none placeholder:text-ink-faint focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
+            className="w-full resize-none rounded-[var(--radius-card)] border border-line bg-surface p-3 text-[15px] text-ink outline-none placeholder:text-ink-faint/60 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
           />
           <Button variant="secondary" loading={c.busy} disabled={!c.manual.trim()} icon={<Search className="size-4" />} onClick={c.fromManual}>
             Buscar en Parla
@@ -82,7 +82,7 @@ export function ContactsFinder({ onOpenChat, autoStart = false }: { onOpenChat?:
                       {o.name && <span className="block truncate text-xs text-ink-soft">{o.phone}</span>}
                     </span>
                     <a
-                      href={`sms:${o.phone.replace(/[^d+]/g, '')}?body=${invite}`}
+                      href={`sms:${o.phone.replace(/[^\d+]/g, '')}?body=${invite}`}
                       className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-2"
                     >
                       <Send className="size-4" /> Invitar

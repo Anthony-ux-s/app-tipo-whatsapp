@@ -83,7 +83,7 @@ export function RegisterView() {
                     placeholder={form.country.example}
                     value={form.localNumber}
                     onChange={(e) => form.onLocalNumberChange(e.target.value)}
-                    className="h-12 w-full rounded-[var(--radius-card)] border border-line bg-surface pr-3 pl-10 text-[15px] text-ink outline-none placeholder:text-ink-faint focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
+                    className="h-12 w-full rounded-[var(--radius-card)] border border-line bg-surface pr-3 pl-10 text-[15px] text-ink outline-none placeholder:text-ink-faint/60 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
                   />
                 </div>
               </div>
@@ -117,7 +117,7 @@ export function RegisterView() {
             </button>
           </p>
           {form.sent?.devCode && (
-            <p className="flex items-start gap-2 rounded-[var(--radius-card)] bg-cyan-50 p-3 text-sm text-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-100" data-testid="dev-code">
+            <p className="flex items-start gap-2 rounded-[var(--radius-card)] bg-cyan-50 p-3 text-sm text-ink dark:bg-cyan-950/50 dark:text-ink" data-testid="dev-code">
               <FlaskConical className="mt-0.5 size-4 shrink-0" />
               <span>
                 Modo de prueba ({form.byEmail ? 'Brevo' : 'OneSignal'} sin configurar): tu código es <strong className="font-mono tracking-widest">{form.sent.devCode}</strong>
@@ -142,7 +142,7 @@ export function RegisterView() {
 
       {form.step === 'details' && (
         <form onSubmit={form.createAccount} className="flex flex-col gap-4" noValidate>
-          <p className="rounded-[var(--radius-card)] bg-teal-50 px-3 py-2 text-sm text-teal-900 dark:bg-teal-950/60 dark:text-teal-100">
+          <p className="rounded-[var(--radius-card)] bg-teal-50 px-3 py-2 text-sm text-ink dark:bg-teal-950/60 dark:text-ink">
             ✓ {form.byEmail ? 'Correo' : 'Número'} verificado: <span className="font-semibold">{form.contact}</span>
           </p>
           <Field

@@ -37,10 +37,27 @@ export async function restoreVault(userId: string): Promise<boolean> {
   }
 }
 
-export function lockVault(userId: string | null): void {
+/** Cierra la bóveda. Con `forget` también borra la clave guardada en este dispositivo (entrar de nuevo pedirá la contraseña). */
+export function lockVault(userId: string | null, forget = true): void {
   privateKey = null;
   conversationKeys.clear();
-  if (userId) localStorage.removeItem(PRIVATE_KEY_PREFIX + userId);
+  if (userId && forget) localStorage.removeItem(PRIVATE_KEY_PREFIX + userId);
+}
+
+/**
+ * ¿Este dispositivo ya tiene la clave de esta cuenta? Solo vale si es la misma que la pública de la cuenta
+ * (si la contraseña se restableció en otro dispositivo, la clave guardada quedó vieja y no sirve).
+ */
+export function deviceKeyMatches(userId: string, publicKeyJwk: string): boolean {
+  try {
+    const stored = localStorage.getItem(PRIVATE_KEY_PREFIX + userId);
+    if (!stored) return false;
+    const mine = JSON.parse(stored) as { x?: string; y?: string };
+    const account = JSON.parse(publicKeyJwk) as { x?: string; y?: string };
+    return Boolean(mine.x && mine.y) && mine.x === account.x && mine.y === account.y;
+  } catch {
+    return false;
+  }
 }
 
 function requirePrivateKey(): CryptoKey {

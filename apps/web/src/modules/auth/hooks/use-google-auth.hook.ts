@@ -14,14 +14,15 @@ export interface GoogleSignup {
 }
 
 /**
- * «Continuar con Google»: si el correo ya tiene cuenta pide la contraseña de Parla (abre las claves de cifrado
- * de los chats); si no, lleva al último paso del registro con el correo ya verificado.
+ * «Continuar con Google»: si el correo ya tiene cuenta entra directo cuando este dispositivo ya tiene sus claves
+ * de cifrado; en un dispositivo nuevo pide la contraseña de Parla una vez (abre las claves de los chats). Si no hay cuenta, lleva al último paso del registro con el correo ya verificado.
  */
 export function useGoogleAuth() {
   const navigate = useNavigate();
   const { from, goNext } = useAuthRedirect();
   const googleSignIn = useSessionStore((s) => s.googleSignIn);
   const unlockSession = useSessionStore((s) => s.unlockSession);
+  const unlockWithDevice = useSessionStore((s) => s.unlockWithDevice);
   const [pending, setPending] = useState<AuthResponse | null>(null);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +38,11 @@ export function useGoogleAuth() {
     try {
       const result = await googleSignIn(await signInWithGoogle());
       if (result.kind === 'login') {
+        // Si este dispositivo ya tiene la clave de la cuenta, Google basta: entra directo a sus chats.
+        if (await unlockWithDevice(result.auth)) {
+          goNext();
+          return;
+        }
         setPending(result.auth);
         setPassword('');
       } else {

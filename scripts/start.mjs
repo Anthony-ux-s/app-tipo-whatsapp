@@ -36,12 +36,16 @@ if (!devMode) {
 
   step('Compilando el core (NestJS)');
   run(npm, ['run', 'build', '-w', '@parla/api']);
+
+  // La web se sirve ya compilada: unos 20 archivos pequeños en vez de cientos de módulos sueltos.
+  step('Compilando la web');
+  run(npm, ['run', 'build', '-w', '@parla/web']);
 }
 
 buildServices();
 
 step(`Arrancando: web ${ports.web} · gateway ${ports.gateway} · core ${ports.core} · tiempo real ${ports.realtime} · APIs externas ${ports.providers}`);
-startServices({ core: devMode ? 'dev' : 'start' });
+startServices({ core: devMode ? 'dev' : 'start', web: devMode ? 'dev' : 'static' });
 
 console.log(`
 \x1b[32m✔ Parla está listo\x1b[0m

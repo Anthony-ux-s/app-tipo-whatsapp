@@ -223,7 +223,7 @@ export function AdminTraffic() {
             type="button"
             aria-pressed={days === r}
             onClick={() => setDays(r)}
-            className={`h-8 rounded-full px-3 text-xs font-semibold ${days === r ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200' : 'bg-surface text-ink-soft shadow-float'}`}
+            className={`h-8 rounded-full px-3 text-xs font-semibold ${days === r ? 'bg-teal-100 text-ink dark:bg-teal-900/60 dark:text-ink' : 'bg-surface text-ink-soft shadow-float'}`}
           >
             {r} días
           </button>

@@ -60,7 +60,7 @@ export function DriverOrdersView() {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-bold">{r.activeCount > 1 ? `${r.activeCount} entregas en curso` : 'Entrega en curso'}</span>
-            <span className="block truncate text-sm text-teal-50">
+            <span className="block truncate text-sm text-white">
               {r.activeCount > 1
                 ? 'Ver el mejor orden en Mis rutas'
                 : r.active.status === 'driver_assigned'
@@ -130,7 +130,7 @@ function DriverOrderCard({ order, onOpen, onTake, taking }: { order: DriverOrder
           <span>
             <span className="block text-xs font-bold tracking-wide text-ink-faint uppercase">Ganas</span>
             <span className="block font-display text-3xl leading-none font-extrabold text-ink">{formatSoles(order.earningsCents)}</span>
-            {order.tipCents > 0 && <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">+ {formatSoles(order.tipCents)} de propina 🎉</span>}
+            {order.tipCents > 0 && <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-ink dark:bg-emerald-950 dark:text-emerald-300">+ {formatSoles(order.tipCents)} de propina 🎉</span>}
           </span>
           {order.mine ? (
             <OrderStatusBadge status={order.status} />
@@ -187,7 +187,7 @@ function ExclusiveBadge({ until }: { until: string }) {
   }, []);
   const seconds = Math.max(0, Math.ceil((new Date(until).getTime() - now) / 1000));
   return (
-    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-200" data-testid="exclusive-offer">
+    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-ink dark:bg-amber-950 dark:text-ink" data-testid="exclusive-offer">
       {seconds > 0 ? `Para ti · ${seconds} s` : 'Se pasó al siguiente'}
     </span>
   );

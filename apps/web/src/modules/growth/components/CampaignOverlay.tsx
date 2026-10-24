@@ -52,7 +52,7 @@ export function CampaignOverlay({
 
       <div className="relative my-auto flex w-full max-w-md animate-pop flex-col items-center gap-5 py-6 text-center">
         {preview ? (
-          <div className="flex w-full items-center justify-between gap-2 rounded-full bg-amber-300/95 px-4 py-1.5 text-xs font-bold text-amber-950">
+          <div className="flex w-full items-center justify-between gap-2 rounded-full bg-amber-300/95 px-4 py-1.5 text-xs font-bold text-ink">
             <span className="flex items-center gap-1.5">
               <Eye className="size-4" /> Vista previa: así la ve el cliente. No se guarda nada.
             </span>

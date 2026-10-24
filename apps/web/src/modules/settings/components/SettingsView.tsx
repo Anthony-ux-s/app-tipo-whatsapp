@@ -54,7 +54,7 @@ export function SettingsView() {
         <button
           type="button"
           onClick={s.askLogout}
-          className="flex w-full items-center gap-4 px-4 py-3.5 text-left text-[15px] font-semibold text-teal-900 transition-colors duration-200 hover:bg-surface-2 md:px-5 dark:text-teal-200"
+          className="flex w-full items-center gap-4 px-4 py-3.5 text-left text-[15px] font-semibold text-ink transition-colors duration-200 hover:bg-surface-2 md:px-5 dark:text-ink"
         >
           <span className="flex size-10 items-center justify-center rounded-xl bg-surface-3">
             <LogOut className="size-5" />

@@ -27,7 +27,7 @@ function Box({ index, state, label, won, onPick }: { index: number; state: 'idle
       >
         {/* Premio que sale del cofre. */}
         <span
-          className={`absolute top-0 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-sm font-extrabold shadow-lg transition-all duration-700 ${opened ? '-translate-y-2 scale-110 opacity-100' : 'translate-y-8 scale-50 opacity-0'} ${won ? 'bg-amber-300 text-amber-950' : 'bg-white text-ink-soft'}`}
+          className={`absolute top-0 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-sm font-extrabold shadow-lg transition-all duration-700 ${opened ? '-translate-y-2 scale-110 opacity-100' : 'translate-y-8 scale-50 opacity-0'} ${won ? 'bg-amber-300 text-ink' : 'bg-white text-ink-soft'}`}
         >
           {label}
         </span>

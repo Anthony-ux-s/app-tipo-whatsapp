@@ -90,7 +90,7 @@ export function RouletteGate() {
           <div className="flex w-full animate-rise flex-col items-center gap-3 rounded-3xl bg-surface p-5 text-ink shadow-pop" data-testid="roulette-result">
             {r.result.coupon ? (
               <>
-                <span className="flex size-12 items-center justify-center rounded-full bg-teal-100 text-teal-700 [animation:prize-glow_1.6s_ease-out_2] dark:bg-teal-900/60 dark:text-teal-200">
+                <span className="flex size-12 items-center justify-center rounded-full bg-teal-100 text-teal-700 [animation:prize-glow_1.6s_ease-out_2] dark:bg-teal-900/60 dark:text-ink">
                   <PartyPopper className="size-6" />
                 </span>
                 <div>

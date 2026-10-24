@@ -32,7 +32,7 @@ export function VehiclePicker({
               role="radio"
               aria-checked={on}
               onClick={() => onVehicle(v.id)}
-              className={`flex flex-col items-center gap-1.5 rounded-2xl px-1 py-3 text-xs font-semibold transition-colors duration-200 ${on ? 'bg-teal-100 text-teal-900 ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-teal-100' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
+              className={`flex flex-col items-center gap-1.5 rounded-2xl px-1 py-3 text-xs font-semibold transition-colors duration-200 ${on ? 'bg-teal-100 text-ink ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-ink' : 'bg-surface-3 text-ink-soft hover:text-ink'}`}
             >
               <Icon className="size-6" />
               {v.label}

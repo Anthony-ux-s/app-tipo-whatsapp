@@ -5,6 +5,7 @@ import { useChatStore } from '@shared/stores/chat.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { toast } from '@shared/stores/toast.store';
 import { errorMessage, http } from '@shared/utils/http';
+import { queryClient } from '@shared/utils/query-client';
 
 /**
  * Chat sobre un pedido, en los dos sentidos, con la otra parte que se elija: el cliente con la tienda
@@ -24,7 +25,11 @@ export function useOrderChat(orderId: string | undefined) {
       if (!orderId || !me || opening) return;
       setOpening(withRole);
       try {
-        const contact = await http.get<PublicUser>(`/orders/${encodeURIComponent(orderId)}/contact?with=${withRole}`);
+        const contact = await queryClient.fetchQuery({
+          queryKey: ['orders', 'contact', orderId, withRole],
+          queryFn: () => http.get<PublicUser>(`/orders/${encodeURIComponent(orderId)}/contact?with=${withRole}`),
+          staleTime: 5 * 60_000,
+        });
         const conversation = await startDirect({ ...me, publicKey: me.publicKey }, contact);
         navigate(`/app/c/${conversation.id}`);
       } catch (err) {

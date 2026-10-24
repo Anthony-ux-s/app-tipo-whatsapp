@@ -28,7 +28,7 @@ export interface OtherContact {
 }
 
 /** Los últimos 8 dígitos identifican el número aunque venga con o sin indicativo. */
-const tail = (phone: string) => phone.replace(/D/g, '').slice(-8);
+const tail = (phone: string) => phone.replace(/\D/g, '').slice(-8);
 
 export interface FoundContact extends ContactMatch {
   /** Nombre con el que está guardado en la libreta (si lo hay). */

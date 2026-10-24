@@ -13,6 +13,8 @@ import { AmountRow, PageHeader, ServicePage, StoreClosedBanner } from './Service
 import { ProductImage } from './ProductImage';
 import { SERVICE_VISUALS } from '../const/services.const';
 import { useStore } from '../hooks/use-stores.hook';
+import { isBigOrder } from '@shared/utils/big-order';
+import { BigOrderNotice } from './BigOrderNotice';
 import { SavedAddresses } from './SavedAddresses';
 
 /** Carrito → dirección → total (productos + delivery) → pagar con QR. */
@@ -118,7 +120,7 @@ export function CheckoutView() {
               onChange={(e) => c.onCustomTip(e.target.value)}
               placeholder="Otro"
               aria-label="Otra propina en soles"
-              className="w-16 bg-transparent font-semibold text-ink outline-none placeholder:text-ink-faint"
+              className="w-16 bg-transparent font-semibold text-ink outline-none placeholder:text-ink-faint/60"
             />
           </label>
         </div>
@@ -177,6 +179,15 @@ export function CheckoutView() {
           </>
         )}
       </section>
+
+      {c.quote && info && isBigOrder({ totalCents: c.quote.totalCents, units: c.lines.reduce((sum, l) => sum + l.quantity, 0) }, info.bigOrder) && (
+        <BigOrderNotice
+          rules={info.bigOrder}
+          storeName={storeName}
+          stage="quote"
+          summary={`Hola, quiero confirmar un pedido grande por Parla: ${c.lines.map((l) => `${l.quantity}× ${l.product.name}`).join(', ')}. Total ${formatSoles(c.quote.totalCents)}.`}
+        />
+      )}
 
       <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Resumen" data-testid="quote">
         {!c.addressReady ? (

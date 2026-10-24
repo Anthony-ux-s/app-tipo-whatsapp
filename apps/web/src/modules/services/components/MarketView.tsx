@@ -54,7 +54,7 @@ function StoreView({ storeId }: { storeId: string }) {
             onChange={(e) => m.onQueryChange(e.target.value)}
             placeholder={category?.placeholder ?? '¿Qué necesitas? ej. arroz, un cargador'}
             aria-label="Buscar productos"
-            className="h-12 w-full rounded-2xl bg-surface pr-24 pl-11 text-[15px] text-ink shadow-float outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-teal-500/40"
+            className="h-12 w-full rounded-2xl bg-surface pr-24 pl-11 text-[15px] text-ink shadow-float outline-none placeholder:text-ink-faint/60 focus:ring-2 focus:ring-teal-500/40"
           />
           <button type="submit" className="absolute right-1.5 h-9 rounded-xl bg-brand px-4 text-sm font-bold text-white hover:bg-brand-strong">
             Buscar
@@ -64,7 +64,7 @@ function StoreView({ storeId }: { storeId: string }) {
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-soft">
             Buscando:
             {m.terms.map((term) => (
-              <span key={term} className="rounded-full bg-teal-100 px-2.5 py-1 font-semibold text-teal-900 dark:bg-teal-900/60 dark:text-teal-100">
+              <span key={term} className="rounded-full bg-teal-100 px-2.5 py-1 font-semibold text-ink dark:bg-teal-900/60 dark:text-ink">
                 {term}
               </span>
             ))}

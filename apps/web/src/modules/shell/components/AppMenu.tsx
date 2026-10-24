@@ -32,15 +32,15 @@ const TONES = {
 type Tone = keyof typeof TONES;
 
 const tileClass = (tone: Tone) =>
-  `flex min-h-24 flex-col items-start justify-between gap-2 rounded-2xl p-3 text-left transition-transform duration-200 active:scale-95 md:min-h-0 md:flex-row md:items-center md:justify-start md:gap-2.5 md:rounded-xl md:p-2 ${TONES[tone]}`;
+  `flex items-center gap-2.5 rounded-xl p-2 text-left transition-transform duration-200 active:scale-[0.98] ${TONES[tone]}`;
 
 function TileContent({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
     <>
-      <span className="flex size-11 items-center justify-center rounded-xl bg-white/80 shadow-sm md:size-8 md:rounded-lg dark:bg-black/20">
-        <Icon className="size-6 md:size-[18px]" strokeWidth={2.25} />
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/80 shadow-sm dark:bg-black/20">
+        <Icon className="size-[18px]" strokeWidth={2.25} />
       </span>
-      <span className="text-[15px] leading-tight font-bold text-ink md:text-sm">{label}</span>
+      <span className="min-w-0 truncate text-sm leading-tight font-bold text-ink">{label}</span>
     </>
   );
 }
@@ -74,8 +74,9 @@ function SettingRow({ to, icon: Icon, label, onClose }: { to: string; icon: Luci
  */
 export function AppMenu({ open, onClose, onNewGroup }: AppMenuProps) {
   const user = useSessionStore((s) => s.user);
-  const business = useBusinessStore((s) => s.business);
-  const driver = useDriverStore((s) => s.driver);
+  // Tienda y reparto son de los clientes: soporte (que solo administra) no los ve.
+  const business = useBusinessStore((s) => (user?.isAdmin ? undefined : s.business));
+  const driver = useDriverStore((s) => (user?.isAdmin ? undefined : s.driver));
   const installApp = useInstallApp();
 
   useEffect(() => {
@@ -90,7 +91,8 @@ export function AppMenu({ open, onClose, onNewGroup }: AppMenuProps) {
   return (
     <div className="fixed inset-0 z-40 flex" role="dialog" aria-modal="true" aria-label="Menú">
       <button type="button" aria-label="Cerrar menú" onClick={onClose} className="absolute inset-0 animate-fade-in bg-black/40" />
-      <nav className="relative flex h-full w-[88%] max-w-84 animate-slide-in flex-col overflow-y-auto bg-surface shadow-pop">
+      {/* En modo claro todo el texto del menú va en negro puro; en oscuro, blanco puro. */}
+      <nav className="relative flex h-full w-[88%] max-w-84 animate-slide-in flex-col overflow-y-auto bg-surface shadow-pop [--ink-faint:#000000] [--ink-soft:#000000] [--ink:#000000] dark:[--ink-faint:#ffffff] dark:[--ink-soft:#ffffff] dark:[--ink:#ffffff]">
         <div className="flex items-start gap-3 bg-brand px-4 pt-5 pb-4 text-white">
           <Link to="/app/ajustes/perfil" onClick={onClose} className="flex min-w-0 flex-1 items-center gap-3">
             <Avatar name={user.displayName} color={user.avatarColor} photo={user.avatarUrl} size="lg" />
@@ -104,12 +106,12 @@ export function AppMenu({ open, onClose, onNewGroup }: AppMenuProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 p-3 md:grid-cols-1 md:gap-1.5" data-testid="menu-tiles">
+        <div className="flex flex-col gap-1.5 p-3" data-testid="menu-tiles">
           <Tile to="/app/pedidos" icon={Package} label="Mis pedidos" tone="orange" onClose={onClose} />
           {driver && <Tile to="/app/rapidito" icon={Bike} label="Rapidito" tone="rose" onClose={onClose} />}
           {driver && <Tile to="/app/rapidito/rutas" icon={Route} label="Mis rutas" tone="violet" onClose={onClose} />}
           {business && <Tile to="/app/negocio" icon={Store} label="Mi negocio" tone="amber" onClose={onClose} />}
-          {business === null && <Tile to="/app/negocio/abrir" icon={Store} label="Abrir mi tienda" tone="green" onClose={onClose} />}
+          {business === null && <Tile to="/app/negocio/nueva" icon={Store} label="Crear tienda" tone="green" onClose={onClose} />}
           <button
             type="button"
             onClick={() => {

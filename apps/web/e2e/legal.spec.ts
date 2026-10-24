@@ -37,9 +37,9 @@ test.describe('Legal y datos personales', () => {
     await page.getByRole('button', { name: 'Eliminar definitivamente' }).click();
     await expect(page).toHaveURL(/\/entrar/);
 
-    await page.getByLabel('Usuario o teléfono').fill(phone);
+    await page.getByLabel('Usuario, correo o teléfono').fill(phone);
     await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: 'Entrar' }).click();
-    await expect(page.getByRole('alert')).toHaveText('Usuario, teléfono o contraseña incorrectos');
+    await expect(page.getByRole('alert')).toHaveText('Usuario, correo, teléfono o contraseña incorrectos');
   });
 });

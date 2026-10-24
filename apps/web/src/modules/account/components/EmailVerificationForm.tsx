@@ -31,7 +31,7 @@ export function EmailVerificationForm() {
           Escribe el código que enviamos a <span className="font-semibold text-ink">{e.sent.sentTo}</span>.
         </p>
         {e.sent.devCode && (
-          <p className="flex items-start gap-2 rounded-[var(--radius-card)] bg-cyan-50 p-3 text-sm text-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-100" data-testid="dev-code">
+          <p className="flex items-start gap-2 rounded-[var(--radius-card)] bg-cyan-50 p-3 text-sm text-ink dark:bg-cyan-950/50 dark:text-ink" data-testid="dev-code">
             <FlaskConical className="mt-0.5 size-4 shrink-0" />
             <span>
               Modo de prueba: el código es <strong className="font-mono tracking-widest">{e.sent.devCode}</strong>

@@ -64,7 +64,7 @@ function Trends() {
               type="button"
               aria-pressed={days === r}
               onClick={() => setDays(r)}
-              className={`h-8 rounded-full px-3 text-xs font-semibold transition-colors ${days === r ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200' : 'bg-surface text-ink-soft shadow-float hover:text-ink'}`}
+              className={`h-8 rounded-full px-3 text-xs font-semibold transition-colors ${days === r ? 'bg-teal-100 text-ink dark:bg-teal-900/60 dark:text-ink' : 'bg-surface text-ink-soft shadow-float hover:text-ink'}`}
             >
               {r} días
             </button>

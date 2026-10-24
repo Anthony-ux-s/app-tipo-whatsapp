@@ -70,7 +70,7 @@ export function AdminPeople({ chip }: { chip: (on: boolean, onClick: () => void,
           }}
           placeholder="Nombre, @usuario o teléfono"
           aria-label="Buscar personas"
-          className="h-10 w-full rounded-[var(--radius-card)] bg-surface pr-3 pl-9 text-sm text-ink shadow-float outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-teal-500/30"
+          className="h-10 w-full rounded-[var(--radius-card)] bg-surface pr-3 pl-9 text-sm text-ink shadow-float outline-none placeholder:text-ink-faint/60 focus:ring-2 focus:ring-teal-500/30"
         />
       </form>
       <div className="flex flex-wrap gap-1.5" aria-label="Tipo de cuenta">

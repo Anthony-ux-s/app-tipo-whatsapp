@@ -58,14 +58,48 @@ test.describe('Flujo principal: conversar en tiempo real con cifrado de extremo 
 
   test('una contraseña equivocada muestra un error claro', async ({ page }) => {
     await page.goto('/entrar');
-    await page.getByLabel('Usuario o teléfono').fill('laura');
+    await page.getByLabel('Usuario, correo o teléfono').fill('laura');
     await page.getByLabel('Contraseña', { exact: true }).fill('Incorrecta123');
     await page.getByRole('button', { name: 'Entrar' }).click();
-    await expect(page.getByRole('alert')).toHaveText('Usuario, teléfono o contraseña incorrectos');
+    await expect(page.getByRole('alert')).toHaveText('Usuario, correo, teléfono o contraseña incorrectos');
+  });
+
+  test('si falla el envío el mensaje queda marcado y «Reintentar» lo manda sin duplicarlo', async ({ browser }) => {
+    const laura = await openSession(browser, 'laura');
+    const andres = await openSession(browser, 'andres');
+    const text = unique('Mensaje que primero falla');
+
+    // El primer envío se corta (red caída); el segundo pasa.
+    let blocked = false;
+    await laura.page.route('**/api/chats/*/messages', async (route) => {
+      if (route.request().method() === 'POST' && !blocked) {
+        blocked = true;
+        await route.abort('failed');
+        return;
+      }
+      await route.continue();
+    });
+
+    await openChat(laura.page, 'Andrés Rojas');
+    await laura.page.getByLabel('Escribe un mensaje').fill(text);
+    await laura.page.getByRole('button', { name: 'Enviar mensaje' }).click();
+    const failed = laura.page.getByTestId('message').filter({ hasText: text });
+    await expect(failed).toBeVisible();
+    await expect(failed.getByRole('button', { name: /reintentar/i })).toBeVisible();
+
+    await failed.getByRole('button', { name: /reintentar/i }).click();
+    await expect(failed.getByRole('button', { name: /reintentar/i })).toBeHidden();
+    // Llega una sola vez a Andrés, descifrado.
+    const item = andres.page.getByTestId('chat-item').filter({ hasText: 'Laura Méndez' });
+    await expect(item).toContainText(text);
+    await item.click();
+    await expect(andres.page.getByTestId('message').filter({ hasText: text })).toHaveCount(1);
+    await expect(laura.page.getByTestId('message').filter({ hasText: text })).toHaveCount(1);
   });
 
   test('se puede entrar con el número de teléfono', async ({ page }) => {
     await login(page, '+57 300 123 4567');
-    await expect(page.getByRole('link', { name: 'Tu perfil' })).toHaveAttribute('title', 'Sofía Ramírez');
+    await page.getByRole('button', { name: 'Abrir menú' }).click();
+    await expect(page.getByRole('dialog', { name: 'Menú' })).toContainText('Sofía Ramírez');
   });
 });

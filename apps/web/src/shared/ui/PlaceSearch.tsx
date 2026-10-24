@@ -57,7 +57,7 @@ export function PlaceSearch({ onSelect, placeholder = 'Busca una dirección o un
             placeholder={placeholder}
             aria-label="Buscar en el mapa"
             enterKeyHint="search"
-            className="h-11 w-full rounded-xl border border-line bg-surface pr-3 pl-9 text-[15px] text-ink outline-none placeholder:text-ink-faint focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
+            className="h-11 w-full rounded-xl border border-line bg-surface pr-3 pl-9 text-[15px] text-ink outline-none placeholder:text-ink-faint/60 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/30"
           />
         </div>
         <Button type="submit" variant="secondary" loading={loading} disabled={query.trim().length < 3}>

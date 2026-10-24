@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from '@shared/stores/toast.store';
 import { errorMessage, http } from '@shared/utils/http';
+import { whenIdle } from '@shared/utils/idle';
 import { landingRotation } from '../utils/roulette.utils';
 
 export type RoulettePhase = 'hidden' | 'ready' | 'spinning' | 'settling' | 'result';
@@ -37,22 +38,25 @@ export function useRoulette() {
 
   useEffect(() => {
     let alive = true;
-    http
-      .get<{ roulette: PublicRoulette | null }>('/roulette')
-      .then(({ roulette: found }) => {
-        // En modo de prueba se muestra en cada visita, aunque la hayan cerrado antes.
-        if (!alive || !found || (!found.testMode && wasDismissed(found.id))) return;
-        timers.current.push(
-          window.setTimeout(() => {
-            setRoulette(found);
-            setPhase('ready');
-          }, SHOW_DELAY_MS),
-        );
-      })
-      // Sin ruleta o sin conexión: la app sigue como siempre.
-      .catch(() => undefined);
+    const cancelIdle = whenIdle(() => {
+      http
+        .get<{ roulette: PublicRoulette | null }>('/roulette')
+        .then(({ roulette: found }) => {
+          // En modo de prueba se muestra en cada visita, aunque la hayan cerrado antes.
+          if (!alive || !found || (!found.testMode && wasDismissed(found.id))) return;
+          timers.current.push(
+            window.setTimeout(() => {
+              setRoulette(found);
+              setPhase('ready');
+            }, SHOW_DELAY_MS),
+          );
+        })
+        // Sin ruleta o sin conexión: la app sigue como siempre.
+        .catch(() => undefined);
+    });
     return () => {
       alive = false;
+      cancelIdle();
       timers.current.forEach((t) => window.clearTimeout(t));
     };
   }, []);

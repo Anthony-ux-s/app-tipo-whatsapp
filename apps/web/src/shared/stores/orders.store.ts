@@ -1,6 +1,7 @@
 import type { DriverLocation, Order } from '@parla/types';
 import { create } from 'zustand';
 import { http } from '../utils/http';
+import { fetchQ } from '../utils/query-client';
 
 interface OrdersState {
   orders: Record<string, Order>;
@@ -25,7 +26,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
   loadOrders: async () => {
     if (get().status !== 'ready') set({ status: 'loading' });
     try {
-      const list = await http.get<Order[]>('/orders');
+      const list = await fetchQ<Order[]>(['orders', 'list'], '/orders');
       set({ orders: { ...get().orders, ...Object.fromEntries(list.map((o) => [o.id, o])) }, status: 'ready' });
     } catch (error) {
       if (get().status !== 'ready') set({ status: 'error' });
@@ -34,7 +35,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
   },
 
   loadOrder: async (id) => {
-    const order = await http.get<Order>(`/orders/${encodeURIComponent(id)}`);
+    const order = await fetchQ<Order>(['orders', 'one', id], `/orders/${encodeURIComponent(id)}`);
     get().upsert(order);
     return order;
   },

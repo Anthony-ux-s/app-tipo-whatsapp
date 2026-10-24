@@ -33,7 +33,7 @@ export function ForgotPasswordView() {
             Si <span className="font-semibold text-ink">{f.sent?.sentTo}</span> está en una cuenta de Parla, ya te llegó el código.
           </p>
           {f.sent?.devCode && (
-            <p className="flex items-start gap-2 rounded-[var(--radius-card)] bg-cyan-50 p-3 text-sm text-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-100" data-testid="dev-code">
+            <p className="flex items-start gap-2 rounded-[var(--radius-card)] bg-cyan-50 p-3 text-sm text-ink dark:bg-cyan-950/50 dark:text-ink" data-testid="dev-code">
               <FlaskConical className="mt-0.5 size-4 shrink-0" />
               <span>
                 Modo de prueba: el código es <strong className="font-mono tracking-widest">{f.sent.devCode}</strong>
@@ -50,7 +50,7 @@ export function ForgotPasswordView() {
 
       {f.step === 'password' && (
         <form onSubmit={f.save} className="flex flex-col gap-4" noValidate>
-          <p className="flex items-start gap-2 rounded-[var(--radius-card)] bg-teal-50 p-3 text-sm text-teal-900 dark:bg-teal-950/60 dark:text-teal-100">
+          <p className="flex items-start gap-2 rounded-[var(--radius-card)] bg-teal-50 p-3 text-sm text-ink dark:bg-teal-950/60 dark:text-ink">
             <Info className="mt-0.5 size-4 shrink-0" />
             Tus mensajes van cifrados con una clave que dependía de tu contraseña anterior. Se creará una clave nueva y tus contactos verán un aviso para volver a compartirte cada chat.
           </p>

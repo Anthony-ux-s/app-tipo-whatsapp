@@ -71,7 +71,7 @@ export function RateOrderCard({ order }: { order: Order }) {
         placeholder="Cuéntanos algo (opcional)"
         aria-label="Comentario"
         rows={2}
-        className="w-full resize-none rounded-[var(--radius-card)] border border-line bg-surface px-3.5 py-2.5 text-[15px] text-ink outline-none placeholder:text-ink-faint focus:border-teal-500 focus:ring-4 focus:ring-teal-500/15"
+        className="w-full resize-none rounded-[var(--radius-card)] border border-line bg-surface px-3.5 py-2.5 text-[15px] text-ink outline-none placeholder:text-ink-faint/60 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/15"
       />
       <Button icon={<Send className="size-4" />} onClick={send} loading={sending} disabled={driverStars === null && storeStars === null} className="self-start" data-testid="send-rating">
         Enviar calificación

@@ -70,13 +70,14 @@
   --surface-2: #f7f8fa;
   --surface-3: #eef1f3;
   --line: #e4e9ec;
-  --ink: #111b21;
-  --ink-soft: #54656f;
-  --ink-faint: #8696a0;
+  /* Texto con contraste máximo: negro puro sobre fondo claro, blanco puro sobre fondo oscuro. */
+  --ink: #000000;
+  --ink-soft: #000000;
+  --ink-faint: #000000;
   --chat: #eef6f2;
   --bubble-in: #ffffff;
   --bubble-out: #d4f3e8;
-  --tick-read: #0891b2;
+  --tick-read: #2563eb;
   /* Series de los gráficos (validadas para daltonismo contra la superficie de cada modo). */
   --chart-1: #009d71;
   --chart-2: #d97706;
@@ -89,13 +90,13 @@
   --surface-2: #17242b;
   --surface-3: #202c33;
   --line: #24343d;
-  --ink: #e9edef;
-  --ink-soft: #aebac1;
-  --ink-faint: #7b8d97;
+  --ink: #ffffff;
+  --ink-soft: #ffffff;
+  --ink-faint: #ffffff;
   --chat: #0b141a;
   --bubble-in: #202c33;
   --bubble-out: #005d44;
-  --tick-read: #22d3ee;
+  --tick-read: #60a5fa;
   --chart-1: #1fa77f;
   --chart-2: #d97706;
   color-scheme: dark;
@@ -267,7 +268,7 @@ svg .stk-bob, svg .stk-shake, svg .stk-bow, svg .stk-sway, .stk-wave, .stk-spin 
 
 /* Letra de los mensajes: tamaño y tipo elegidos en Ajustes → Chats (variables en <html>). */
 .chat-text {
-  font-size: var(--chat-font-size, 15px);
+  font-size: var(--chat-font-size, 14px);
   font-family: var(--chat-font, var(--font-sans));
 }
 
