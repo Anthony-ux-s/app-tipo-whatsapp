@@ -1,4 +1,4 @@
-import type { OrderStatus } from '@parla/types';
+import type { OrderStatus, Product } from '@parla/types';
 import { FILLER_WORDS, MAX_SEARCH_TERMS, ORDER_STEPS } from '../const/services.const';
 
 /**
@@ -43,4 +43,17 @@ export function isFinalStatus(status: OrderStatus): boolean {
 /** «14:35» de vencimiento o «vencido». */
 export function minutesLeft(expiresAt: string, now: number): number {
   return Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 60_000));
+}
+
+/**
+ * Las presentaciones de un producto (unidad, caja, rollo…): en las tiendas de FerroHub cada una es un producto
+ * con id «7-caja» y nombre «Cinta (Caja x12)». Se agrupan las que comparten el id base y el nombre sin paréntesis.
+ */
+export function variantsOf(product: Product, all: Product[]): Product[] {
+  const base = (id: string) => id.slice(0, Math.max(0, id.lastIndexOf('-')));
+  const stem = (name: string) => name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  const key = base(product.id);
+  if (!key) return [product];
+  const group = all.filter((p) => base(p.id) === key && stem(p.name) === stem(product.name));
+  return group.length > 1 ? group : [product];
 }

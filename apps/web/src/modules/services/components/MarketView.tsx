@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Clock, MapPin, Search, X } from 'lucide-react';
 import { Navigate, useParams } from 'react-router';
 import { EmptyState, ErrorState } from '@shared/ui/States';
@@ -24,6 +25,7 @@ function StoreView({ storeId }: { storeId: string }) {
   const forYou = useForYou(m.terms.length ? null : (m.groups?.[0]?.products ?? null));
   const status = useStoreStatus(storeId);
   const { store, error: storeError, retry: retryStore } = useStore(storeId);
+  const pool = useMemo(() => [...new Map((m.groups ?? []).flatMap((g) => g.products).map((p) => [p.id, p] as const)).values()].map((product) => ({ product, storeId, storeName: store?.name })), [m.groups, storeId, store?.name]);
   const category = store ? SERVICE_VISUALS[store.service] : null;
   return (
     <ServicePage
@@ -88,7 +90,7 @@ function StoreView({ storeId }: { storeId: string }) {
       {!m.terms.length && (
         <ForYouSection
           forYou={forYou}
-          render={(product) => <ProductCard key={product.id} product={product} quantity={m.quantityOf(product.id)} onAdd={() => m.add(product)} onSubtract={() => m.subtract(product)} />}
+          render={(product) => <ProductCard key={product.id} product={product} storeId={storeId} storeName={store?.name} quantity={m.quantityOf(product.id)} onAdd={() => m.add(product)} onSubtract={() => m.subtract(product)} />}
         />
       )}
 
@@ -103,6 +105,9 @@ function StoreView({ storeId }: { storeId: string }) {
                 <ProductCard
                   key={product.id}
                   product={product}
+                  storeId={storeId}
+                  storeName={store?.name}
+                  pool={pool}
                   quantity={m.quantityOf(product.id)}
                   onAdd={() => m.add(product)}
                   onSubtract={() => m.subtract(product)}

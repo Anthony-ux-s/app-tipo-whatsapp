@@ -46,6 +46,7 @@ class OrderLineDto implements OrderLine {
   @IsInt() @Min(1) @Max(50) quantity: number;
   @IsInt() @Min(0) @Max(MAX_CENTS) unitPriceCents: number;
   @IsInt() @Min(0) @Max(MAX_CENTS) totalCents: number;
+  @IsOptional() @IsString() @MaxLength(500) imageUrl?: string | null;
 }
 
 class GeoPointDto implements GeoPoint {

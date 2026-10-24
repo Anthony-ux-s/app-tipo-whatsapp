@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router';
 import { cartCount, cartEstimateCents, useCartStore } from '@shared/stores/cart.store';
 import { useOrdersStore } from '@shared/stores/orders.store';
 import { toast } from '@shared/stores/toast.store';
+import { searchPlaces, type PlaceResult } from '@shared/utils/geocode';
 import { ApiError, errorMessage, http } from '@shared/utils/http';
 
 const QUOTE_DEBOUNCE_MS = 400;
@@ -41,6 +42,44 @@ export function useCheckout() {
   const myCoupons = useQuery({ queryKey: ['coupons', 'mine'], queryFn: () => http.get<MyCoupon[]>('/coupons/mine') }).data ?? NO_COUPONS;
 
   const lines = Object.values(items);
+
+  // Al escribir la dirección (y hacer una pausa), también se busca en el mapa y el pin salta ahí. Solo si la
+  // persona tecleó: lo que marcó a mano en el mapa o eligió de sus direcciones guardadas no se pisa.
+  // Una búsqueda por pausa (Nominatim no admite pedir letra por letra).
+  const typedAddress = useRef(false);
+  const addressLine = address.line;
+  const [locatingAddress, setLocatingAddress] = useState(false);
+  /** Los lugares que coinciden con lo escrito (para elegir el correcto) y si no hubo ninguno. */
+  const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
+  const [noMatch, setNoMatch] = useState(false);
+  /** El número de puerta que escribió, cuando el mapa encontró la calle pero no ese número. */
+  const [missingNumber, setMissingNumber] = useState<string | null>(null);
+  useEffect(() => {
+    const query = addressLine.trim();
+    if (!typedAddress.current || query.length < 8) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setLocatingAddress(true);
+      searchPlaces(query, controller.signal)
+        .then((found) => {
+          if (!typedAddress.current) return;
+          setSuggestions(found);
+          setNoMatch(found.length === 0);
+          const typedNumber = query.match(/\b\d{1,5}[a-z]?\b/i)?.[0] ?? null;
+          setMissingNumber(typedNumber && found.length > 0 && !found.some((r) => r.label.toLowerCase().split(/[^\p{L}\p{N}]+/u).includes(typedNumber.toLowerCase())) ? typedNumber : null);
+          if (!found[0]) return;
+          typedAddress.current = false;
+          const latest = useCartStore.getState().address;
+          if (latest.line.trim() === query) setAddress({ ...latest, location: found[0].point });
+        })
+        .catch(() => undefined)
+        .finally(() => setLocatingAddress(false));
+    }, 1200);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [addressLine, setAddress]);
 
   // Cada cupón ganado dice cuánto le falta al carrito para poder usarlo (compra mínima).
   const subtotalCents = cartEstimateCents(items);
@@ -107,9 +146,29 @@ export function useCheckout() {
     add: (product: Product) => change(product, 1, service),
     subtract: (product: Product) => change(product, -1, service),
     remove,
-    onAddressChange: (line: string) => setAddress({ ...address, line }),
+    locatingAddress,
+    suggestions,
+    noMatch,
+    missingNumber,
+    /** Elegir uno de los lugares sugeridos: el pin y la dirección quedan ahí. */
+    pickSuggestion: (place: PlaceResult) => {
+      typedAddress.current = false;
+      setSuggestions([]);
+      setNoMatch(false);
+      setMissingNumber(null);
+      setAddress({ ...address, location: place.point, line: place.label.slice(0, 200) });
+    },
+    onAddressChange: (line: string) => {
+      typedAddress.current = true;
+      setNoMatch(false);
+      setMissingNumber(null);
+      setAddress({ ...address, line });
+    },
     /** Elegir una dirección guardada. */
-    pickAddress: setAddress,
+    pickAddress: (picked: typeof address) => {
+      typedAddress.current = false;
+      setAddress(picked);
+    },
     myCoupons: wallet,
     useMyCoupon: (code: string) => {
       setCouponError(null);
@@ -148,9 +207,11 @@ export function useCheckout() {
       setTip(Math.round(Number(clean || '0') * 100));
     },
     /** El punto de entrega en el mapa (para que el repartidor llegue y el cliente lo siga). */
-    onPickLocation: (location: GeoPoint) => setAddress({ ...address, location }),
+    onPickLocation: (location: GeoPoint) => {
+      typedAddress.current = false;
+      setAddress({ ...address, location });
+    },
     /** Eligió un lugar en el buscador: el pin va ahí y, si aún no escribió la dirección, se completa. */
-    onPlaceFound: (location: GeoPoint, label: string) => setAddress({ ...address, location, line: address.line.trim() ? address.line : label.slice(0, 200) }),
     locating,
     useMyLocation: () => {
       if (!navigator.geolocation) return toast('Tu navegador no comparte la ubicación. Marca el punto en el mapa.', 'error');

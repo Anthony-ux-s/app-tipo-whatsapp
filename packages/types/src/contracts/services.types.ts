@@ -28,6 +28,9 @@ export interface Product {
   stock: number;
   category: string;
   imageUrl: string | null;
+  /** La ficha del producto: texto plano (hasta 600 letras) y hasta 4 fotos (la primera es imageUrl). Pueden faltar. */
+  description?: string;
+  images?: string[];
   /** Precio normal cuando el producto está en oferta (priceCents es el rebajado). */
   listPriceCents?: number;
 }
@@ -66,6 +69,8 @@ export interface OrderLine {
   quantity: number;
   unitPriceCents: number;
   totalCents: number;
+  /** Miniatura de la primera foto del producto (pedidos nuevos). */
+  imageUrl?: string | null;
 }
 
 export interface OrderQuote {

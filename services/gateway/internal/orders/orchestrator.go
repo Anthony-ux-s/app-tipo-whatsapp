@@ -311,7 +311,7 @@ func (o *Orchestrator) quote(ctx context.Context, userID string, req services.Qu
 		if p.Stock < item.Quantity {
 			return q, req, rapidito.Quote{}, &Error{Status: http.StatusConflict, Code: "conflict", Message: fmt.Sprintf("Solo quedan %d de «%s»", p.Stock, p.Name)}
 		}
-		line := services.OrderLine{ProductID: p.ID, Name: p.Name, Unit: p.Unit, Quantity: item.Quantity, UnitPriceCents: p.PriceCents, TotalCents: p.PriceCents * item.Quantity}
+		line := services.OrderLine{ProductID: p.ID, Name: p.Name, Unit: p.Unit, Quantity: item.Quantity, UnitPriceCents: p.PriceCents, TotalCents: p.PriceCents * item.Quantity, ImageURL: p.ImageURL}
 		q.Lines[i] = line
 		q.SubtotalCents += line.TotalCents
 	}

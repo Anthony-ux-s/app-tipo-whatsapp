@@ -28,5 +28,8 @@ export function isStale(at: string, now = Date.now()): boolean {
   return now - new Date(at).getTime() > 2 * 60_000;
 }
 
-/** Centro por defecto del mapa (Miraflores, Lima) cuando aún no hay puntos. */
-export const DEFAULT_CENTER: GeoPoint = { lat: -12.1211, lng: -77.0297 };
+/** Centro por defecto del mapa (Cajamarca) cuando aún no hay puntos. */
+export const DEFAULT_CENTER: GeoPoint = { lat: -7.1638, lng: -78.5003 };
+
+/** La ciudad donde opera Parla: las búsquedas de direcciones la prefieren. */
+export const DEFAULT_CITY = 'Cajamarca';

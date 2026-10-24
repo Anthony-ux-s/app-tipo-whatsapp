@@ -18,7 +18,9 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -72,6 +74,8 @@ type producto struct {
 	Marca          string           `json:"marca"`
 	Activo         bool             `json:"activo"`
 	ImagenURL      *string          `json:"imagenUrl"`
+	Descripcion    string           `json:"descripcion"`
+	Imagenes       []string         `json:"imagenes"`
 	UnidadBase     string           `json:"unidadBase"`
 	Presentaciones []presentacion   `json:"presentaciones"`
 	Variantes      []map[string]any `json:"variantes"`
@@ -113,14 +117,12 @@ func (c Client) toProducts(p producto) []services.Product {
 	if !p.Activo || len(p.Variantes) > 0 || !safeID.MatchString(pid) {
 		return nil
 	}
+	images := c.photos(p)
 	var image *string
-	if p.ImagenURL != nil && *p.ImagenURL != "" {
-		img := *p.ImagenURL
-		if strings.HasPrefix(img, "/") {
-			img = strings.TrimRight(c.BaseURL, "/") + img
-		}
-		image = &img
+	if len(images) > 0 {
+		image = &images[0]
 	}
+	description := cutDescription(p.Descripcion)
 	out := []services.Product{}
 	for _, pr := range p.Presentaciones {
 		if pr.PrecioVenta == nil || *pr.PrecioVenta <= 0 || !safeID.MatchString(pr.ID) {
@@ -142,10 +144,63 @@ func (c Client) toProducts(p producto) []services.Product {
 		}
 		out = append(out, services.Product{
 			ID: pid + separator + pr.ID, Name: name, Unit: pr.Nombre, PriceCents: cents, Currency: services.Currency,
-			Stock: stock, Category: category, ImageURL: image,
+			Stock: stock, Category: category, ImageURL: image, Description: description, Images: images,
 		})
 	}
 	return out
+}
+
+// photos: hasta 4 fotos del producto (la principal primero), solo direcciones seguras. FerroHub las sirve
+// públicas: el navegador las pide directo, Parla no las copia.
+func (c Client) photos(p producto) []string {
+	raw := []string{}
+	if p.ImagenURL != nil {
+		raw = append(raw, *p.ImagenURL)
+	}
+	raw = append(raw, p.Imagenes...)
+	out := []string{}
+	for _, img := range raw {
+		img = strings.TrimSpace(img)
+		if strings.HasPrefix(img, "/") {
+			img = strings.TrimRight(c.BaseURL, "/") + img
+		}
+		if !safeImage(img) || slices.Contains(out, img) {
+			continue
+		}
+		out = append(out, img)
+		if len(out) == maxPhotos {
+			break
+		}
+	}
+	return out
+}
+
+const (
+	maxPhotos         = 4
+	maxDescriptionLen = 600
+)
+
+// safeImage: https://; http://localhost solo fuera de producción (desarrollo).
+func safeImage(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || len(raw) > 500 {
+		return false
+	}
+	if u.Scheme == "https" {
+		return true
+	}
+	production := os.Getenv("NODE_ENV") == "production" || os.Getenv("APP_ENV") == "production"
+	return u.Scheme == "http" && !production && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1")
+}
+
+// cutDescription: texto plano de hasta 600 letras (se corta sin partir un carácter).
+func cutDescription(s string) string {
+	s = strings.TrimSpace(s)
+	r := []rune(s)
+	if len(r) <= maxDescriptionLen {
+		return s
+	}
+	return strings.TrimSpace(string(r[:maxDescriptionLen-1])) + "…"
 }
 
 // catalog: todos los productos. Fresco, del caché; vencido, el del caché mientras se actualiza por

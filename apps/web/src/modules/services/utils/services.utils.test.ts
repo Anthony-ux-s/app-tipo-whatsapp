@@ -1,6 +1,7 @@
+import type { Product } from '@parla/types';
 import { describe, expect, it } from 'vitest';
 import { formatSoles } from '@shared/utils/money';
-import { discountPercent, isFinalStatus, minutesLeft, orderStepIndex, parseShoppingQuery } from './services.utils';
+import { discountPercent, isFinalStatus, minutesLeft, orderStepIndex, parseShoppingQuery, variantsOf } from './services.utils';
 
 describe('servicios', () => {
   it('entiende un pedido escrito como se habla', () => {
@@ -35,5 +36,28 @@ describe('servicios', () => {
     const now = Date.now();
     expect(minutesLeft(new Date(now + 90_000).toISOString(), now)).toBe(2);
     expect(minutesLeft(new Date(now - 1).toISOString(), now)).toBe(0);
+  });
+});
+
+describe('variantsOf', () => {
+  const p = (id: string, name: string, unit = 'Unidad'): Product => ({ id, name, unit, priceCents: 100, currency: 'PEN', stock: 5, category: 'Eléctrico', imageUrl: null });
+
+  it('agrupa las presentaciones del mismo producto', () => {
+    const base = p('7-base', 'Cinta aislante', 'Rollo');
+    const caja = p('7-caja', 'Cinta aislante (Caja x12)', 'Caja x12');
+    const otro = p('8-base', 'Martillo');
+    expect(variantsOf(base, [base, caja, otro])).toEqual([base, caja]);
+    expect(variantsOf(caja, [base, caja, otro])).toEqual([base, caja]);
+  });
+
+  it('no junta productos distintos que solo comparten un código con guion', () => {
+    const a = p('ARR-01', 'Arroz');
+    const b = p('ARR-02', 'Arroz integral');
+    expect(variantsOf(a, [a, b])).toEqual([a]);
+  });
+
+  it('un producto sin guion no tiene presentaciones', () => {
+    const a = p('sku1', 'Pan');
+    expect(variantsOf(a, [a])).toEqual([a]);
   });
 });

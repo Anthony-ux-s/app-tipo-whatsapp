@@ -1,16 +1,16 @@
 import type { BusinessStatus, OrderStatus, OrderTimelineEntry } from '@parla/types';
 import { ArrowLeft, Moon, ShoppingCart } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { formatTime } from '@shared/utils/date';
 import { formatSoles } from '@shared/utils/money';
 import { ORDER_STATUS_LABELS } from '../const/services.const';
 
 /** Contenedor de las pantallas de Servicios: ancho cómodo y desplazamiento propio. */
-export function ServicePage({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
+export function ServicePage({ children, footer, wide }: { children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col bg-canvas">
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-5 px-3 pt-3 pb-8 sm:px-4 md:gap-6 md:px-6 md:pt-6 lg:px-8">{children}</div>
+        <div className={`mx-auto flex ${wide ? 'max-w-6xl' : 'max-w-3xl'} flex-col gap-5 px-3 pt-3 pb-8 sm:px-4 md:gap-6 md:px-6 md:pt-6 lg:px-8`}>{children}</div>
       </div>
       {footer}
     </div>
@@ -149,4 +149,11 @@ export function StoreClosedBanner({ status }: { status: BusinessStatus | null })
       </p>
     </div>
   );
+}
+
+/** Miniatura de la primera foto de un producto del pedido (si falla o no hay, no se muestra nada roto). */
+export function LineThumb({ src, name }: { src?: string | null; name: string }) {
+  const [broken, setBroken] = useState(false);
+  if (!src || broken) return null;
+  return <img src={src} alt={name} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="size-10 shrink-0 rounded-lg bg-surface-3 object-cover" data-testid="line-thumb" />;
 }

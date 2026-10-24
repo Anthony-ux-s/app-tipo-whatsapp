@@ -250,3 +250,54 @@ func TestSinDatosDelPedidoLaVentaQuedaComoSiempre(t *testing.T) {
 		}
 	}
 }
+
+func TestLaFichaTraeFotosYDescripcion(t *testing.T) {
+	c := Client{BaseURL: "https://api.ferrohub.pe/"}
+	price := 10.0
+	base := producto{
+		ID: "7", Nombre: "Cable", Activo: true, Categoria: "Eléctrico",
+		Presentaciones: []presentacion{{ID: "base", Nombre: "Metro", PrecioVenta: &price}},
+	}
+	one := func(p producto) services.Product {
+		out := c.toProducts(p)
+		if len(out) != 1 {
+			t.Fatalf("esperaba 1 producto, obtuve %d", len(out))
+		}
+		return out[0]
+	}
+
+	if p := one(base); p.ImageURL != nil || len(p.Images) != 0 || p.Description != "" {
+		t.Fatalf("sin fotos ni descripción: %+v", p)
+	}
+
+	main := "/imagenes/t/7/0"
+	withOne := base
+	withOne.ImagenURL = &main
+	withOne.Imagenes = []string{main}
+	if p := one(withOne); len(p.Images) != 1 || p.Images[0] != "https://api.ferrohub.pe/imagenes/t/7/0" || *p.ImageURL != p.Images[0] {
+		t.Fatalf("una foto, ruta relativa con la base: %+v", p)
+	}
+
+	many := base
+	many.ImagenURL = &main
+	many.Imagenes = []string{main, "https://x.pe/1", "javascript:alert(1)", "http://evil.pe/2", "https://x.pe/3", "https://x.pe/4", "https://x.pe/5"}
+	many.Descripcion = strings.Repeat("á", 700)
+	p := one(many)
+	if len(p.Images) != 4 {
+		t.Fatalf("máximo 4 fotos válidas (https), obtuve %v", p.Images)
+	}
+	for _, img := range p.Images {
+		if !strings.HasPrefix(img, "https://") {
+			t.Fatalf("foto insegura: %s", img)
+		}
+	}
+	if n := len([]rune(p.Description)); n != 600 {
+		t.Fatalf("la descripción se recorta a 600, obtuve %d", n)
+	}
+
+	bad := base
+	bad.Imagenes = []string{"ftp://x", "no es url", ""}
+	if p := one(bad); p.ImageURL != nil || len(p.Images) != 0 {
+		t.Fatalf("direcciones malas se descartan: %+v", p)
+	}
+}

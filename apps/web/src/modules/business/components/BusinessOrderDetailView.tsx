@@ -8,7 +8,7 @@ import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatTime } from '@shared/utils/date';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
 import { whatsappLink } from '@shared/utils/big-order';
-import { AmountRow, OrderStatusBadge, OrderTimeline, PageHeader, ServicePage } from '../../services/components/ServicesUi';
+import { AmountRow, LineThumb, OrderStatusBadge, OrderTimeline, PageHeader, ServicePage } from '../../services/components/ServicesUi';
 import { BigOrderTag } from './BigOrderTag';
 import { LiveTracking } from '../../services/components/LiveTracking';
 import { useOrderChat } from '../../services/hooks/use-order-chat.hook';
@@ -183,8 +183,9 @@ export function BusinessOrderDetailView() {
 
       <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Productos">
         {order.lines.map((line) => (
-          <div key={line.productId} className="flex items-baseline justify-between gap-4 text-sm">
-            <span className="min-w-0 text-ink">
+          <div key={line.productId} className="flex items-center justify-between gap-4 text-sm">
+            <LineThumb src={line.imageUrl} name={line.name} />
+            <span className="min-w-0 flex-1 text-ink">
               <span className="font-semibold">{line.quantity}×</span> {line.name} <span className="text-ink-faint">· {line.unit}</span>
             </span>
             <span className="shrink-0 font-semibold text-ink">{formatSoles(line.totalCents)}</span>

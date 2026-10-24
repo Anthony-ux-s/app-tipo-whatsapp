@@ -59,6 +59,9 @@ type Product struct {
 	Stock      int     `json:"stock"`
 	Category   string  `json:"category"`
 	ImageURL   *string `json:"imageUrl"`
+	// Description e Images: la ficha del producto (hasta 4 fotos; la primera es ImageURL). Opcionales.
+	Description string   `json:"description,omitempty"`
+	Images      []string `json:"images,omitempty"`
 	// ListPriceCents: precio normal cuando el producto está en oferta.
 	ListPriceCents *int `json:"listPriceCents,omitempty"`
 }
@@ -115,6 +118,8 @@ type OrderLine struct {
 	Quantity       int    `json:"quantity"`
 	UnitPriceCents int    `json:"unitPriceCents"`
 	TotalCents     int    `json:"totalCents"`
+	// ImageURL: la miniatura de la primera foto del producto (opcional).
+	ImageURL *string `json:"imageUrl,omitempty"`
 }
 
 type OrderQuote struct {

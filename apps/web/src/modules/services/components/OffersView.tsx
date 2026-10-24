@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { ForYouSection } from '../../growth/components/ForYouSection';
 import { useForYou } from '../../growth/hooks/use-for-you.hook';
 import { ProfileButton } from '@shared/ui/ProfileButton';
@@ -12,6 +12,7 @@ import { CartBar, PageHeader, ServicePage } from './ServicesUi';
 /** Ofertas: los productos rebajados de las tiendas de Mercado, que se compran aquí mismo. */
 export function OffersView() {
   const o = useOffers();
+  const pool = useMemo(() => (o.catalog ?? []).flatMap((product) => { const st = o.storeOf(product); return st ? [{ product, storeId: st.id, storeName: st.name }] : []; }), [o.catalog]);
   const forYou = useForYou(o.catalog);
   return (
     <ServicePage footer={<CartBar count={o.count} estimateCents={o.estimate} onOpen={o.goToCart} />}>
@@ -20,7 +21,7 @@ export function OffersView() {
       <ForYouSection
         forYou={forYou}
         render={(product) => (
-          <ProductCard key={`${o.storeOf(product)?.id}-${product.id}`} product={product} storeName={o.storeOf(product)?.name} quantity={o.quantityOf(product)} onAdd={() => o.add(product)} onSubtract={() => o.subtract(product)} />
+          <ProductCard key={`${o.storeOf(product)?.id}-${product.id}`} product={product} storeId={o.storeOf(product)?.id} storeName={o.storeOf(product)?.name} pool={pool} quantity={o.quantityOf(product)} onAdd={() => o.add(product)} onSubtract={() => o.subtract(product)} />
         )}
       />
 
@@ -38,7 +39,7 @@ export function OffersView() {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {o.offers.map((product) => (
-              <ProductCard key={`${o.storeOf(product)?.id}-${product.id}`} product={product} storeName={o.storeOf(product)?.name} quantity={o.quantityOf(product)} onAdd={() => o.add(product)} onSubtract={() => o.subtract(product)} />
+              <ProductCard key={`${o.storeOf(product)?.id}-${product.id}`} product={product} storeId={o.storeOf(product)?.id} storeName={o.storeOf(product)?.name} pool={pool} quantity={o.quantityOf(product)} onAdd={() => o.add(product)} onSubtract={() => o.subtract(product)} />
             ))}
           </div>
         )}
