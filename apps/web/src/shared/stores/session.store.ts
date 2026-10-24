@@ -3,7 +3,7 @@ import type { AuthResponse, GoogleSignInResponse, PublicUser, SessionUser, Theme
 import { CHAT_FONT_FAMILIES, CHAT_FONT_SIZES } from '../const/chat-text.const';
 import { create } from 'zustand';
 import { deviceKeyMatches, lockVault, restoreVault, unlockVault } from '../utils/crypto-vault';
-import { http, setUnauthorizedHandler, tokenStorage } from '../utils/http';
+import { ApiError, http, setUnauthorizedHandler, tokenStorage } from '../utils/http';
 import { queryClient } from '../utils/query-client';
 import { disconnectSocket } from '../utils/socket';
 
@@ -65,6 +65,37 @@ export function applyChatText({ chatFontSize, chatFont }: Pick<UserPreferences, 
   root.setProperty('--chat-font', CHAT_FONT_FAMILIES[chatFont] ?? CHAT_FONT_FAMILIES.inter);
 }
 
+const RENEWED_KEY = 'parla.token.renewedAt';
+/** Cada cuánto se renueva el token mientras la app se usa (la sesión no se cierra sola). */
+const RENEW_EVERY_MS = 12 * 60 * 60_000;
+let renewalStarted = false;
+
+/** Pide un token nuevo si pasó un rato desde el último. Un fallo de red no importa: se reintenta después. */
+async function renewToken(force = false): Promise<void> {
+  if (!tokenStorage.get()) return;
+  const last = Number(localStorage.getItem(RENEWED_KEY) ?? 0);
+  if (!force && Date.now() - last < RENEW_EVERY_MS) return;
+  try {
+    const { token } = await http.post<{ token: string }>('/auth/refresh');
+    tokenStorage.set(token);
+    localStorage.setItem(RENEWED_KEY, String(Date.now()));
+  } catch {
+    // Sin conexión o servidor caído: la sesión sigue; si el token ya venció, el 401 la cierra.
+  }
+}
+
+/** La sesión se mantiene: se renueva al abrir la app, al volver a ella y cada hora mientras está abierta. */
+function startTokenRenewal(): void {
+  void renewToken(true);
+  if (renewalStarted) return;
+  renewalStarted = true;
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && void renewToken());
+  window.setInterval(() => void renewToken(), 60 * 60_000);
+}
+
+/** Un error de red o del servidor no es un token vencido: solo un 401/403 (o una cuenta que ya no existe) cierra la sesión. */
+const isFatalAuthError = (error: unknown): boolean => error instanceof ApiError && error.status !== 0 && error.status < 500 && error.status !== 408 && error.status !== 429;
+
 export const useSessionStore = create<SessionState>((set, get) => {
   const openSession = ({ token, user }: AuthResponse) => {
     tokenStorage.set(token);
@@ -74,6 +105,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
     applyTheme(user.preferences.theme);
     applyChatText(user.preferences);
     set({ status: 'ready', user });
+    startTokenRenewal();
   };
 
   const startSession = async (auth: AuthResponse, password: string) => {
@@ -109,13 +141,22 @@ export const useSessionStore = create<SessionState>((set, get) => {
         logout();
         return;
       }
-      try {
-        const user = await http.get<SessionUser>('/auth/me');
-        applyTheme(user.preferences.theme);
-        applyChatText(user.preferences);
-        set({ status: 'ready', user });
-      } catch {
-        logout();
+      // Si no hay internet o el servidor se está reiniciando, se espera y se reintenta: la sesión no se cierra.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const user = await http.get<SessionUser>('/auth/me');
+          applyTheme(user.preferences.theme);
+          applyChatText(user.preferences);
+          set({ status: 'ready', user });
+          startTokenRenewal();
+          return;
+        } catch (error) {
+          if (isFatalAuthError(error)) {
+            logout();
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 8000)));
+        }
       }
     },
 

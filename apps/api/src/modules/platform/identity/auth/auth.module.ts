@@ -20,6 +20,7 @@ import {
   VerifyFirebasePhoneUseCase,
   VerifyPhoneUseCase,
 } from './use-cases/phone-verification.use-case';
+import { RefreshSessionUseCase } from './use-cases/refresh-session.use-case';
 import { RegisterUserUseCase } from './use-cases/register-user.use-case';
 import { SearchPeopleUseCase } from './use-cases/search-people.use-case';
 import { ProfileEvents, UpdateProfileUseCase } from './use-cases/update-profile.use-case';
@@ -40,6 +41,7 @@ import { ProfileEvents, UpdateProfileUseCase } from './use-cases/update-profile.
     RegisterUserUseCase,
     LoginUseCase,
     GetSessionUseCase,
+    RefreshSessionUseCase,
     ProfileEvents,
     UpdateProfileUseCase,
     StartEmailVerificationUseCase,

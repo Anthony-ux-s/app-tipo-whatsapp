@@ -6,6 +6,7 @@ import { AccountDataSection } from './sections/AccountDataSection';
 import { AddressesSection } from './sections/AddressesSection';
 import { AppearanceSection, ChatsSection, NotificationsSection } from './sections/PreferenceSections';
 import { PrivacySection } from './sections/PrivacySection';
+import { SecuritySection } from './sections/SecuritySection';
 import { ProfileSection } from './sections/ProfileSection';
 import { SectionHeader, SettingsPage } from './SettingsUi';
 
@@ -16,6 +17,7 @@ const SECTION_CONTENT: Record<SettingsSectionId, ComponentType> = {
   chats: ChatsSection,
   notificaciones: NotificationsSection,
   privacidad: PrivacySection,
+  seguridad: SecuritySection,
   datos: AccountDataSection,
 };
 

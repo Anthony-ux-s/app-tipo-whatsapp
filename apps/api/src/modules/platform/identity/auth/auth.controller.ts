@@ -31,6 +31,7 @@ import {
   VerifyFirebasePhoneUseCase,
   VerifyPhoneUseCase,
 } from './use-cases/phone-verification.use-case';
+import { RefreshSessionUseCase } from './use-cases/refresh-session.use-case';
 import { RegisterUserUseCase } from './use-cases/register-user.use-case';
 import { UpdateProfileUseCase } from './use-cases/update-profile.use-case';
 
@@ -46,6 +47,7 @@ export class AuthController {
     private readonly registerUser: RegisterUserUseCase,
     private readonly login: LoginUseCase,
     private readonly getSession: GetSessionUseCase,
+    private readonly refreshSession: RefreshSessionUseCase,
     private readonly updateProfile: UpdateProfileUseCase,
     private readonly startEmail: StartEmailVerificationUseCase,
     private readonly verifyEmail: VerifyEmailUseCase,
@@ -127,6 +129,13 @@ export class AuthController {
   @Post('auth/login')
   signIn(@Body() body: LoginDto): Promise<AuthResponse> {
     return this.login.execute(body);
+  }
+
+  /** Renueva el token: la sesión no se cierra mientras la persona siga usando la app. */
+  @HttpCode(200)
+  @Post('auth/refresh')
+  refresh(@CurrentUser() user: AuthUser): Promise<{ token: string }> {
+    return this.refreshSession.execute(user.userId);
   }
 
   @Get('auth/me')

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { RouterProvider } from 'react-router';
 import { router } from './app/router';
+import { LockGate } from './modules/lock/components/LockGate';
 import { useSessionStore } from './shared/stores/session.store';
 import { queryClient } from './shared/utils/query-client';
 import { Toaster } from './shared/ui/Toaster';
@@ -27,6 +28,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
+      <LockGate />
       <Toaster />
     </QueryClientProvider>
   </StrictMode>,

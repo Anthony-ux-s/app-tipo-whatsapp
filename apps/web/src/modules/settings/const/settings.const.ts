@@ -1,5 +1,5 @@
 import type { ThemePreference } from '@parla/types';
-import { Bell, FileLock2, MapPin, MessageSquareText, Palette, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react';
+import { Bell, FileLock2, LockKeyhole, MapPin, MessageSquareText, Palette, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react';
 
 export const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
   { id: 'light', label: 'Claro' },
@@ -7,7 +7,7 @@ export const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
   { id: 'system', label: 'Sistema' },
 ];
 
-export type SettingsSectionId = 'perfil' | 'direcciones' | 'apariencia' | 'chats' | 'notificaciones' | 'privacidad' | 'datos';
+export type SettingsSectionId = 'perfil' | 'direcciones' | 'apariencia' | 'chats' | 'notificaciones' | 'seguridad' | 'privacidad' | 'datos';
 
 export interface SettingsSectionInfo {
   id: SettingsSectionId;
@@ -33,6 +33,13 @@ export const SETTINGS_SECTIONS: Record<SettingsSectionId, SettingsSectionInfo> =
     summary: 'Casa, trabajo y donde recibes tus pedidos',
     description: 'Se guardan solas cuando pides. Ponles nombre o bórralas.',
     icon: MapPin,
+  },
+  seguridad: {
+    id: 'seguridad',
+    title: 'Seguridad',
+    summary: 'Bloqueo de la app con PIN o patrón',
+    description: 'Pide un código para abrir Parla en este dispositivo.',
+    icon: LockKeyhole,
   },
   privacidad: {
     id: 'privacidad',
@@ -72,7 +79,7 @@ export const SETTINGS_SECTIONS: Record<SettingsSectionId, SettingsSectionInfo> =
 };
 
 /** Secciones de la pantalla principal de Ajustes, en orden (una sola lista, sin títulos de grupo). */
-export const SETTINGS_HOME_SECTIONS: SettingsSectionId[] = ['direcciones', 'chats', 'apariencia', 'notificaciones', 'privacidad', 'datos'];
+export const SETTINGS_HOME_SECTIONS: SettingsSectionId[] = ['direcciones', 'chats', 'apariencia', 'notificaciones', 'seguridad', 'privacidad', 'datos'];
 
 export const LEGAL_LINKS = [
   { to: '/legal/terminos', label: 'Términos y condiciones' },
