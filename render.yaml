@@ -46,7 +46,7 @@ services:
         sync: false
       # Ferreterías con FerroHub: la llave la entrega FerroHub; la dirección pública es donde FerroHub avisa de cambios.
       - key: FERROHUB_API_URL
-        value: https://api.ferrohub.pe
+        value: https://ferrohub-api.vercel.app
       - key: FERROHUB_PLATFORM_KEY
         sync: false
       - key: FERROHUB_WEBHOOK_BASE

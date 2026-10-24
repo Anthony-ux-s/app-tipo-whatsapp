@@ -121,7 +121,7 @@ export function loadEnv(): AppEnv {
     routingUrl: (env.ROUTING_URL ?? 'https://router.project-osrm.org').replace(/\/$/, ''),
     webDist: webDistPath && existsSync(resolve(webDistPath, 'index.html')) ? webDistPath : null,
     firebaseProjectId: env.FIREBASE_PROJECT_ID?.trim() || null,
-    ferrohub: { apiUrl: (env.FERROHUB_API_URL || 'https://api.ferrohub.pe').replace(/\/$/, ''), platformKey: env.FERROHUB_PLATFORM_KEY?.trim() || null },
+    ferrohub: { apiUrl: (env.FERROHUB_API_URL || 'https://ferrohub-api.vercel.app').replace(/\/$/, ''), platformKey: env.FERROHUB_PLATFORM_KEY?.trim() || null },
     androidApp:
       env.APK_PACKAGE_ID && env.APK_SHA256_CERT_FINGERPRINTS
         ? { packageId: env.APK_PACKAGE_ID.trim(), fingerprints: env.APK_SHA256_CERT_FINGERPRINTS.split(',').map((f) => f.trim()).filter(Boolean) }
