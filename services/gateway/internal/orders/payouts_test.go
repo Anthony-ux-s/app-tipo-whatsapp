@@ -24,6 +24,8 @@ type fakePayoutCore struct {
 	settled   []services.PayoutSettle
 	failSettl bool
 	next      int
+	// prefix: cómo empiezan los ids de retiro («po_» repartidores, «sp_» tiendas).
+	prefix string
 }
 
 func (f *fakePayoutCore) ReservePayout(_ context.Context, userID, _ string) (services.PayoutReservation, error) {
@@ -38,7 +40,11 @@ func (f *fakePayoutCore) ReservePayout(_ context.Context, userID, _ string) (ser
 		return services.PayoutReservation{}, &ConflictError{Message: "No tienes saldo para retirar"}
 	}
 	f.next++
-	id := "po_" + string(rune('0'+f.next))
+	prefix := f.prefix
+	if prefix == "" {
+		prefix = "po_"
+	}
+	id := prefix + string(rune('0'+f.next))
 	f.pending[userID] = id
 	return services.PayoutReservation{PayoutID: id, AmountCents: f.balance[userID], Destination: f.phone[userID]}, nil
 }
@@ -102,7 +108,7 @@ func (f *fakeWallet) Transfer(_ context.Context, reference, destination string, 
 	if f.err != nil {
 		return "", f.err
 	}
-	if concept != "Rapidito · tus ganancias" || destination == "" {
+	if (concept != "Rapidito · tus ganancias" && concept != "Parla · tus ventas") || destination == "" {
 		return "", errors.New("transferencia mal armada")
 	}
 	if _, ok := f.sent[reference]; !ok {
@@ -321,5 +327,76 @@ func TestHTTPCoreRetirosTrabadosYMensajeDel409(t *testing.T) {
 	var conflict *ConflictError
 	if !errors.As(err, &conflict) || conflict.Message != "No tienes saldo para retirar" || !errors.Is(err, ErrConflict) {
 		t.Fatalf("el 409 debía traer el mensaje del core: %v", err)
+	}
+}
+
+// Las tiendas cobran por el mismo camino que los repartidores, con su propio saldo y su propio concepto.
+func storePayoutWorld() (*Orchestrator, *fakePayoutCore, *fakePayoutCore, *fakeWallet) {
+	orch, drivers, wallet := payoutWorld()
+	stores := &fakePayoutCore{
+		balance: map[string]int{"elena": 45000, "sinsaldo": 0},
+		phone:   map[string]string{"elena": "955111222", "sinsaldo": "955333444"},
+		pending: map[string]string{},
+		prefix:  "sp_",
+	}
+	orch.StorePayouts = stores
+	return orch, drivers, stores, wallet
+}
+
+func TestLaTiendaRetiraSusVentasPorSuPropioCamino(t *testing.T) {
+	orch, drivers, stores, wallet := storePayoutWorld()
+	payout, err := orch.StorePayout(context.Background(), "elena", "manual")
+	if err != nil || payout.Status != "paid" || payout.AmountCents != 45000 {
+		t.Fatalf("retiro de tienda inesperado: %+v %v", payout, err)
+	}
+	if stores.balance["elena"] != 0 || drivers.balance["carlos"] != 1234 || wallet.sent["sp_1"] != 45000 {
+		t.Fatalf("solo debía moverse el saldo de la tienda: %v %v", stores.balance, drivers.balance)
+	}
+	// Quien no tiene tienda recibe su propio mensaje, no el de los repartidores.
+	_, err = orch.StorePayout(context.Background(), "nadie", "manual")
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusNotFound || apiErr.Message != "Tu cuenta no tiene una tienda en Parla" {
+		t.Fatalf("mensaje de «sin tienda» inesperado: %v", err)
+	}
+}
+
+func TestSinRetirosDeTiendasEncendidosNoHayNada(t *testing.T) {
+	orch, _, _ := payoutWorld()
+	if _, err := orch.StorePayout(context.Background(), "elena", "manual"); err == nil {
+		t.Fatal("con los retiros de tiendas apagados debía avisar que no están disponibles")
+	}
+}
+
+func TestElRetiroAutomaticoPagaTambienALasTiendasConSaldo(t *testing.T) {
+	orch, _, stores, wallet := storePayoutWorld()
+	paid, failed := orch.RunAutoPayouts(context.Background())
+	// Dos repartidores con saldo y una tienda con saldo; la tienda sin saldo no cobra.
+	if paid != 3 || failed != 0 || len(wallet.sent) != 3 || stores.balance["elena"] != 0 {
+		t.Fatalf("debía pagar a 2 repartidores y a 1 tienda: pagados %d, fallidos %d, %v", paid, failed, wallet.sent)
+	}
+}
+
+func TestHTTPCoreDeTiendasUsaSusRutas(t *testing.T) {
+	var uris []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uris = append(uris, r.Method+" "+r.URL.RequestURI())
+		_, _ = io.WriteString(w, `{"payoutId":"sp_1","amountCents":500,"destination":"987654321","status":"paid"}`)
+	}))
+	t.Cleanup(srv.Close)
+	base, _ := url.Parse(srv.URL)
+	core := StorePayoutCore{HTTPCore{BaseURL: base, Token: "t", HTTP: srv.Client()}}
+	ctx := context.Background()
+	_, _ = core.ReservePayout(ctx, "u_1", "manual")
+	_, _ = core.SettlePayout(ctx, "sp_1", services.PayoutSettle{Status: "paid", TransferID: "tr_1"})
+	_, _ = core.StuckPayouts(ctx, 10)
+	want := []string{
+		"POST /api/internal/businesses/u_1/payouts",
+		"PATCH /api/internal/store-payouts/sp_1",
+		"GET /api/internal/store-payouts/stuck?olderThanMinutes=10",
+	}
+	for i, w := range want {
+		if i >= len(uris) || uris[i] != w {
+			t.Fatalf("rutas inesperadas: %v", uris)
+		}
 	}
 }

@@ -96,6 +96,8 @@ type Orchestrator struct {
 	Core     Core
 	// Payouts y Wallet: retiros de las ganancias de los repartidores a su billetera.
 	Payouts PayoutCore
+	// StorePayouts: lo mismo para las ventas de las tiendas (opcional: nil lo apaga).
+	StorePayouts PayoutCore
 	Wallet  Wallet
 	// Claims y Refunds: devoluciones parciales por reclamos que aprueba soporte.
 	Claims  ClaimsCore
@@ -362,7 +364,13 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 		return services.Order{}, err
 	}
 
-	if err := shop.Reserve(ctx, id, req.Items); err != nil {
+	// La tienda recibe, además, el canal, la entrega y si el pedido es grande (solo RED WIIIL lo usa).
+	saleUnits := 0
+	for _, line := range q.Lines {
+		saleUnits += line.Quantity
+	}
+	saleCtx := services.WithSaleInfo(ctx, services.SaleInfo{TotalCents: q.TotalCents, Units: saleUnits, DeliveryFeeCents: q.DeliveryFeeCents, TipCents: q.TipCents, Address: req.Address.Line})
+	if err := shop.Reserve(saleCtx, id, req.Items); err != nil {
 		var stock mercaya.OutOfStockError
 		if errors.As(err, &stock) {
 			return services.Order{}, &Error{Status: http.StatusConflict, Code: "conflict", Message: "Uno de los productos se agotó mientras armabas el pedido. Revisa el carrito."}

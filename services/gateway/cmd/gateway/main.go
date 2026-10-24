@@ -63,6 +63,7 @@ func main() {
 		Payments:  wallet,
 		Core:      core,
 		Payouts:   core,
+		StorePayouts: orders.StorePayoutCore{HTTPCore: core},
 		Wallet:    wallet,
 		Claims:    core,
 		Refunds:   wallet,

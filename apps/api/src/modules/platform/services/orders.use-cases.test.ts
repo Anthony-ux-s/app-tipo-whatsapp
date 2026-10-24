@@ -1,5 +1,9 @@
+import { RecordStoreSaleUseCase } from './use-cases/store-wallet.use-cases';
+import { StoreStatusSync } from './use-cases/store-status-sync';
+import { toOrder } from './use-cases/orders.use-cases';
+import { WatchBigOrdersUseCase } from './use-cases/big-order-watch.use-cases';
 import type { BusinessOrder, DriverOrder, InternalCreateOrder, Order } from '@parla/types';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../kernel/domain-error';
 import { DEFAULT_DELIVERY_PRICING } from '../../../kernel/delivery-pricing';
 import { PresenceRegistry } from '../../../infra/realtime/presence.registry';
@@ -15,6 +19,7 @@ import {
   makeDriver,
   InMemoryDriversRepository,
   InMemoryOrdersRepository,
+  InMemoryStoreLedger,
   InMemoryPushSubscriptions,
   makeUser,
   RecordingPushSender,
@@ -154,7 +159,7 @@ describe('pedidos de Servicios (core)', () => {
     claims = new InMemoryClaims(orders);
     realtime = new RecordingRealtime();
     const subs = new InMemoryPushSubscriptions();
-    for (const [u, name] of [[ana, 'ana'], [rosa, 'rosa'], [carlos, 'carlos']] as const) {
+    for (const [u, name] of [[ana, 'ana'], [rosa, 'rosa'], [carlos, 'carlos'], [soporte, 'soporte']] as const) {
       await subs.save({ userId: u.id, endpoint: `https://push.example/${name}`, p256dh: 'k', auth: 'a' });
     }
     push = new RecordingPushSender();
@@ -376,9 +381,179 @@ describe('pedidos de Servicios (core)', () => {
     expect((await deliver.execute(carlos.id, ID, { code: renewed.deliveryCode! })).status).toBe('delivered');
   });
 
+  describe('pedidos grandes', () => {
+    /** Una obra: un solo producto, S/ 700. */
+    const bigByTotal = () =>
+      newOrder({ lines: [{ productId: 'CEM-1', name: 'Cemento', unit: 'bolsa', quantity: 10, unitPriceCents: 7000, totalCents: 70000 }], subtotalCents: 70000, totalCents: 70650 });
+    /** Mucha cantidad, poco dinero: 30 unidades de S/ 1. */
+    const bigByUnits = () =>
+      newOrder({ lines: [{ productId: 'CLA-1', name: 'Clavos', unit: 'unidad', quantity: 30, unitPriceCents: 100, totalCents: 3000 }], subtotalCents: 3000, totalCents: 3650 });
+    const titlesFor = (who: string) => push.sent.filter((s) => s.target.endpoint.endsWith(`/${who}`)).map((s) => s.payload.title);
+
+    it('un pedido normal no es grande: aviso normal y sin el teléfono del cliente', async () => {
+      Object.assign(ana, { phone: '+51999000111' });
+      await create.execute(newOrder());
+      await pay();
+      await flush();
+      expect(toOrder((await orders.findById(ID))!).big).toBe(false);
+      expect(titlesFor('rosa')).toEqual(['Nuevo pedido']);
+      const forStore = realtime.events('business-order:updated').at(-1)!.payload as { big: boolean; customer: { phone?: string | null } };
+      expect(forStore.big).toBe(false);
+      expect(forStore.customer.phone).toBeUndefined();
+      Object.assign(ana, { phone: null });
+    });
+
+    it('lo es por total o por unidades; la tienda recibe un aviso GRANDE y ve el teléfono del cliente para confirmarlo', async () => {
+      Object.assign(ana, { phone: '+51999000111' });
+      for (const [index, make] of [bigByTotal, bigByUnits].entries()) {
+        const id = `ord_grande${index}xx`;
+        await create.execute({ ...make(), id });
+        await update.execute(id, { expectStatus: 'pending_payment', status: 'paid' });
+        await flush();
+        expect(toOrder((await orders.findById(id))!).big).toBe(true);
+        const forStore = realtime.events('business-order:updated').filter((e) => (e.payload as { id: string }).id === id).at(-1)!.payload as { big: boolean; customer: { phone?: string | null } };
+        expect(forStore).toMatchObject({ big: true, customer: { phone: '+51999000111' } });
+      }
+      expect(titlesFor('rosa')).toEqual(['Pedido GRANDE', 'Pedido GRANDE']);
+      Object.assign(ana, { phone: null });
+    });
+
+    it('cada tienda tiene sus umbrales: con los suyos, un pedido chico puede ser grande', async () => {
+      await businesses.setBigOrderRules('biz_1', { totalCents: 2_000, units: null, whatsapp: '+51 987 654 321' });
+      await create.execute(newOrder());
+      const order = (await orders.findById(ID))!;
+      expect(toOrder(order).big).toBe(true);
+      expect(order.business!.bigOrder).toEqual({ totalCents: 2_000, units: 25, whatsapp: '51987654321' });
+    });
+
+    it('vigilancia: a los 10 minutos recuerda a la tienda, a los 20 avisa a soporte, una sola vez cada uno', async () => {
+      const watch = new WatchBigOrdersUseCase(orders, users, dispatcher);
+      await create.execute(bigByTotal());
+      await pay();
+      await flush();
+      const at = (minutes: number) => new Date(Date.now() + minutes * 60_000);
+
+      expect(await watch.execute(at(9))).toEqual({ reminded: [], escalated: [] });
+      expect(await watch.execute(at(11))).toEqual({ reminded: [ID], escalated: [] });
+      expect(await watch.execute(at(12))).toEqual({ reminded: [], escalated: [] });
+      expect(await watch.execute(at(21))).toEqual({ reminded: [], escalated: [ID] });
+      expect(await watch.execute(at(25))).toEqual({ reminded: [], escalated: [] });
+      await flush();
+      expect(titlesFor('rosa')).toContain('Pedido GRANDE sin confirmar');
+      expect(titlesFor('soporte')).toEqual(['Pedido grande sin atender']);
+    });
+
+    it('vigilancia: un pedido normal o uno que la tienda ya aceptó no genera avisos', async () => {
+      const watch = new WatchBigOrdersUseCase(orders, users, dispatcher);
+      await create.execute(newOrder());
+      await pay();
+      const later = () => new Date(Date.now() + 60 * 60_000);
+      expect(await watch.execute(later())).toEqual({ reminded: [], escalated: [] });
+
+      await create.execute({ ...bigByUnits(), id: 'ord_aceptado1x' });
+      await update.execute('ord_aceptado1x', { expectStatus: 'pending_payment', status: 'paid' });
+      await decide.execute(rosa.id, 'ord_aceptado1x', 'accept');
+      expect(await watch.execute(later())).toEqual({ reminded: [], escalated: [] });
+    });
+  });
+
+  describe('estados hacia la ferretería', () => {
+    const calls: { url: string; method?: string; headers: Record<string, string>; body: unknown }[] = [];
+    const fetchStub = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, method: init?.method, headers: init?.headers as Record<string, string>, body: init?.body ? JSON.parse(String(init.body)) : null });
+      return new Response('{}', { status: 200 });
+    });
+
+    beforeEach(() => {
+      calls.length = 0;
+      fetchStub.mockClear();
+      vi.stubGlobal('fetch', fetchStub);
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    const connect = () =>
+      businesses.setSource('biz_1', 'api', { format: 'redwiiil', baseUrl: 'https://api.ferrohub.pe', prefix: '', apiKey: 'wiiil_llave', adminKey: '' });
+
+    it('cada paso del pedido se le dice a la ferretería con su nombre de estado', async () => {
+      await connect();
+      const sync = new StoreStatusSync(businesses);
+      await create.execute(newOrder());
+      const record = (await orders.findById(ID))!;
+      const steps: [OrderStatus, string][] = [
+        ['paid', 'nuevo'],
+        ['preparing', 'preparando'],
+        ['searching_driver', 'listo'],
+        ['driver_assigned', 'listo'],
+        ['on_the_way', 'en_camino'],
+        ['delivered', 'entregado'],
+        ['rejected', 'cancelado'],
+        ['cancelled', 'cancelado'],
+      ];
+      for (const [status] of steps) await sync.statusChanged({ ...record, status });
+      expect(calls.map((c) => (c.body as { estado: string }).estado)).toEqual(steps.map(([, estado]) => estado));
+      expect(calls[0]).toMatchObject({ url: `https://api.ferrohub.pe/api/v1/orders/${ID}`, method: 'PATCH', headers: { authorization: 'Bearer wiiil_llave' } });
+    });
+
+    it('sin conexión con la ferretería (catálogo de Parla) no se llama a nadie, y un estado sin equivalente tampoco', async () => {
+      const sync = new StoreStatusSync(businesses);
+      await create.execute(newOrder());
+      const record = (await orders.findById(ID))!;
+      await sync.statusChanged({ ...record, status: 'paid' });
+      await connect();
+      await sync.statusChanged({ ...record, status: 'pending_payment' });
+      expect(fetchStub).not.toHaveBeenCalled();
+    });
+
+    it('si la ferretería no tiene la ruta (404) o no responde, el pedido sigue como siempre', async () => {
+      await connect();
+      const sync = new StoreStatusSync(businesses);
+      await create.execute(newOrder());
+      const record = (await orders.findById(ID))!;
+      fetchStub.mockResolvedValueOnce(new Response('{}', { status: 404 }));
+      await expect(sync.statusChanged({ ...record, status: 'paid' })).resolves.toBeUndefined();
+      fetchStub.mockRejectedValueOnce(new Error('timeout'));
+      await expect(sync.statusChanged({ ...record, status: 'preparing' })).resolves.toBeUndefined();
+    });
+
+    it('el flujo real avisa solo: al pagar y al aceptar el pedido llegan nuevo y preparando', async () => {
+      await connect();
+      const wired = new OrderEvents(realtime, users, drivers, dispatcher, payPolicy, dispatchPolicy, new StoreStatusSync(businesses));
+      const createWired = new CreateOrderUseCase(orders, users, businesses, wired, coupons, addresses);
+      const updateWired = new UpdateOrderUseCase(orders, wired);
+      const decideWired = new DecideBusinessOrderUseCase(orders, users, wired, dispatchPolicy);
+      await createWired.execute(newOrder());
+      await updateWired.execute(ID, { expectStatus: 'pending_payment', status: 'paid' });
+      await decideWired.execute(rosa.id, ID, 'accept');
+      await flush();
+      expect(calls.map((c) => (c.body as { estado: string }).estado)).toEqual(['nuevo', 'preparando']);
+    });
+  });
+
+  describe('ventas de la tienda al entregar', () => {
+    it('al entregar, la venta (productos menos comisión) suma a la billetera de la tienda, una sola vez', async () => {
+      const storeLedger = new InMemoryStoreLedger(businesses);
+      const withSales = new DeliverOrderUseCase(drivers, orders, users, events, ledger, payPolicy, dispatchPolicy, photos, new RecordStoreSaleUseCase(storeLedger));
+      await readyForDrivers();
+      await take.execute(carlos.id, ID);
+      await decide.execute(rosa.id, ID, 'handoff');
+      // newOrder(): productos S/ 14.20 + delivery S/ 6.50. Antes de entregar, la tienda no tiene nada.
+      expect((await storeLedger.balance('biz_1')).availableCents).toBe(0);
+      await withSales.execute(carlos.id, ID, { code: await codeOf() });
+      await withSales.execute(carlos.id, ID, { code: await codeOf() }).catch(() => undefined);
+      // 1420 de productos − 5 % de comisión (71) = 1349; el delivery es del repartidor.
+      expect((await storeLedger.balance('biz_1')).availableCents).toBe(1349);
+      expect(storeLedger.entries.filter((e) => e.kind === 'sale')).toHaveLength(1);
+    });
+  });
+
   describe('repartidores', () => {
+    it('soporte no puede registrarse como repartidor', async () => {
+      const register = new RegisterDriverUseCase(drivers, users);
+      await expect(register.execute(soporte.id, { vehicle: 'Moto', plate: 'ABC-123', dniNumber: '45678912', licenseNumber: 'q12345678' })).rejects.toThrow(ForbiddenError);
+    });
+
     it('cualquiera se registra, edita su vehículo, se conecta y deja de repartir (y puede volver)', async () => {
-      const register = new RegisterDriverUseCase(drivers);
+      const register = new RegisterDriverUseCase(drivers, users);
       const docs = { dniNumber: '45678912', licenseNumber: 'q12345678' };
       await expect(register.execute(beto.id, { vehicle: 'Moto', plate: 'x', ...docs })).rejects.toThrow('placa');
       await expect(register.execute(beto.id, { vehicle: 'Patineta' as never, ...docs })).rejects.toThrow('Elige un vehículo');
@@ -734,7 +909,7 @@ describe('pedidos de Servicios (core)', () => {
     };
 
     it('se registra en revisión, sube su documento y soporte lo aprueba o lo rechaza con motivo', async () => {
-      const register = new RegisterDriverUseCase(drivers);
+      const register = new RegisterDriverUseCase(drivers, users);
       const setDocument = new SetDriverDocumentUseCase(drivers, photos);
       const review = new ReviewDriverUseCase(users, drivers, dispatcher, realtime);
       const pending = new ListDriversForReviewUseCase(users, drivers);

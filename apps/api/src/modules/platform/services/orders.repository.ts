@@ -136,6 +136,8 @@ export interface OrdersRepository {
   search(filter: AdminOrderFilter): Promise<OrderRecord[]>;
   /** Promedio de estrellas de un repartidor o de una tienda. */
   ratingSummary(of: { driverId: string } | { businessId: string }): Promise<RatingSummary>;
+  /** La calificación de varias tiendas en una sola consulta (la lista de tiendas no pregunta una por una). */
+  ratingSummaries(businessIds: string[]): Promise<Map<string, RatingSummary>>;
 }
 
 export const ORDERS_REPOSITORY = Symbol('ORDERS_REPOSITORY');

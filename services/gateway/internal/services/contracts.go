@@ -30,6 +30,11 @@ type Integration struct {
 	Prefix   string `json:"prefix"`
 	APIKey   string `json:"apiKey"`
 	AdminKey string `json:"adminKey"`
+	// BigOrder: desde cuándo un pedido es «grande» para esta tienda (la ferretería lo marca en su panel).
+	BigOrder struct {
+		TotalCents int `json:"totalCents"`
+		Units      int `json:"units"`
+	} `json:"bigOrder"`
 }
 
 const Currency = "PEN"

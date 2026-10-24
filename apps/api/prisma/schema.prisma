@@ -298,6 +298,23 @@ model Business {
   apiAdminKey     String   @default("")
   /// El dueño puede pausar los pedidos aunque esté en horario («Recibir pedidos»).
   acceptingOrders Boolean  @default(true)
+  /// Conector con un sistema externo: '' (ninguno) | 'ferrohub'. La llave de su API va en apiKey (cifrada).
+  connector       String   @default("")
+  /// Cómo se conectó: 'code' (código de enlace) | 'provision' (ferretería creada desde Parla).
+  connectorOrigin String   @default("")
+  /// Id de la ferretería en FerroHub y el secreto con que firma sus avisos (cifrado).
+  connectorTenant String   @default("")
+  connectorSecret String   @default("")
+  connectedAt     DateTime?
+  /// FerroHub validó RUC y estado activo: «Ferretería verificada».
+  verifiedAt      DateTime?
+  /// Pedido grande: desde qué total (céntimos) y cuántas unidades lo confirma la tienda con el cliente; null = los generales.
+  bigOrderCents   Int?
+  bigOrderUnits   Int?
+  /// WhatsApp del administrador de la tienda (para que el cliente le escriba en un pedido grande).
+  adminWhatsapp   String   @default("")
+  /// Número de PagaYa donde se le depositan sus ventas (vacío = todavía no lo puso).
+  payoutPhone     String   @default("")
   /// Horario de atención (hora de Lima, «HH:MM»); si cierra antes de abrir, cruza la medianoche.
   opensAt         String   @default("08:00")
   closesAt        String   @default("22:00")
@@ -308,6 +325,7 @@ model Business {
   orders       Order[]
   products     Product[]
   reservations StockReservation[]
+  ledger       StoreLedgerEntry[]
 
   @@index([service, status])
   @@index([status, createdAt])
@@ -635,4 +653,31 @@ model SearchEvent {
 
   @@index([userId, createdAt])
   @@index([createdAt])
+}
+
+/// Billetera de una tienda: sus ventas entregadas (productos), la comisión de Parla y los depósitos a su PagaYa.
+model StoreLedgerEntry {
+  /// Los depósitos usan «sp_…» como id (es la referencia de la transferencia en PagaYa).
+  id            String    @id @default(cuid())
+  businessId    String
+  /// Pedido de la venta; null en los depósitos.
+  orderId       String?
+  /// sale | commission | payout
+  kind          String
+  /// En céntimos, con signo: positivo suma al saldo, negativo resta.
+  amountCents   Int
+  /// posted (cuenta) | pending | paid | failed (depósitos)
+  status        String    @default("posted")
+  transferId    String?
+  failureReason String?
+  /// manual | auto (depósitos)
+  reason        String?
+  createdAt     DateTime  @default(now())
+  settledAt     DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// Una venta se anota una sola vez aunque el aviso se repita.
+  @@unique([orderId, kind])
+  @@index([businessId, createdAt])
 }

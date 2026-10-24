@@ -44,6 +44,8 @@ export interface AuthRepository {
   findActiveByPhones(phones: string[]): Promise<UserRecord[]>;
   /** Cuentas activas con esos ids (las eliminadas no aparecen). */
   findActiveByIds(ids: string[]): Promise<UserRecord[]>;
+  /** Cuentas de soporte activas (para avisarles de lo que necesita atención). */
+  listAdminIds(): Promise<string[]>;
   /** Directorio de Parla: cuentas activas por nombre, usuario o teléfono, sin incluir a quien busca. */
   searchDirectory(excludeId: string, query: string, limit: number): Promise<UserRecord[]>;
   /** Personas con las que comparte al menos un chat (a quienes les importa su presencia). */

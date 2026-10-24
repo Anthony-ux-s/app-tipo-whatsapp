@@ -95,11 +95,13 @@ export function orderPush(
 }
 
 /** Aviso push para el dueño del negocio: llegó un pedido pagado que debe aceptar. */
-export function businessOrderPush(orderId: string, status: OrderStatus, totalCents: number, customerName: string): PushPayload | null {
+export function businessOrderPush(orderId: string, status: OrderStatus, totalCents: number, customerName: string, big = false): PushPayload | null {
   if (status !== 'paid') return null;
   return {
-    title: 'Nuevo pedido',
-    body: `${customerName} pagó ${formatSoles(totalCents)}. Acéptalo para empezar a prepararlo.`,
+    title: big ? 'Pedido GRANDE' : 'Nuevo pedido',
+    body: big
+      ? `${customerName} pagó ${formatSoles(totalCents)}. Confírmalo con el cliente (stock, tiempo, camioneta) antes de prepararlo.`
+      : `${customerName} pagó ${formatSoles(totalCents)}. Acéptalo para empezar a prepararlo.`,
     url: `/app/negocio/pedidos/${orderId}`,
     tag: `business-order-${orderId}`,
   };

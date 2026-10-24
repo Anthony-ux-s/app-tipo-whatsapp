@@ -191,3 +191,62 @@ func TestLlaveEquivocada(t *testing.T) {
 		t.Fatal("con una llave equivocada debería fallar")
 	}
 }
+
+// capturaVenta: una RED WIIIL que solo guarda el cuerpo de la venta que recibe.
+func capturaVenta(t *testing.T) (*httptest.Server, *map[string]any) {
+	t.Helper()
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"data":{"id":"v1"}}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &got
+}
+
+func TestLaVentaLlevaCanalEntregaYSiEsGrande(t *testing.T) {
+	items := []services.CartItem{{ProductID: "8-base", Quantity: 30}}
+	casos := []struct {
+		nombre string
+		client Client
+		info   services.SaleInfo
+		grande bool
+	}{
+		{"por total", Client{BigTotalCents: 60000, BigUnits: 25}, services.SaleInfo{TotalCents: 70650, Units: 3}, true},
+		{"por unidades", Client{BigTotalCents: 60000, BigUnits: 25}, services.SaleInfo{TotalCents: 3650, Units: 30}, true},
+		{"normal", Client{BigTotalCents: 60000, BigUnits: 25}, services.SaleInfo{TotalCents: 2070, Units: 3}, false},
+		{"sin umbrales no se marca", Client{}, services.SaleInfo{TotalCents: 999999, Units: 999}, false},
+	}
+	for _, c := range casos {
+		t.Run(c.nombre, func(t *testing.T) {
+			srv, got := capturaVenta(t)
+			c.client.BaseURL, c.client.APIKey, c.client.HTTP = srv.URL, key, srv.Client()
+			c.info.DeliveryFeeCents, c.info.TipCents, c.info.Address = 650, 200, "Av. Larco 123, Miraflores"
+			ctx := services.WithSaleInfo(context.Background(), c.info)
+			if err := c.client.Reserve(ctx, "ord_1", items); err != nil {
+				t.Fatal(err)
+			}
+			if (*got)["canal"] != "parla" || (*got)["grande"] != c.grande {
+				t.Fatalf("canal/grande: %v", *got)
+			}
+			entrega, _ := (*got)["entrega"].(map[string]any)
+			if entrega["direccion"] != "Av. Larco 123, Miraflores" || entrega["costo"] != 6.5 || entrega["propina"] != 2.0 {
+				t.Fatalf("entrega: %v", entrega)
+			}
+		})
+	}
+}
+
+func TestSinDatosDelPedidoLaVentaQuedaComoSiempre(t *testing.T) {
+	srv, got := capturaVenta(t)
+	c := Client{BaseURL: srv.URL, APIKey: key, HTTP: srv.Client(), BigTotalCents: 1, BigUnits: 1}
+	if err := c.Reserve(context.Background(), "ord_2", []services.CartItem{{ProductID: "8-base", Quantity: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, campo := range []string{"canal", "grande", "entrega"} {
+		if _, hay := (*got)[campo]; hay {
+			t.Fatalf("la venta no debía llevar %q: %v", campo, *got)
+		}
+	}
+}

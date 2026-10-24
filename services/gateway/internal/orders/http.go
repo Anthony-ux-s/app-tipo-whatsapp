@@ -182,6 +182,16 @@ func (h *HTTP) Payout(w http.ResponseWriter, r *http.Request, userID string) {
 	WriteJSON(w, http.StatusOK, payout)
 }
 
+// StorePayout: «Retirar ahora» — la tienda retira su saldo (ventas menos comisión) a su billetera PagaYa.
+func (h *HTTP) StorePayout(w http.ResponseWriter, r *http.Request, userID string) {
+	payout, err := h.Orch.StorePayout(r.Context(), userID, "manual")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, payout)
+}
+
 // RefundClaim: soporte aprueba un reclamo y devuelve parte del pedido en la billetera del cliente.
 // CancelBySupport: soporte cancela un pedido trabado (con devolución del pago).
 func (h *HTTP) CancelBySupport(w http.ResponseWriter, r *http.Request, userID string) {

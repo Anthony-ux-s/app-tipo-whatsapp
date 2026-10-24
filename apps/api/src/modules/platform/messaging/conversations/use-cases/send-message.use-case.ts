@@ -1,8 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { Message, SendMessageRequest } from '@parla/types';
 import { randomUUID } from 'node:crypto';
 import { messagePush, sanitizeMentions, threadRootOf, type PushContext } from '../../../../../kernel/collaboration-rules';
 import { ValidationError } from '../../../../../kernel/domain-error';
+import { PresenceRegistry } from '../../../../../infra/realtime/presence.registry';
 import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../../infra/realtime/realtime-publisher.port';
 import { NotificationDispatcher } from '../../push/use-cases/notification-dispatcher';
 import { toMessage } from '../conversation.mapper';
@@ -36,6 +37,8 @@ export class SendMessageUseCase {
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
     private readonly getConversation: GetConversationUseCase,
     private readonly notifications: NotificationDispatcher,
+    /** Con esto, lo que llega a alguien conectado nace «entregado» (opcional: sin esto lo avisa su celular). */
+    @Optional() private readonly presence?: PresenceRegistry,
   ) {}
 
   async execute(userId: string, conversationId: string, input: SendMessageRequest): Promise<Message> {
@@ -57,6 +60,8 @@ export class SendMessageUseCase {
       systemText: null,
       clientId: input.clientId,
       recipientIds: recipients,
+      // Quien está conectado ya lo recibe en este mismo instante: su recibo nace «entregado», sin esperar a su celular ni hacer consultas aparte.
+      deliveredTo: recipients.filter((id) => this.presence?.statusOf(id) === 'online'),
       replyToId,
       mentions,
     });

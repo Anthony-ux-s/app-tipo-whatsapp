@@ -28,6 +28,17 @@ import { GetAdminOrderUseCase, IsAdminUseCase, ListAdminOrdersUseCase } from './
 import { CreateCouponUseCase, ListCouponsUseCase, QuoteCouponUseCase, SetCouponActiveUseCase } from './use-cases/coupons.use-cases';
 import { DispatchPolicy } from './dispatch.policy';
 import { DRIVER_LEDGER_REPOSITORY } from './driver-ledger.repository';
+import { PrismaStoreLedgerRepository } from './prisma-store-ledger.repository';
+import { STORE_LEDGER_REPOSITORY } from './store-ledger.repository';
+import {
+  DueStorePayoutsUseCase,
+  GetStoreWalletUseCase,
+  RecordStoreSaleUseCase,
+  ReserveStorePayoutUseCase,
+  SetStorePayoutPhoneUseCase,
+  SettleStorePayoutUseCase,
+  StuckStorePayoutsUseCase,
+} from './use-cases/store-wallet.use-cases';
 import { PHOTOS_REPOSITORY } from './photos.repository';
 import { PrismaClaimsRepository } from './prisma-claims.repository';
 import { PrismaPhotosRepository } from './prisma-photos.repository';
@@ -85,6 +96,8 @@ import {
   RenewDeliveryCodeUseCase,
   UpdateOrderUseCase,
 } from './use-cases/orders.use-cases';
+import { BigOrderWatchService, WatchBigOrdersUseCase } from './use-cases/big-order-watch.use-cases';
+import { StoreStatusSync } from './use-cases/store-status-sync';
 import { DeliveryWatchService, WatchDeliveriesUseCase } from './use-cases/delivery-watch.use-cases';
 import {
   DuePayoutsUseCase,
@@ -172,6 +185,7 @@ const USE_CASES = [
     { provide: BUSINESSES_REPOSITORY, useClass: PrismaBusinessesRepository },
     { provide: DRIVERS_REPOSITORY, useClass: PrismaDriversRepository },
     { provide: DRIVER_LEDGER_REPOSITORY, useClass: PrismaDriverLedgerRepository },
+    { provide: STORE_LEDGER_REPOSITORY, useClass: PrismaStoreLedgerRepository },
     { provide: CLAIMS_REPOSITORY, useClass: PrismaClaimsRepository },
     { provide: PHOTOS_REPOSITORY, useClass: PrismaPhotosRepository },
     { provide: COUPONS_REPOSITORY, useClass: PrismaCouponsRepository },
@@ -184,9 +198,30 @@ const USE_CASES = [
     OrderEvents,
     WatchDeliveriesUseCase,
     DeliveryWatchService,
+    WatchBigOrdersUseCase,
+    BigOrderWatchService,
+    StoreStatusSync,
+    RecordStoreSaleUseCase,
+    GetStoreWalletUseCase,
+    SetStorePayoutPhoneUseCase,
+    ReserveStorePayoutUseCase,
+    SettleStorePayoutUseCase,
+    DueStorePayoutsUseCase,
+    StuckStorePayoutsUseCase,
     OptimalDispatchService,
     ...USE_CASES,
   ],
-  exports: [...USE_CASES, BUSINESSES_REPOSITORY, ORDERS_REPOSITORY],
+  exports: [
+    ...USE_CASES,
+    BUSINESSES_REPOSITORY,
+    ORDERS_REPOSITORY,
+    // La billetera de la tienda: la usan «Mi negocio» y los depósitos del gateway.
+    GetStoreWalletUseCase,
+    SetStorePayoutPhoneUseCase,
+    ReserveStorePayoutUseCase,
+    SettleStorePayoutUseCase,
+    DueStorePayoutsUseCase,
+    StuckStorePayoutsUseCase,
+  ],
 })
 export class OrdersEngineModule {}

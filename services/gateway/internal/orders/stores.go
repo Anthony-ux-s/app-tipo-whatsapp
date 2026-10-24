@@ -64,7 +64,7 @@ func (s *CoreStores) For(ctx context.Context, service services.ServiceID) (Comme
 		return nil, ErrServiceOff
 	}
 	if in.Format == "redwiiil" {
-		return redwiiil.Client{BaseURL: in.BaseURL, APIKey: in.APIKey, HTTP: s.HTTP}, nil
+		return redwiiil.Client{BaseURL: in.BaseURL, APIKey: in.APIKey, HTTP: s.HTTP, BigTotalCents: in.BigOrder.TotalCents, BigUnits: in.BigOrder.Units}, nil
 	}
 	return mercaya.Client{BaseURL: in.BaseURL, Prefix: in.Prefix, APIKey: in.APIKey, AdminKey: in.AdminKey, HTTP: s.HTTP}, nil
 }

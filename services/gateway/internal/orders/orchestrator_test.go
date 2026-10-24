@@ -125,7 +125,7 @@ func (f *fakePayments) Refund(_ context.Context, chargeID string) (time.Time, er
 
 func (f *fakePayments) CreateCharge(_ context.Context, req pagaya.ChargeRequest) (pagaya.Charge, error) {
 	f.last = req
-	return pagaya.Charge{ID: "cob_1", QRText: "http://p/pagar/cob_1", PayURL: "http://p/pagar/cob_1", ExpiresAt: time.Date(2026, 10, 17, 12, 15, 0, 0, time.UTC)}, nil
+	return pagaya.Charge{ID: "cob_1", Provider: "PagaYa", QRText: "http://p/pagar/cob_1", PayURL: "http://p/pagar/cob_1", ExpiresAt: time.Date(2026, 10, 17, 12, 15, 0, 0, time.UTC)}, nil
 }
 
 // fakeCore imita las reglas del core: expectStatus distinto → 409.

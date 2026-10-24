@@ -16,7 +16,9 @@ import type { PushResult, PushSender, PushTarget } from '../infra/push/push-send
 import type { PushSubscriptionsRepository, StoredSubscription } from '../modules/platform/messaging/push/push-subscriptions.repository';
 import type { PushPayload } from '@parla/types';
 import type { CatalogSource, StoreProduct, StoreStatus, UpdateBusinessRequest } from '@parla/types';
-import { NO_API, type BusinessesRepository, type BusinessRecord, type NewBusiness, type StoreApiConfig, type StoreFilter } from '../modules/platform/services/businesses.repository';
+import { bigOrderRulesOf } from '../kernel/big-order';
+import type { StoreLedgerEntryRecord, StoreLedgerRepository } from '../modules/platform/services/store-ledger.repository';
+import { NO_API, type ConnectorLink, type BusinessesRepository, type BusinessRecord, type NewBusiness, type StoreApiConfig, type StoreFilter } from '../modules/platform/services/businesses.repository';
 import type { ProductsRepository, ReservationLine, ReserveOutcome } from '../modules/platform/stores/products.repository';
 import type { ClaimStatus, GeoPoint, OrderRating } from '@parla/types';
 import type { ClaimChanges, ClaimRecord, ClaimsRepository, NewClaim } from '../modules/platform/services/claims.repository';
@@ -82,6 +84,9 @@ export class InMemoryAuthRepository implements AuthRepository {
   }
   async findActiveByIds(ids: string[]) {
     return this.users.filter((u) => ids.includes(u.id) && !u.deletedAt);
+  }
+  async listAdminIds() {
+    return this.users.filter((u) => u.isAdmin && !u.deletedAt).map((u) => u.id);
   }
   async searchDirectory(excludeId: string, query: string, limit: number) {
     const q = query.trim().toLowerCase();
@@ -204,14 +209,14 @@ export class InMemoryConversationsRepository implements ConversationsRepository 
   async createMessage(input: NewMessage) {
     const existing = this.messages.find((m) => m.senderId === input.senderId && m.clientId === input.clientId);
     if (existing) return existing;
-    const { recipientIds, replyToId = null, mentions = [], ...data } = input;
+    const { recipientIds, deliveredTo = [], replyToId = null, mentions = [], ...data } = input;
     const root = replyToId ? this.messages.find((m) => m.id === replyToId) : undefined;
     if (root) root.replyCount += 1;
     const message: MessageRecord = {
       ...data,
       id: nextId('m'),
       createdAt: new Date(),
-      receipts: recipientIds.map((userId) => ({ userId, deliveredAt: null, readAt: null })),
+      receipts: recipientIds.map((userId) => ({ userId, deliveredAt: deliveredTo.includes(userId) ? new Date() : null, readAt: null })),
       replyTo: root ? { id: root.id, senderId: root.senderId, kind: root.kind, ciphertext: root.ciphertext, iv: root.iv, clientId: root.clientId } : null,
       replyCount: 0,
       mentions,
@@ -305,6 +310,11 @@ export function makeBusiness(over: Partial<BusinessRecord> = {}): BusinessRecord
     closesAt: '22:00',
     createdAt: new Date('2026-01-01T00:00:00Z'),
     api: NO_API,
+    connector: null,
+    bigOrderCents: null,
+    bigOrderUnits: null,
+    adminWhatsapp: '',
+    payoutPhone: '',
     ...over,
   };
 }
@@ -340,6 +350,22 @@ export class InMemoryBusinessesRepository implements BusinessesRepository {
     business.source = source;
     business.api = api;
     return { ...business };
+  }
+  async setConnector(id: string, link: ConnectorLink | null) {
+    const business = this.businesses.find((b) => b.id === id)!;
+    business.connector = link;
+    return { ...business };
+  }
+  async setBigOrderRules(id: string, rules: { totalCents: number | null; units: number | null; whatsapp: string }) {
+    const business = this.businesses.find((b) => b.id === id)!;
+    Object.assign(business, { bigOrderCents: rules.totalCents, bigOrderUnits: rules.units, adminWhatsapp: rules.whatsapp });
+    return { ...business };
+  }
+  async setPayoutPhone(id: string, phone: string) {
+    this.businesses.find((b) => b.id === id)!.payoutPhone = phone;
+  }
+  async remove(id: string) {
+    this.businesses = this.businesses.filter((b) => b.id !== id);
   }
   async list(filter: StoreFilter) {
     return this.businesses.filter((b) => (!filter.service || b.service === filter.service) && (!filter.status || b.status === filter.status)).map((b) => ({ ...b }));
@@ -472,7 +498,7 @@ export class InMemoryOrdersRepository implements OrdersRepository {
   ) {}
   async create({ businessId, pickup, ...order }: NewOrder) {
     const found = this.businesses.businesses.find((b) => b.id === businessId);
-    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId, address: found.address, location: found.location ?? null } : null;
+    const business = found ? { id: found.id, name: found.name, ownerId: found.ownerId, address: found.address, location: found.location ?? null, bigOrder: bigOrderRulesOf(found) } : null;
     const now = new Date();
     const record: OrderRecord = {
       ...order,
@@ -535,6 +561,9 @@ export class InMemoryOrdersRepository implements OrdersRepository {
     if (!order || order.rating) return null;
     order.rating = { ...rating, at: at.toISOString() };
     return this.withLocation(order);
+  }
+  async ratingSummaries(businessIds: string[]) {
+    return new Map(await Promise.all(businessIds.map(async (id) => [id, await this.ratingSummary({ businessId: id })] as const)));
   }
   async ratingSummary(of: { driverId: string } | { businessId: string }) {
     const stars = this.orders
@@ -805,5 +834,57 @@ export class InMemoryAddresses implements AddressesRepository {
     const before = this.addresses.length;
     this.addresses = this.addresses.filter((a) => !(a.id === id && a.userId === userId));
     return this.addresses.length < before;
+  }
+}
+
+export class InMemoryStoreLedger implements StoreLedgerRepository {
+  entries: StoreLedgerEntryRecord[] = [];
+  constructor(private readonly businesses?: InMemoryBusinessesRepository) {}
+  private counts = (e: StoreLedgerEntryRecord) => e.status !== 'failed';
+  async recordSale(e: { businessId: string; orderId: string; saleCents: number; commissionCents: number }) {
+    if (this.entries.some((x) => x.orderId === e.orderId && x.kind === 'sale')) return false;
+    const base = { businessId: e.businessId, orderId: e.orderId, status: 'posted' as const, transferId: null, failureReason: null, reason: null, createdAt: new Date() };
+    this.entries.push({ ...base, id: nextId('sl'), kind: 'sale', amountCents: e.saleCents });
+    if (e.commissionCents > 0) this.entries.push({ ...base, id: nextId('sl'), kind: 'commission', amountCents: -e.commissionCents });
+    return true;
+  }
+  async balance(businessId: string) {
+    const mine = this.entries.filter((e) => e.businessId === businessId);
+    return {
+      availableCents: mine.filter(this.counts).reduce((s, e) => s + e.amountCents, 0),
+      pendingPayoutCents: 0 - mine.filter((e) => e.kind === 'payout' && e.status === 'pending').reduce((s, e) => s + e.amountCents, 0),
+    };
+  }
+  async list(businessId: string, limit: number) {
+    return this.entries.filter((e) => e.businessId === businessId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+  }
+  async reservePayout(businessId: string, minCents: number, reason: 'manual' | 'auto') {
+    if (this.entries.some((e) => e.businessId === businessId && e.kind === 'payout' && e.status === 'pending')) return 'pending' as const;
+    const { availableCents } = await this.balance(businessId);
+    if (availableCents < minCents) return 'no_balance' as const;
+    const entry: StoreLedgerEntryRecord = { id: `sp_${nextId('n')}`, businessId, orderId: null, kind: 'payout', amountCents: -availableCents, status: 'pending', transferId: null, failureReason: null, reason, createdAt: new Date() };
+    this.entries.push(entry);
+    return { ...entry };
+  }
+  async findPayout(id: string) {
+    const e = this.entries.find((x) => x.id === id && x.kind === 'payout');
+    return e ? { ...e } : null;
+  }
+  async settlePayout(id: string, status: 'paid' | 'failed', transferId: string | null, failureReason: string | null) {
+    const e = this.entries.find((x) => x.id === id && x.kind === 'payout' && x.status === 'pending');
+    if (!e) return null;
+    Object.assign(e, { status, transferId, failureReason });
+    return { ...e };
+  }
+  async stuckPayouts(before: Date) {
+    return this.entries.filter((e) => e.kind === 'payout' && e.status === 'pending' && e.createdAt < before).map((e) => ({ ...e }));
+  }
+  async duePayouts(minCents: number) {
+    const due: string[] = [];
+    for (const b of this.businesses?.businesses ?? []) {
+      if (!b.payoutPhone || this.entries.some((e) => e.businessId === b.id && e.kind === 'payout' && e.status === 'pending')) continue;
+      if ((await this.balance(b.id)).availableCents >= minCents) due.push(b.id);
+    }
+    return due;
   }
 }

@@ -1,4 +1,4 @@
-import type { GeoPoint, ServiceId } from './services.types';
+import type { BigOrderRules, BusinessInfo, GeoPoint, ServiceId } from './services.types';
 
 /**
  * Tiendas de Parla (marketplace): cada tienda la registra su dueño desde la app y soporte la aprueba.
@@ -7,6 +7,9 @@ import type { GeoPoint, ServiceId } from './services.types';
  */
 export type StoreStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
 export type CatalogSource = 'native' | 'api';
+
+/** Sistemas con los que una tienda se puede conectar (cada categoría declara cuáles soporta). */
+export type StoreConnector = 'ferrohub';
 
 /** La tienda tal como la ve un cliente en la lista de su categoría. */
 export interface StoreSummary {
@@ -25,6 +28,10 @@ export interface StoreSummary {
   /** Calificación promedio de sus pedidos (null si todavía no tiene). */
   ratingAvg: number | null;
   ratingCount: number;
+  /** FerroHub validó la ferretería («Ferretería verificada»). */
+  verified: boolean;
+  /** Desde cuándo un pedido es grande (se avisa al cliente al cotizar). */
+  bigOrder: BigOrderRules;
 }
 
 export interface StoreCategoryInfo {
@@ -122,4 +129,42 @@ export interface ReviewStoreRequest {
   action: 'approve' | 'reject' | 'suspend' | 'reactivate';
   /** Motivo (obligatorio al rechazar o suspender; lo ve el dueño). */
   note?: string;
+}
+
+/** «Conectar mi tienda» con el código de enlace de FerroHub (FH-XXXX-XXXX). */
+export interface FerrohubConnectRequest {
+  code: string;
+}
+
+export interface FerrohubConnectResult {
+  /** La tienda ya con los datos de FerroHub precargados: la persona solo revisa y confirma. */
+  business: BusinessInfo;
+  storeName: string;
+  /** Productos que Parla alcanzó a leer al probar la conexión. */
+  products: number;
+  sample: string[];
+  /** FerroHub la tiene activa: queda aprobada y verificada sin esperar a soporte. */
+  verified: boolean;
+}
+
+/** «Crear mi ferretería»: los datos con los que FerroHub crea la ferretería y su panel de dueño. */
+export interface FerrohubProvisionRequest {
+  name: string;
+  city: string;
+  /** Rubros que vende (Herramientas manuales, Electricidad…). */
+  categories?: string[];
+  ruc?: string;
+  ownerName: string;
+  email: string;
+  phone: string;
+}
+
+export interface FerrohubProvisionResult {
+  business: BusinessInfo;
+  /** Enlace de un solo uso (60 s) que abre su panel de dueño en FerroHub sin contraseña. */
+  ssoUrl: string;
+}
+
+export interface FerrohubSsoResult {
+  url: string;
 }

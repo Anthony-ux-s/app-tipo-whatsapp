@@ -9,6 +9,7 @@ const STATUS_BY_KIND: Record<DomainError['kind'], number> = {
   forbidden: HttpStatus.FORBIDDEN,
   not_found: HttpStatus.NOT_FOUND,
   conflict: HttpStatus.CONFLICT,
+  rate_limited: HttpStatus.TOO_MANY_REQUESTS,
 };
 
 /** Traduce DomainError y HttpException a una respuesta JSON uniforme (ApiErrorBody). */

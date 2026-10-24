@@ -3,11 +3,13 @@ import type { DriverEarnings, DriverInfo, DriverLocation, DriverProfileRequest, 
 import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../infra/realtime/realtime-publisher.port';
 import { ConflictError } from '../../../../kernel/domain-error';
 import { assertPoint, normalizeDriverDocuments, normalizeDriverProfile } from '../../../../kernel/geo';
+import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { DRIVERS_REPOSITORY, type DriverRecord, type DriversRepository } from '../drivers.repository';
 import { DRIVER_LEDGER_REPOSITORY, type DriverLedgerRepository } from '../driver-ledger.repository';
 import { ORDERS_REPOSITORY, type OrdersRepository } from '../orders.repository';
 import { PHOTOS_REPOSITORY, type PhotosRepository } from '../photos.repository';
 import { requireDriver, toDriverInfo } from './driver-orders.use-cases';
+import { rejectIfSupport } from './claims.use-cases';
 import { assertOwnPhoto } from './photos.use-cases';
 
 /** Cada cuánto, como mucho, se guarda y se reparte la ubicación (el celular puede mandar más seguido). */
@@ -24,9 +26,13 @@ const requireActiveDriver = (drivers: DriversRepository, userId: string): Promis
  */
 @Injectable()
 export class RegisterDriverUseCase {
-  constructor(@Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository) {}
+  constructor(
+    @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
+    @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
+  ) {}
 
   async execute(userId: string, input: DriverProfileRequest): Promise<DriverInfo> {
+    await rejectIfSupport(this.users, userId, 'ser repartidoras');
     const profile = normalizeDriverProfile(input.vehicle, input.plate);
     const docs = normalizeDriverDocuments(profile.vehicle, input.dniNumber, input.licenseNumber);
     if ((await this.drivers.findByUser(userId))?.active) throw new ConflictError('Ya eres repartidor de Rapidito');

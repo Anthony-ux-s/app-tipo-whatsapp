@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { DeliverOrderRequest, DriverInfo, DriverOrder, DriverOrders } from '@parla/types';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
 import { MAX_DELIVERY_CODE_ATTEMPTS } from '../../../../kernel/order-rules';
@@ -12,6 +12,7 @@ import { ORDERS_REPOSITORY, type OrderChanges, type OrderRecord, type OrdersRepo
 import { PHOTOS_REPOSITORY, type PhotosRepository } from '../photos.repository';
 import { customersOf, OrderEvents, toDriverOrder } from './orders.use-cases';
 import { assertOwnPhoto } from './photos.use-cases';
+import { RecordStoreSaleUseCase } from './store-wallet.use-cases';
 
 const DRIVER_LIMIT = 50;
 
@@ -188,6 +189,8 @@ export class DeliverOrderUseCase {
     private readonly pay: DriverPayPolicy,
     private readonly dispatch: DispatchPolicy,
     @Inject(PHOTOS_REPOSITORY) private readonly photos: PhotosRepository,
+    /** La venta de la tienda (productos menos comisión) suma a su billetera al entregarse. */
+    @Optional() private readonly storeSales?: RecordStoreSaleUseCase,
   ) {}
 
   async execute(userId: string, id: string, input: DeliverOrderRequest): Promise<DriverOrder> {
@@ -229,6 +232,7 @@ export class DeliverOrderUseCase {
     // descuenta sola y, si la entrega se confirma dos veces, no se anota dos veces.
     const split = this.pay.split(order.deliveryFeeCents, order.tipCents);
     await this.ledger.recordDelivery({ driverId: userId, orderId: order.id, feeCents: order.deliveryFeeCents, commissionCents: split.commissionCents, tipCents: order.tipCents });
+    await this.storeSales?.execute(order);
     return toDriverOrder(order, userId, await customersOf(this.users, [order]), this.pay, driver.location);
   }
 }

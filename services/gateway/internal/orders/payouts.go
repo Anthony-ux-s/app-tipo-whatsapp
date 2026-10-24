@@ -19,6 +19,37 @@ type Wallet interface {
 }
 
 const payoutConcept = "Rapidito · tus ganancias"
+const storePayoutConcept = "Parla · tus ventas"
+
+// payoutKind: a quién se le deposita. El mismo recorrido (apartar saldo → transferir → cerrar → conciliar) sirve
+// para los repartidores (sus ganancias) y para las tiendas (sus ventas menos la comisión de Parla).
+type payoutKind struct {
+	core    PayoutCore
+	concept string
+	// notFound: lo que se le dice a quien no tiene cuenta de ese tipo.
+	notFound string
+	// label: cómo se nombra en los registros.
+	label string
+}
+
+func (o *Orchestrator) driverKind() payoutKind {
+	return payoutKind{core: o.Payouts, concept: payoutConcept, notFound: "Tu cuenta no es de repartidor de Rapidito", label: "repartidor"}
+}
+
+func (o *Orchestrator) storeKind() payoutKind {
+	return payoutKind{core: o.StorePayouts, concept: storePayoutConcept, notFound: "Tu cuenta no tiene una tienda en Parla", label: "tienda"}
+}
+
+// kinds: los retiros que están encendidos (el de tiendas es opcional).
+func (o *Orchestrator) kinds() []payoutKind {
+	var out []payoutKind
+	for _, k := range []payoutKind{o.driverKind(), o.storeKind()} {
+		if k.core != nil {
+			out = append(out, k)
+		}
+	}
+	return out
+}
 
 // Payout retira las ganancias del repartidor a su billetera PagaYa. Las ganancias (95 % de la
 // tarifa de delivery más el 100 % de las propinas) las calcula y las guarda el core; aquí solo se
@@ -35,10 +66,19 @@ const payoutConcept = "Rapidito · tus ganancias"
 // ReconcilePayouts lo cierre (vuelve a transferir con la misma referencia, que devuelve la misma
 // transferencia sin pagar de nuevo).
 func (o *Orchestrator) Payout(ctx context.Context, userID, reason string) (services.Payout, error) {
-	if o.Payouts == nil || o.Wallet == nil {
+	return o.payout(ctx, o.driverKind(), userID, reason)
+}
+
+// StorePayout: «Retirar ahora» de una tienda. Es el mismo recorrido, con las ventas de la tienda (menos la comisión).
+func (o *Orchestrator) StorePayout(ctx context.Context, userID, reason string) (services.Payout, error) {
+	return o.payout(ctx, o.storeKind(), userID, reason)
+}
+
+func (o *Orchestrator) payout(ctx context.Context, k payoutKind, userID, reason string) (services.Payout, error) {
+	if k.core == nil || o.Wallet == nil {
 		return services.Payout{}, unavailable("Los retiros")
 	}
-	reservation, err := o.Payouts.ReservePayout(ctx, userID, reason)
+	reservation, err := k.core.ReservePayout(ctx, userID, reason)
 	var conflict *ConflictError
 	switch {
 	case errors.As(err, &conflict):
@@ -46,21 +86,21 @@ func (o *Orchestrator) Payout(ctx context.Context, userID, reason string) (servi
 	case errors.Is(err, ErrConflict):
 		return services.Payout{}, &Error{Status: http.StatusConflict, Code: "conflict", Message: "No se pudo iniciar el retiro"}
 	case errors.Is(err, ErrNotFound):
-		return services.Payout{}, &Error{Status: http.StatusNotFound, Code: "not_found", Message: "Tu cuenta no es de repartidor de Rapidito"}
+		return services.Payout{}, &Error{Status: http.StatusNotFound, Code: "not_found", Message: k.notFound}
 	case err != nil:
-		slog.Error("no se pudo apartar el saldo del repartidor", "repartidor", userID, "error", err)
+		slog.Error("no se pudo apartar el saldo", "tipo", k.label, "cuenta", userID, "error", err)
 		return services.Payout{}, unavailable("Parla")
 	}
 
-	transferID, err := o.Wallet.Transfer(ctx, reservation.PayoutID, reservation.Destination, reservation.AmountCents, payoutConcept)
+	transferID, err := o.Wallet.Transfer(ctx, reservation.PayoutID, reservation.Destination, reservation.AmountCents, k.concept)
 	if err != nil {
 		invalidDestination := errors.Is(err, pagaya.ErrInvalidDestination)
 		failure := "PagaYa no responde"
 		if invalidDestination {
 			failure = "Número de PagaYa inválido"
 		}
-		slog.Warn("la transferencia al repartidor falló", "retiro", reservation.PayoutID, "error", err)
-		if _, settleErr := o.Payouts.SettlePayout(ctx, reservation.PayoutID, services.PayoutSettle{Status: "failed", FailureReason: failure}); settleErr != nil {
+		slog.Warn("la transferencia falló", "tipo", k.label, "retiro", reservation.PayoutID, "error", err)
+		if _, settleErr := k.core.SettlePayout(ctx, reservation.PayoutID, services.PayoutSettle{Status: "failed", FailureReason: failure}); settleErr != nil {
 			slog.Error("no se pudo marcar el retiro como fallido", "retiro", reservation.PayoutID, "error", settleErr)
 		}
 		if invalidDestination {
@@ -70,9 +110,9 @@ func (o *Orchestrator) Payout(ctx context.Context, userID, reason string) (servi
 	}
 
 	paid := services.Payout{PayoutID: reservation.PayoutID, AmountCents: reservation.AmountCents, Status: "paid", TransferID: transferID}
-	settled, err := o.Payouts.SettlePayout(ctx, reservation.PayoutID, services.PayoutSettle{Status: "paid", TransferID: transferID})
+	settled, err := k.core.SettlePayout(ctx, reservation.PayoutID, services.PayoutSettle{Status: "paid", TransferID: transferID})
 	if err != nil {
-		slog.Error("el dinero se transfirió pero no se pudo cerrar el retiro en el core", "retiro", reservation.PayoutID, "transferencia", transferID, "error", err)
+		slog.Error("el dinero se transfirió pero no se pudo cerrar el retiro en el core", "tipo", k.label, "retiro", reservation.PayoutID, "transferencia", transferID, "error", err)
 		return paid, nil
 	}
 	return settled, nil
@@ -88,19 +128,27 @@ const StuckAfterMinutes = 10
 // inválido se cierra fallido (el dinero vuelve al saldo); con PagaYa caído queda pendiente para la
 // próxima vez. Nunca falla.
 func (o *Orchestrator) ReconcilePayouts(ctx context.Context) (settled, failed, pending int) {
-	if o.Payouts == nil || o.Wallet == nil {
+	if o.Wallet == nil {
 		return 0, 0, 0
 	}
-	stuck, err := o.Payouts.StuckPayouts(ctx, StuckAfterMinutes)
+	for _, k := range o.kinds() {
+		s, f, p := o.reconcile(ctx, k)
+		settled, failed, pending = settled+s, failed+f, pending+p
+	}
+	return settled, failed, pending
+}
+
+func (o *Orchestrator) reconcile(ctx context.Context, k payoutKind) (settled, failed, pending int) {
+	stuck, err := k.core.StuckPayouts(ctx, StuckAfterMinutes)
 	if err != nil {
-		slog.Error("no se pudo consultar los retiros pendientes", "error", err)
+		slog.Error("no se pudo consultar los retiros pendientes", "tipo", k.label, "error", err)
 		return 0, 0, 0
 	}
 	for _, p := range stuck {
-		transferID, err := o.Wallet.Transfer(ctx, p.PayoutID, p.Destination, p.AmountCents, payoutConcept)
+		transferID, err := o.Wallet.Transfer(ctx, p.PayoutID, p.Destination, p.AmountCents, k.concept)
 		switch {
 		case errors.Is(err, pagaya.ErrInvalidDestination):
-			if _, err := o.Payouts.SettlePayout(ctx, p.PayoutID, services.PayoutSettle{Status: "failed", FailureReason: "Número de PagaYa inválido"}); err != nil {
+			if _, err := k.core.SettlePayout(ctx, p.PayoutID, services.PayoutSettle{Status: "failed", FailureReason: "Número de PagaYa inválido"}); err != nil {
 				slog.Error("no se pudo cerrar como fallido un retiro pendiente", "retiro", p.PayoutID, "error", err)
 				pending++
 				continue
@@ -110,7 +158,7 @@ func (o *Orchestrator) ReconcilePayouts(ctx context.Context) (settled, failed, p
 			slog.Warn("PagaYa no responde: el retiro sigue pendiente", "retiro", p.PayoutID, "error", err)
 			pending++
 		default:
-			if _, err := o.Payouts.SettlePayout(ctx, p.PayoutID, services.PayoutSettle{Status: "paid", TransferID: transferID}); err != nil {
+			if _, err := k.core.SettlePayout(ctx, p.PayoutID, services.PayoutSettle{Status: "paid", TransferID: transferID}); err != nil {
 				slog.Error("no se pudo cerrar como pagado un retiro pendiente", "retiro", p.PayoutID, "error", err)
 				pending++
 				continue
@@ -119,33 +167,38 @@ func (o *Orchestrator) ReconcilePayouts(ctx context.Context) (settled, failed, p
 		}
 	}
 	if len(stuck) > 0 {
-		slog.Info("conciliación de retiros de Rapidito", "pagados", settled, "fallidos", failed, "siguen_pendientes", pending)
+		slog.Info("conciliación de retiros", "tipo", k.label, "pagados", settled, "fallidos", failed, "siguen_pendientes", pending)
 	}
 	return settled, failed, pending
 }
 
-// RunAutoPayouts paga a cada repartidor con saldo suficiente (retiro automático diario). Antes
+// RunAutoPayouts paga a cada repartidor y a cada tienda con saldo suficiente (retiro automático diario). Antes
 // concilia los retiros pendientes, para que nadie quede bloqueado por uno viejo. Nunca falla: lo que
 // no se pudo pagar queda en el saldo para la próxima vez.
 func (o *Orchestrator) RunAutoPayouts(ctx context.Context) (paid, failed int) {
-	if o.Payouts == nil {
-		return 0, 0
-	}
 	o.ReconcilePayouts(ctx)
-	due, err := o.Payouts.DuePayouts(ctx)
+	for _, k := range o.kinds() {
+		p, f := o.runAuto(ctx, k)
+		paid, failed = paid+p, failed+f
+	}
+	return paid, failed
+}
+
+func (o *Orchestrator) runAuto(ctx context.Context, k payoutKind) (paid, failed int) {
+	due, err := k.core.DuePayouts(ctx)
 	if err != nil {
-		slog.Error("no se pudo consultar quién tiene saldo para el retiro automático", "error", err)
+		slog.Error("no se pudo consultar quién tiene saldo para el retiro automático", "tipo", k.label, "error", err)
 		return 0, 0
 	}
 	for _, d := range due {
-		if _, err := o.Payout(ctx, d.UserID, "auto"); err != nil {
+		if _, err := o.payout(ctx, k, d.UserID, "auto"); err != nil {
 			failed++
-			slog.Warn("retiro automático no realizado", "repartidor", d.UserID, "error", err)
+			slog.Warn("retiro automático no realizado", "tipo", k.label, "cuenta", d.UserID, "error", err)
 			continue
 		}
 		paid++
 	}
-	slog.Info("retiros automáticos de Rapidito", "pagados", paid, "no_realizados", failed, "pendientes", len(due))
+	slog.Info("retiros automáticos", "tipo", k.label, "pagados", paid, "no_realizados", failed, "pendientes", len(due))
 	return paid, failed
 }
 

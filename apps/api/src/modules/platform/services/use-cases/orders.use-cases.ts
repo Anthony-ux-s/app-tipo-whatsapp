@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type {
   BusinessOrder,
   DriverOrder,
@@ -13,6 +13,8 @@ import type {
   RateOrderRequest,
 } from '@parla/types';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
+import { isBigOrder } from '../../../../kernel/big-order';
+import { StoreStatusSync } from './store-status-sync';
 import { distanceKm } from '../../../../kernel/geo';
 import {
   assertOrderTotals,
@@ -58,6 +60,7 @@ export function toOrder(order: OrderRecord, forCustomer = false): Order {
     service: order.service,
     business: order.business,
     status: order.status,
+    big: order.business ? isBigOrder(order, order.business.bigOrder) : false,
     lines: order.lines,
     subtotalCents: order.subtotalCents,
     deliveryFeeCents: order.deliveryFeeCents,
@@ -111,7 +114,7 @@ export function toOrderClaim(c: ClaimRecord): OrderClaim {
 /** Quién hizo cada pedido, para el dueño del negocio y el repartidor. */
 export async function customersOf(users: AuthRepository, orders: OrderRecord[]): Promise<Map<string, OrderCustomer>> {
   const found = await users.findActiveByIds([...new Set(orders.map((o) => o.userId))]);
-  return new Map(found.map((u) => [u.id, { id: u.id, displayName: u.displayName, avatarColor: u.avatarColor, avatarUrl: avatarUrlOf(u) }]));
+  return new Map(found.map((u) => [u.id, { id: u.id, displayName: u.displayName, avatarColor: u.avatarColor, avatarUrl: avatarUrlOf(u), phone: u.phone }]));
 }
 
 function customerOf(order: OrderRecord, customers: Map<string, OrderCustomer>): OrderCustomer {
@@ -120,7 +123,10 @@ function customerOf(order: OrderRecord, customers: Map<string, OrderCustomer>): 
 
 /** Pedido para el dueño: con el cliente (sin el código de entrega, que es del cliente). */
 export function toBusinessOrder(order: OrderRecord, customers: Map<string, OrderCustomer>): BusinessOrder {
-  return { ...toOrder(order), customer: customerOf(order, customers) };
+  const customer = customerOf(order, customers);
+  const big = order.business ? isBigOrder(order, order.business.bigOrder) : false;
+  // El teléfono del cliente solo lo ve la tienda en un pedido grande: para confirmarlo con él al instante.
+  return { ...toOrder(order), customer: big ? customer : { ...customer, phone: undefined } };
 }
 
 /**
@@ -173,6 +179,8 @@ export class OrderEvents {
     private readonly notifications: NotificationDispatcher,
     private readonly pay: DriverPayPolicy,
     private readonly dispatch: DispatchPolicy,
+    /** Avisa a la ferretería conectada cada paso del pedido (opcional: sin esto todo funciona igual). */
+    @Optional() private readonly storeSync?: StoreStatusSync,
   ) {}
 
   /**
@@ -181,6 +189,7 @@ export class OrderEvents {
    */
   changed(order: OrderRecord, previousDriverId: string | null = null, statusChanged = true): void {
     this.realtime.toUsers([order.userId], 'order:updated', toOrder(order, true));
+    if (statusChanged) void this.storeSync?.statusChanged(order);
     if (statusChanged) {
       const refunded = !!order.payment.refundedAt;
       const push = orderPush(order.id, order.status, order.totalCents, order.delivery?.driverName ?? null, order.business?.name ?? null, refunded);
@@ -195,7 +204,7 @@ export class OrderEvents {
     this.realtime.toUsers([ownerId], 'business-order:updated', businessOrder);
     const customerName = businessOrder.customer.displayName;
     const push = statusChanged
-      ? (businessOrderPush(order.id, order.status, order.totalCents, customerName)
+      ? (businessOrderPush(order.id, order.status, order.totalCents, customerName, order.business ? isBigOrder(order, order.business.bigOrder) : false)
         ?? businessDeliveryPush(order.id, order.status, order.delivery?.driverName ?? null, customerName))
       : null;
     if (push) void this.notifications.notify([ownerId], () => push);

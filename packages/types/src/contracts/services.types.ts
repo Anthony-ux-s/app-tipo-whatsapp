@@ -1,4 +1,4 @@
-import type { CatalogSource, StoreStatus } from './stores.types';
+import type { CatalogSource, StoreConnector, StoreStatus } from './stores.types';
 /**
  * Servicios dentro de Parla (estilo WeChat): el cliente compra en sistemas externos (tienda,
  * delivery, pagos) sin salir del chat. El gateway traduce cada API externa a estos contratos.
@@ -149,6 +149,10 @@ export interface BusinessInfo {
   /** Horario de atención, hora de Lima («HH:MM»). */
   opensAt: string;
   closesAt: string;
+  /** Sistema externo al que está conectada (null = ninguno). */
+  connector: StoreConnector | null;
+  /** FerroHub validó la ferretería: lleva la insignia «Ferretería verificada». */
+  verified: boolean;
 }
 
 /** Si un negocio recibe pedidos ahora (lo ve el cliente antes de pagar). */
@@ -180,6 +184,16 @@ export interface UpdateCatalogProductRequest {
   stock?: number;
 }
 
+/** Cuándo un pedido es «grande» para una tienda (obra, mucha cantidad): lo confirma ella con el cliente antes de prepararlo. */
+export interface BigOrderRules {
+  /** Total del pedido desde el cual es grande (céntimos). */
+  totalCents: number;
+  /** Unidades desde las cuales es grande. */
+  units: number;
+  /** WhatsApp del administrador de la tienda (solo dígitos, con país); null si no lo tiene. */
+  whatsapp: string | null;
+}
+
 export interface OrderBusiness {
   id: string;
   name: string;
@@ -188,6 +202,7 @@ export interface OrderBusiness {
   /** Dónde recoge el repartidor. */
   address: string;
   location: GeoPoint | null;
+  bigOrder: BigOrderRules;
 }
 
 export interface Order {
@@ -197,6 +212,8 @@ export interface Order {
   /** Negocio que prepara el pedido; null en pedidos sin negocio asignado. */
   business: OrderBusiness | null;
   status: OrderStatus;
+  /** Pedido grande (obra, mucha cantidad): la tienda lo confirma con el cliente antes de prepararlo. */
+  big: boolean;
   lines: OrderLine[];
   subtotalCents: number;
   deliveryFeeCents: number;
@@ -237,6 +254,8 @@ export interface OrderCustomer {
   displayName: string;
   avatarColor: string;
   avatarUrl: string | null;
+  /** Solo en un pedido grande: para que la tienda lo confirme con el cliente al instante. */
+  phone?: string | null;
 }
 
 /** Pedido tal como lo ve el dueño del negocio: con quién lo pidió, para atenderlo y escribirle. */
@@ -583,4 +602,29 @@ export interface AdminOrder {
   openClaims: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Un movimiento de la billetera de la tienda (positivo suma, negativo resta). */
+export interface StoreWalletEntry {
+  id: string;
+  kind: 'sale' | 'commission' | 'payout';
+  amountCents: number;
+  orderId: string | null;
+  /** Solo en depósitos: si ya se depositó, está en curso o falló (y el saldo volvió). */
+  status: PayoutStatus | null;
+  createdAt: string;
+}
+
+/** «Mis ventas y depósitos»: lo que la tienda lleva vendido, la comisión de Parla y lo que ya se le depositó. */
+export interface StoreWallet {
+  balanceCents: number;
+  pendingPayoutCents: number;
+  /** Número de PagaYa donde se le deposita; null si todavía no lo puso. */
+  payoutPhone: string | null;
+  /** Hora (de Lima) del depósito automático diario. */
+  autoPayoutAt: string;
+  minAutoPayoutCents: number;
+  /** Porcentaje de los productos que se queda Parla. */
+  commissionPercent: number;
+  entries: StoreWalletEntry[];
 }

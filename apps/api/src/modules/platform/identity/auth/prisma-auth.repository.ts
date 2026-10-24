@@ -41,6 +41,11 @@ export class PrismaAuthRepository implements AuthRepository {
     return rows.map(toUserRecord);
   }
 
+  async listAdminIds(): Promise<string[]> {
+    const rows = await this.prisma.user.findMany({ where: { isAdmin: true, deletedAt: null, blockedAt: null }, select: { id: true } });
+    return rows.map((r) => r.id);
+  }
+
   async searchDirectory(excludeId: string, query: string, limit: number): Promise<UserRecord[]> {
     const q = query.trim();
     const digits = q.replace(/\D/g, '');

@@ -7,7 +7,7 @@ import { APP_ENV, type AppEnv } from './config/env.validation';
 import { applySecurityHeaders, serveWebApp } from './http/web-hosting';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: ['error', 'warn', 'log'] });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: ['error', 'warn', 'log'], rawBody: true });
   const env = app.get<AppEnv>(APP_ENV);
 
   // Detrás de un proxy (Render, Fly, Nginx) la IP real viene en X-Forwarded-For.

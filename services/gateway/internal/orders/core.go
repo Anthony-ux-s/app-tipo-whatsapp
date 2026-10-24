@@ -194,3 +194,27 @@ func (c HTTPCore) call(ctx context.Context, method, path string, in, out any) er
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
 }
+
+// StorePayoutCore: los retiros de las tiendas (sus ventas menos la comisión). Misma interfaz que PayoutCore, con las
+// rutas internas del core para tiendas.
+type StorePayoutCore struct{ HTTPCore }
+
+func (c StorePayoutCore) ReservePayout(ctx context.Context, userID, reason string) (services.PayoutReservation, error) {
+	var out services.PayoutReservation
+	return out, c.call(ctx, http.MethodPost, "/api/internal/businesses/"+url.PathEscape(userID)+"/payouts", map[string]string{"reason": reason}, &out)
+}
+
+func (c StorePayoutCore) SettlePayout(ctx context.Context, payoutID string, settle services.PayoutSettle) (services.Payout, error) {
+	var out services.Payout
+	return out, c.call(ctx, http.MethodPatch, "/api/internal/store-payouts/"+url.PathEscape(payoutID), settle, &out)
+}
+
+func (c StorePayoutCore) DuePayouts(ctx context.Context) ([]services.DuePayout, error) {
+	var out []services.DuePayout
+	return out, c.call(ctx, http.MethodGet, "/api/internal/store-payouts/due", nil, &out)
+}
+
+func (c StorePayoutCore) StuckPayouts(ctx context.Context, olderThanMinutes int) ([]services.PayoutReservation, error) {
+	var out []services.PayoutReservation
+	return out, c.call(ctx, http.MethodGet, fmt.Sprintf("/api/internal/store-payouts/stuck?olderThanMinutes=%d", olderThanMinutes), nil, &out)
+}

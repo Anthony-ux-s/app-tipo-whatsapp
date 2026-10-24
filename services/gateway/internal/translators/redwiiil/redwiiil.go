@@ -52,6 +52,9 @@ type Client struct {
 	BaseURL string
 	APIKey  string
 	HTTP    *http.Client
+	// BigTotalCents y BigUnits: desde cuándo un pedido es «grande» para esta ferretería (0 = no se marca).
+	BigTotalCents int
+	BigUnits      int
 }
 
 type presentacion struct {
@@ -320,7 +323,14 @@ func (c Client) Reserve(ctx context.Context, reference string, items []services.
 		}
 		lines = append(lines, map[string]any{"productId": productID, "cantidad": it.Quantity, "presentacionId": presID})
 	}
-	status, raw, err := c.call(ctx, http.MethodPost, "/api/v1/sales", map[string]any{"referenciaExterna": reference, "metodoPago": "yape", "items": lines})
+	sale := map[string]any{"referenciaExterna": reference, "metodoPago": "yape", "items": lines}
+	// Datos opcionales de la venta: una ferretería que no los conoce los ignora.
+	if info, ok := services.SaleInfoFrom(ctx); ok {
+		sale["canal"] = "parla"
+		sale["grande"] = c.isBig(info)
+		sale["entrega"] = map[string]any{"direccion": info.Address, "costo": float64(info.DeliveryFeeCents) / 100, "propina": float64(info.TipCents) / 100}
+	}
+	status, raw, err := c.call(ctx, http.MethodPost, "/api/v1/sales", sale)
 	if err != nil {
 		return err
 	}
@@ -338,6 +348,11 @@ func (c Client) Reserve(ctx context.Context, reference string, items []services.
 	default:
 		return fmt.Errorf("%w: venta respondió %d", providerapi.ErrUnavailable, status)
 	}
+}
+
+// isBig: pedido de obra o de mucha cantidad, según los umbrales de la ferretería.
+func (c Client) isBig(info services.SaleInfo) bool {
+	return (c.BigTotalCents > 0 && info.TotalCents >= c.BigTotalCents) || (c.BigUnits > 0 && info.Units >= c.BigUnits)
 }
 
 // Release anula la venta del pedido (devuelve el stock). Si no existe, no hay nada que anular.

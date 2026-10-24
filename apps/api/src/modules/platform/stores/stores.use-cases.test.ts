@@ -40,7 +40,7 @@ describe('tiendas (marketplace)', () => {
     businesses = new InMemoryBusinessesRepository();
     products = new InMemoryProductsRepository();
     const orders = new InMemoryOrdersRepository(businesses);
-    register = new RegisterStoreUseCase(businesses);
+    register = new RegisterStoreUseCase(businesses, users);
     const adminList = new ListAdminStoresUseCase(users, businesses, products);
     review = new ReviewStoreUseCase(users, businesses, adminList);
     list = new ListStoresUseCase(businesses, orders);
@@ -56,6 +56,11 @@ describe('tiendas (marketplace)', () => {
       expect(await list.execute('mercado')).toEqual([]);
       const store = (await businesses.list({}))[0];
       expect((await new GetInternalIntegrationUseCase(businesses, env).execute(store.id)).enabled).toBe(false);
+    });
+
+    it('soporte no puede abrir una tienda: solo administra Parla', async () => {
+      await expect(register.execute(soporte.id, registro)).rejects.toThrow('no pueden abrir una tienda');
+      expect(await businesses.findByOwner(soporte.id)).toBeFalsy();
     });
 
     it('pide datos razonables y una sola tienda por cuenta', async () => {

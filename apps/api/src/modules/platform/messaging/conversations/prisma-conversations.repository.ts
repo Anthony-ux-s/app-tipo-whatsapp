@@ -202,28 +202,46 @@ export class PrismaConversationsRepository implements ConversationsRepository {
   }
 
   async createMessage(input: NewMessage): Promise<MessageRecord> {
-    const { recipientIds, media, mentions = [], replyToId = null, ...data } = input;
+    const { recipientIds, deliveredTo = [], media, mentions = [], replyToId = null, ...data } = input;
+    const delivered = new Set(deliveredTo);
     const now = new Date();
     try {
-      const row = await this.prisma.message.create({
-        relationLoadStrategy: 'join',
-        data: {
-          ...data,
-          replyToId,
-          media: media ? JSON.stringify(media) : null,
-          createdAt: now,
-          receipts: {
-            create: recipientIds.map((userId) => ({ userId, conversationId: input.conversationId })),
-          },
-          mentions: {
-            create: [...new Set(mentions)].map((userId) => ({ userId, conversationId: input.conversationId })),
-          },
-        },
-        include: messageInclude,
-      });
+      const mentionIds = [...new Set(mentions)];
+      const created = {
+        ...data,
+        replyToId,
+        media: media ? JSON.stringify(media) : null,
+        createdAt: now,
+        receipts: { create: recipientIds.map((userId) => ({ userId, conversationId: input.conversationId, deliveredAt: delivered.has(userId) ? now : null })) },
+        mentions: { create: mentionIds.map((userId) => ({ userId, conversationId: input.conversationId })) },
+      };
       // La conversación sube en la lista, pero no hace falta esperar a que termine para contestar.
-      void this.prisma.conversation.update({ where: { id: input.conversationId }, data: { updatedAt: now } }).catch(() => undefined);
-      return toMessageRecord(row);
+      const touch = () => void this.prisma.conversation.update({ where: { id: input.conversationId }, data: { updatedAt: now } }).catch(() => undefined);
+      if (replyToId) {
+        // Una respuesta necesita el mensaje citado: se lee junto con el nuevo.
+        const row = await this.prisma.message.create({ relationLoadStrategy: 'join', data: created, include: messageInclude });
+        touch();
+        return toMessageRecord(row);
+      }
+      // Un mensaje nuevo ya se sabe cómo queda (sus receptores, sus menciones, sin respuestas): no se vuelve a leer, un viaje menos a la base.
+      const row = await this.prisma.message.create({ data: created });
+      touch();
+      return {
+        id: row.id,
+        conversationId: row.conversationId,
+        senderId: row.senderId,
+        kind: row.kind as MessageKind,
+        ciphertext: row.ciphertext,
+        iv: row.iv,
+        media: media ?? null,
+        systemText: row.systemText,
+        clientId: row.clientId,
+        createdAt: row.createdAt,
+        receipts: recipientIds.map((userId) => ({ userId, deliveredAt: delivered.has(userId) ? now : null, readAt: null })),
+        replyTo: null,
+        replyCount: 0,
+        mentions: mentionIds,
+      };
     } catch (error) {
       // Reintento del mismo mensaje (mismo clientId): se devuelve el que ya está guardado.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {

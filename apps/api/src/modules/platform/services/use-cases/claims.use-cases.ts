@@ -25,6 +25,15 @@ export async function requireAdmin(users: AuthRepository, userId: string): Promi
 }
 
 /**
+ * Soporte controla Parla, no participa en ella como un usuario más: no abre tiendas ni reparte.
+ * Se llama antes de dar de alta un negocio o un repartidor.
+ */
+export async function rejectIfSupport(users: AuthRepository, userId: string, action: string): Promise<void> {
+  const [user] = await users.findActiveByIds([userId]);
+  if (user?.isAdmin) throw new ForbiddenError(`Las cuentas de soporte no pueden ${action}: solo administran Parla`);
+}
+
+/**
  * Lo que todavía se puede devolver de un pedido: el total menos lo ya devuelto (cancelación completa
  * o reclamos devueltos o en curso). `exceptClaimId` deja fuera el reclamo que se está resolviendo.
  */

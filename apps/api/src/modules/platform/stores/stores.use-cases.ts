@@ -15,13 +15,14 @@ import type {
   StoreSummary,
 } from '@parla/types';
 import { APP_ENV, type AppEnv } from '../../../config/env.validation';
+import { bigOrderRulesOf } from '../../../kernel/big-order';
 import { businessStatus } from '../../../kernel/business-hours';
 import { ConflictError, NotFoundError, ValidationError } from '../../../kernel/domain-error';
 import { assertStoreRegistration, cleanProduct, MAX_IMPORT_ROWS, SERVICE_IDS } from '../../../kernel/store-rules';
 import { AUTH_REPOSITORY, type AuthRepository } from '../identity/auth/auth.repository';
 import { BUSINESSES_REPOSITORY, NO_API, type BusinessesRepository, type BusinessRecord, type StoreApiConfig } from '../services/businesses.repository';
 import { ORDERS_REPOSITORY, type OrdersRepository } from '../services/orders.repository';
-import { requireAdmin } from '../services/use-cases/claims.use-cases';
+import { rejectIfSupport, requireAdmin } from '../services/use-cases/claims.use-cases';
 import { PRODUCTS_REPOSITORY, type ProductsRepository } from './products.repository';
 import { baseUrlFor, formatFor, normalizeBaseUrl, normalizePrefix, testStoreConnection } from './store-connection';
 
@@ -42,6 +43,8 @@ export function toBusinessInfo(b: BusinessRecord): BusinessInfo {
     acceptingOrders: b.acceptingOrders,
     opensAt: b.opensAt,
     closesAt: b.closesAt,
+    connector: b.connector?.kind ?? null,
+    verified: Boolean(b.connector?.verifiedAt),
   };
 }
 
@@ -60,9 +63,13 @@ function toIntegrationInfo(b: BusinessRecord): StoreIntegrationInfo {
 /** Quien pide abrir una tienda: queda en revisión hasta que soporte la apruebe. */
 @Injectable()
 export class RegisterStoreUseCase {
-  constructor(@Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository) {}
+  constructor(
+    @Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository,
+    @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
+  ) {}
 
   async execute(userId: string, input: RegisterStoreRequest): Promise<BusinessInfo> {
+    await rejectIfSupport(this.users, userId, 'abrir una tienda');
     assertStoreRegistration(input);
     if (await this.businesses.findByOwner(userId)) throw new ConflictError('Ya tienes una tienda en Parla');
     const created = await this.businesses.create({
@@ -90,13 +97,15 @@ export class ListStoresUseCase {
   async execute(service: ServiceId | undefined, now = new Date()): Promise<StoreSummary[]> {
     if (service && !SERVICE_IDS.includes(service)) throw new ValidationError('Esa categoría no existe');
     const list = await this.businesses.list({ ...(service ? { service } : {}), status: 'approved' });
-    const summaries = await Promise.all(list.map((b) => this.summary(b, now)));
+    // Una sola consulta para las calificaciones de todas las tiendas (no una por tienda).
+    const ratings = await this.orders.ratingSummaries(list.map((b) => b.id));
+    const summaries = await Promise.all(list.map((b) => this.summary(b, now, ratings.get(b.id) ?? { average: null, count: 0 })));
     // Primero las abiertas y mejor calificadas.
     return summaries.sort((a, b) => Number(b.open) - Number(a.open) || (b.ratingAvg ?? 0) - (a.ratingAvg ?? 0) || a.name.localeCompare(b.name));
   }
 
-  async summary(b: BusinessRecord, now: Date): Promise<StoreSummary> {
-    const rating = await this.orders.ratingSummary({ businessId: b.id });
+  async summary(b: BusinessRecord, now: Date, known?: { average: number | null; count: number }): Promise<StoreSummary> {
+    const rating = known ?? (await this.orders.ratingSummary({ businessId: b.id }));
     const st = businessStatus(b, now);
     return {
       id: b.id,
@@ -111,6 +120,8 @@ export class ListStoresUseCase {
       closesAt: b.closesAt,
       ratingAvg: rating.count ? rating.average : null,
       ratingCount: rating.count,
+      verified: Boolean(b.connector?.verifiedAt),
+      bigOrder: bigOrderRulesOf(b),
     };
   }
 }
@@ -314,6 +325,8 @@ export interface InternalIntegration {
   prefix: string;
   apiKey: string;
   adminKey: string;
+  /** Desde cuándo un pedido es «grande» para esta tienda (el gateway se lo avisa a la ferretería al crear la venta). */
+  bigOrder: { totalCents: number; units: number };
 }
 
 @Injectable()
@@ -325,12 +338,13 @@ export class GetInternalIntegrationUseCase {
 
   async execute(storeKey: string): Promise<InternalIntegration> {
     const b = await this.businesses.findById(storeKey);
-    const off: InternalIntegration = { service: storeKey, name: b?.name ?? '', format: 'parla', enabled: false, baseUrl: '', prefix: '', apiKey: '', adminKey: '' };
+    const off: InternalIntegration = { service: storeKey, name: b?.name ?? '', format: 'parla', enabled: false, baseUrl: '', prefix: '', apiKey: '', adminKey: '', bigOrder: { totalCents: 0, units: 0 } };
     if (!b || b.status !== 'approved') return off;
     if (b.source === 'native') {
       // El catálogo de Parla se sirve desde el core con la misma API de tienda (ver InternalStoreApiController).
       return { ...off, enabled: true, baseUrl: this.env.coreInternalUrl, prefix: `/api/internal/store-api/${b.id}`, apiKey: this.env.internalToken, adminKey: this.env.internalToken };
     }
-    return { ...off, enabled: !!b.api.baseUrl, format: b.api.format, baseUrl: b.api.baseUrl, prefix: b.api.prefix, apiKey: b.api.apiKey, adminKey: b.api.adminKey };
+    const { totalCents, units } = bigOrderRulesOf(b);
+    return { ...off, bigOrder: { totalCents, units }, enabled: !!b.api.baseUrl, format: b.api.format, baseUrl: b.api.baseUrl, prefix: b.api.prefix, apiKey: b.api.apiKey, adminKey: b.api.adminKey };
   }
 }

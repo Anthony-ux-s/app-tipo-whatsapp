@@ -73,6 +73,8 @@ export interface NewMessage {
   clientId: string;
   /** Destinatarios: se crea un recibo pendiente para cada uno. */
   recipientIds: string[];
+  /** Destinatarios que ya lo recibieron al guardarse (están conectados): su recibo nace «entregado», sin viajes extra. */
+  deliveredTo?: string[];
   replyToId?: string | null;
   mentions?: string[];
 }

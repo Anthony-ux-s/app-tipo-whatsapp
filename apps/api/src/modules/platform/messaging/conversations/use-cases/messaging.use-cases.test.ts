@@ -109,6 +109,62 @@ describe('mensajería', () => {
   });
 });
 
+describe('entregado desde el servidor', () => {
+  const laura = makeUser({ displayName: 'Laura' });
+  const andres = makeUser({ displayName: 'Andrés' });
+  const sofia = makeUser({ displayName: 'Sofía' });
+  let repo: InMemoryConversationsRepository;
+  let realtime: RecordingRealtime;
+  let presence: PresenceRegistry;
+  let send: SendMessageUseCase;
+
+  beforeEach(() => {
+    repo = new InMemoryConversationsRepository();
+    repo.addConversation('direct', [laura, andres]);
+    repo.addConversation('group', [laura, andres, sofia]);
+    realtime = new RecordingRealtime();
+    presence = new PresenceRegistry();
+    const get = new GetConversationUseCase(repo, presence);
+    const dispatcher = new NotificationDispatcher(new InMemoryPushSubscriptions(), new RecordingPushSender(), presence);
+    send = new SendMessageUseCase(repo, realtime, get, dispatcher, presence);
+  });
+
+  it('si el receptor está conectado, el mensaje nace «entregado»: el remitente lo ve así en la misma respuesta, sin otro aviso', async () => {
+    presence.set(andres.id, 'online');
+    const message = await send.execute(laura.id, 'direct', { clientId: 'e1', kind: 'text', body, media: null });
+    expect(message.status).toBe('delivered');
+    expect((realtime.events('message:new')[0].payload as Message).status).toBe('delivered');
+    expect(realtime.events('message:status')).toHaveLength(0);
+  });
+
+  it('si no está conectado queda «enviado» hasta que su celular lo reciba', async () => {
+    const message = await send.execute(laura.id, 'direct', { clientId: 'e2', kind: 'text', body, media: null });
+    expect(message.status).toBe('sent');
+    expect(repo.messages[0].receipts.every((r) => r.deliveredAt === null)).toBe(true);
+  });
+
+  it('en un grupo solo cuenta «entregado» cuando todos están conectados; los que no, lo reciben después', async () => {
+    presence.set(andres.id, 'online');
+    const partial = await send.execute(laura.id, 'group', { clientId: 'e3', kind: 'text', body, media: null });
+    expect(partial.status).toBe('sent');
+    const receipts = repo.messages.find((m) => m.id === partial.id)!.receipts;
+    expect(receipts.find((r) => r.userId === andres.id)!.deliveredAt).toBeTruthy();
+    expect(receipts.find((r) => r.userId === sofia.id)!.deliveredAt).toBeNull();
+    presence.set(sofia.id, 'online');
+    expect((await send.execute(laura.id, 'group', { clientId: 'e4', kind: 'text', body, media: null })).status).toBe('delivered');
+  });
+
+  it('el mensaje de uno mismo no se marca para uno mismo, y un reintento no cambia el estado ya guardado', async () => {
+    presence.set(laura.id, 'online');
+    const first = await send.execute(laura.id, 'direct', { clientId: 'e5', kind: 'text', body, media: null });
+    expect(first.status).toBe('sent');
+    presence.set(andres.id, 'online');
+    const again = await send.execute(laura.id, 'direct', { clientId: 'e5', kind: 'text', body, media: null });
+    expect(again.id).toBe(first.id);
+    expect(repo.messages).toHaveLength(1);
+  });
+});
+
 describe('reglas de conversación', () => {
   it('el chat individual entre dos personas tiene una sola clave estable', () => {
     expect(directKeyFor('b', 'a')).toBe(directKeyFor('a', 'b'));

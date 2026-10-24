@@ -3,6 +3,7 @@ import type { Currency, OrderRating, OrderStatus, OrderTimelineEntry, RatingSumm
 import type { Business as BusinessRow, Claim as ClaimRow, Order as OrderRow } from '@prisma/client';
 import { toClaimRecord } from './prisma-claims.repository';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
+import { bigOrderRulesOf } from '../../../kernel/big-order';
 import type { AdminOrderFilter, NewOrder, OfferReservation, OrderChanges, OrderRecord, OrdersRepository } from './orders.repository';
 
 type OrderWithBusiness = OrderRow & {
@@ -35,6 +36,7 @@ function toOrderRecord(row: OrderWithBusiness): OrderRecord {
           ownerId: row.business.ownerId,
           address: row.business.address,
           location: row.business.lat !== null && row.business.lng !== null ? { lat: row.business.lat, lng: row.business.lng } : null,
+          bigOrder: bigOrderRulesOf(row.business),
         }
       : null,
     status: row.status as OrderStatus,
@@ -192,6 +194,19 @@ export class PrismaOrdersRepository implements OrdersRepository {
     const avg = (r._avg as Record<string, number | null>)[field];
     const count = (r._count as Record<string, number>)[field] ?? 0;
     return { average: avg === null ? null : Math.round(avg * 10) / 10, count };
+  }
+
+  async ratingSummaries(businessIds: string[]): Promise<Map<string, RatingSummary>> {
+    if (businessIds.length === 0) return new Map();
+    const rows = await this.prisma.order.groupBy({
+      by: ['businessId'],
+      where: { businessId: { in: businessIds }, storeStars: { not: null } },
+      _avg: { storeStars: true },
+      _count: { storeStars: true },
+    });
+    return new Map(
+      rows.flatMap((r) => (r.businessId ? [[r.businessId, { average: r._avg.storeStars === null ? null : Math.round(r._avg.storeStars * 10) / 10, count: r._count.storeStars }] as const] : [])),
+    );
   }
 
   async updateIfStatus(id: string, expected: OrderStatus, changes: OrderChanges): Promise<OrderRecord | null> {

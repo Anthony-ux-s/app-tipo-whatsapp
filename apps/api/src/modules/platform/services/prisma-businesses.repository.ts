@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import type { CatalogSource, ServiceId, StoreIntegrationFormat, StoreStatus, UpdateBusinessRequest } from '@parla/types';
 import type { Business as BusinessRow } from '@prisma/client';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
-import type { BusinessesRepository, BusinessRecord, NewBusiness, StoreApiConfig, StoreFilter } from './businesses.repository';
+import { open, seal } from '../../../kernel/secret-box';
+import type { BusinessesRepository, BusinessRecord, ConnectorLink, NewBusiness, StoreApiConfig, StoreFilter } from './businesses.repository';
 
 export function toBusinessRecord(row: BusinessRow): BusinessRecord {
   return {
@@ -20,7 +21,16 @@ export function toBusinessRecord(row: BusinessRow): BusinessRecord {
     opensAt: row.opensAt,
     closesAt: row.closesAt,
     createdAt: row.createdAt,
-    api: { format: row.apiFormat as StoreIntegrationFormat, baseUrl: row.apiBaseUrl, prefix: row.apiPrefix, apiKey: row.apiKey, adminKey: row.apiAdminKey },
+    bigOrderCents: row.bigOrderCents,
+    bigOrderUnits: row.bigOrderUnits,
+    adminWhatsapp: row.adminWhatsapp,
+    payoutPhone: row.payoutPhone,
+    // Las llaves viven cifradas en la base: aquí se abren para usarlas.
+    api: { format: row.apiFormat as StoreIntegrationFormat, baseUrl: row.apiBaseUrl, prefix: row.apiPrefix, apiKey: open(row.apiKey), adminKey: open(row.apiAdminKey) },
+    connector:
+      row.connector === 'ferrohub'
+        ? { kind: 'ferrohub', origin: row.connectorOrigin === 'provision' ? 'provision' : 'code', tenantId: row.connectorTenant, webhookSecret: open(row.connectorSecret), connectedAt: row.connectedAt ?? row.createdAt, verifiedAt: row.verifiedAt }
+        : null,
   };
 }
 
@@ -55,8 +65,27 @@ export class PrismaBusinessesRepository implements BusinessesRepository {
   }
 
   async setSource(id: string, source: CatalogSource, api: StoreApiConfig): Promise<BusinessRecord> {
-    const data = { source, apiFormat: api.format, apiBaseUrl: api.baseUrl, apiPrefix: api.prefix, apiKey: api.apiKey, apiAdminKey: api.adminKey };
+    const data = { source, apiFormat: api.format, apiBaseUrl: api.baseUrl, apiPrefix: api.prefix, apiKey: seal(api.apiKey), apiAdminKey: seal(api.adminKey) };
     return toBusinessRecord(await this.prisma.business.update({ where: { id }, data }));
+  }
+
+  async setConnector(id: string, link: ConnectorLink | null): Promise<BusinessRecord> {
+    const data = link
+      ? { connector: link.kind, connectorOrigin: link.origin, connectorTenant: link.tenantId, connectorSecret: seal(link.webhookSecret), connectedAt: link.connectedAt, verifiedAt: link.verifiedAt }
+      : { connector: '', connectorOrigin: '', connectorTenant: '', connectorSecret: '', connectedAt: null, verifiedAt: null };
+    return toBusinessRecord(await this.prisma.business.update({ where: { id }, data }));
+  }
+
+  async setBigOrderRules(id: string, rules: { totalCents: number | null; units: number | null; whatsapp: string }): Promise<BusinessRecord> {
+    return toBusinessRecord(await this.prisma.business.update({ where: { id }, data: { bigOrderCents: rules.totalCents, bigOrderUnits: rules.units, adminWhatsapp: rules.whatsapp } }));
+  }
+
+  async setPayoutPhone(id: string, phone: string): Promise<void> {
+    await this.prisma.business.update({ where: { id }, data: { payoutPhone: phone } });
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.prisma.business.delete({ where: { id } });
   }
 
   async list(filter: StoreFilter): Promise<BusinessRecord[]> {
