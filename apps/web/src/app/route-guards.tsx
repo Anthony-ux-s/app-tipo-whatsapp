@@ -11,6 +11,12 @@ export function RequireAuth() {
   return <Outlet />;
 }
 
+/** Pantallas de tienda y reparto: soporte no participa como usuario, así que lo devuelve a su inicio. */
+export function UsersOnly() {
+  const isSupport = useSessionStore((s) => !!s.user?.isAdmin);
+  return isSupport ? <Navigate to="/app" replace /> : <Outlet />;
+}
+
 /** Solo sin sesión (entrar y registro). */
 export function GuestOnly() {
   const status = useSessionStore((s) => s.status);
