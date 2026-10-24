@@ -78,6 +78,8 @@ export interface OrderQuote {
   subtotalCents: number;
   deliveryFeeCents: number;
   tipCents: number;
+  /** El delivery que se le paga al repartidor al llegar (no entra al total del QR). 0 si va dentro del total. */
+  deliveryOnArrivalCents: number;
   /** Descuento del cupón (ya restado del total). */
   discountCents: number;
   coupon: AppliedCoupon | null;
@@ -224,6 +226,11 @@ export interface Order {
   deliveryFeeCents: number;
   /** Propina para el repartidor (incluida en el total). */
   tipCents: number;
+  /**
+   * Delivery que el cliente le paga al repartidor al llegar (efectivo, Yape o Plin). No entra al total del QR: por la
+   * app se paga solo lo de los productos. 0 si el delivery se cobró dentro del total (pedidos anteriores).
+   */
+  deliveryOnArrivalCents: number;
   /** Descuento del cupón (ya restado del total) y su código. */
   discountCents: number;
   couponCode: string | null;
@@ -329,6 +336,8 @@ export interface AdminDriver {
   hasDocument: boolean;
   status: DriverStatus;
   reviewNote: string | null;
+  /** Lo que debe a Parla por la comisión de los deliveries que cobró en mano (0 si no debe). */
+  debtCents: number;
   createdAt: string;
 }
 
@@ -396,7 +405,8 @@ export interface DriverEarnings {
   rating: RatingSummary;
 }
 
-export type LedgerEntryKind = 'delivery_fee' | 'commission' | 'tip' | 'payout';
+/** cash_collected: lo cobrado en mano (descuenta lo que no pasó por la app); commission_payment: pago de comisión a Parla. */
+export type LedgerEntryKind = 'delivery_fee' | 'commission' | 'tip' | 'payout' | 'cash_collected' | 'commission_payment';
 export type PayoutStatus = 'pending' | 'paid' | 'failed';
 
 /** Un movimiento del saldo del repartidor (positivo suma, negativo resta). */
@@ -412,8 +422,12 @@ export interface LedgerEntry {
 
 /** La billetera del repartidor: saldo, cuenta de depósito y movimientos. */
 export interface DriverWallet {
-  /** Lo que se le puede depositar ahora. */
+  /** Lo que se le puede depositar ahora (negativo = lo que debe a Parla por comisiones). */
   balanceCents: number;
+  /** Lo que debe a Parla por la comisión de los deliveries cobrados en mano (0 si no debe). */
+  debtCents: number;
+  /** Deuda máxima antes de no poder tomar más pedidos. */
+  maxDebtCents: number;
   /** Reservado en un depósito en curso. */
   pendingPayoutCents: number;
   /** Número de PagaYa donde se le deposita (9 dígitos); null si no lo puso. */
@@ -453,6 +467,13 @@ export interface DriverOrder {
   /** Tarifa de delivery del pedido (lo que pagó el cliente por el envío). */
   deliveryFeeCents: number;
   tipCents: number;
+  /**
+   * Lo que el repartidor le cobra al cliente al entregar (delivery + propina, en efectivo, Yape o Plin). 0 si el
+   * delivery se cobró dentro del pedido (pedidos anteriores).
+   */
+  collectOnArrivalCents: number;
+  /** De lo que cobra en mano, lo que le debe a Parla por este pedido (la comisión del delivery). */
+  commissionDueCents: number;
   /** Comisión de Rapidito sobre la tarifa (DRIVER_SHARE_PERCENT: por defecto el 5 %). */
   commissionCents: number;
   commissionPercent: number;

@@ -3,10 +3,10 @@ import { ValidationError } from './domain-error';
 import { DEFAULT_DRIVER_PAY, normalizePayoutPhone, parseDriverPay, splitDelivery } from './driver-earnings';
 
 describe('ganancias del repartidor', () => {
-  it('se queda con el 95 % de la tarifa y la propina completa; Rapidito cobra el 5 %', () => {
-    expect(splitDelivery(850, 0)).toEqual({ commissionCents: 43, driverFeeCents: 807, earningsCents: 807 });
-    expect(splitDelivery(650, 300)).toEqual({ commissionCents: 33, driverFeeCents: 617, earningsCents: 917 });
-    expect(splitDelivery(1000, 0)).toEqual({ commissionCents: 50, driverFeeCents: 950, earningsCents: 950 });
+  it('se queda con el 90 % de la tarifa y la propina completa; Parla cobra el 10 %', () => {
+    expect(splitDelivery(850, 0)).toEqual({ commissionCents: 85, driverFeeCents: 765, earningsCents: 765 });
+    expect(splitDelivery(650, 300)).toEqual({ commissionCents: 65, driverFeeCents: 585, earningsCents: 885 });
+    expect(splitDelivery(1000, 0)).toEqual({ commissionCents: 100, driverFeeCents: 900, earningsCents: 900 });
     expect(splitDelivery(0, 200)).toEqual({ commissionCents: 0, driverFeeCents: 0, earningsCents: 200 });
     expect(() => splitDelivery(-1, 0)).toThrow(ValidationError);
   });
@@ -30,7 +30,10 @@ describe('ganancias del repartidor', () => {
       sharePercent: 92.5,
       minAutoPayoutCents: 1000,
       minManualPayoutCents: 250,
+      maxDebtCents: 3000,
     });
+    expect(parseDriverPay({ DRIVER_MAX_DEBT_SOLES: '50' }).maxDebtCents).toBe(5000);
+    expect(() => parseDriverPay({ DRIVER_MAX_DEBT_SOLES: '-1' })).toThrow('negativo');
     expect(() => parseDriverPay({ DRIVER_SHARE_PERCENT: '120' })).toThrow('entre 50 y 100');
     expect(() => parseDriverPay({ DRIVER_SHARE_PERCENT: 'noventa' })).toThrow('debe ser un número');
     expect(() => parseDriverPay({ DRIVER_MIN_AUTO_PAYOUT_SOLES: '0.5' })).toThrow('al menos 1');

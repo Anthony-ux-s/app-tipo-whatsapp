@@ -158,6 +158,7 @@ export function AdminView() {
                 driver={d}
                 busy={a.busy === `driver:${d.userId}`}
                 onApprove={() => void a.reviewDriver(d.userId, 'approve')}
+                onCommissionPaid={(cents) => void a.recordCommissionPayment(d.userId, cents)}
                 onReject={() => setRejecting({ kind: 'driver', id: d.userId, name: d.displayName })}
               />
             </li>
@@ -208,7 +209,10 @@ function Chip({ on, onClick, children, small = false, role, testId }: { on: bool
   );
 }
 
-function DriverItem({ driver, busy, onApprove, onReject }: { driver: AdminDriver; busy: boolean; onApprove: () => void; onReject: () => void }) {
+function DriverItem({ driver, busy, onApprove, onReject, onCommissionPaid }: { driver: AdminDriver; busy: boolean; onApprove: () => void; onReject: () => void; onCommissionPaid: (cents: number) => void }) {
+  const [paid, setPaid] = useState((driver.debtCents / 100).toFixed(2));
+  const paidCents = Math.round(Number(paid.replace(',', '.')) * 100);
+  const validPaid = Number.isFinite(paidCents) && paidCents >= 1 && paidCents <= 1_000_000;
   const [showDoc, setShowDoc] = useState(false);
   return (
     <article className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" data-testid="admin-driver" data-user={driver.userId}>
@@ -243,6 +247,20 @@ function DriverItem({ driver, busy, onApprove, onReject }: { driver: AdminDriver
         </>
       ) : (
         <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">Todavía no subió la foto de su documento.</p>
+      )}
+      {driver.status === 'approved' && driver.debtCents > 0 && (
+        <div className="flex flex-col gap-2 rounded-xl bg-amber-50 p-3 text-sm ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-800" data-testid="driver-debt">
+          <p className="font-semibold text-ink">Debe {formatSoles(driver.debtCents)} a Parla (comisión del delivery cobrado en mano)</p>
+          <div className="flex items-end gap-2">
+            <label className="flex items-center gap-1 text-ink-soft">
+              Pagó S/
+              <input value={paid} onChange={(e) => setPaid(e.target.value)} inputMode="decimal" aria-label="Monto que pagó" className="h-9 w-24 rounded-lg border border-line bg-surface px-2 font-semibold text-ink" />
+            </label>
+            <Button size="sm" onClick={() => onCommissionPaid(paidCents)} loading={busy} disabled={!validPaid} data-testid="record-commission">
+              Anotar pago
+            </Button>
+          </div>
+        </div>
       )}
       {driver.status !== 'approved' && (
         <div className="flex gap-2">

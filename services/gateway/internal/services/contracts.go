@@ -127,6 +127,8 @@ type OrderQuote struct {
 	SubtotalCents    int         `json:"subtotalCents"`
 	DeliveryFeeCents int         `json:"deliveryFeeCents"`
 	TipCents         int         `json:"tipCents"`
+	// DeliveryOnArrivalCents: el delivery que el cliente le paga al repartidor al llegar (no entra al total del QR).
+	DeliveryOnArrivalCents int `json:"deliveryOnArrivalCents"`
 	// DiscountCents: lo que descuenta el cupón (ya restado del total).
 	DiscountCents int            `json:"discountCents"`
 	Coupon        *AppliedCoupon `json:"coupon"`

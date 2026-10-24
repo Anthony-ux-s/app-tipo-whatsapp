@@ -29,6 +29,9 @@ export default defineConfig({
   webServer: {
     command: 'node scripts/start.mjs',
     cwd: '../..',
+    // Estos recorridos cobran el delivery dentro del QR (el modo anterior). Para probar el delivery contra entrega, levanta
+    // el stack aparte (npm start) con DELIVERY_PAY_ON_ARRIVAL=true.
+    env: { ...(process.env as Record<string, string>), DELIVERY_PAY_ON_ARRIVAL: process.env.DELIVERY_PAY_ON_ARRIVAL ?? 'false' },
     url: `${API_URL}/gateway/health`,
     reuseExistingServer: true,
     timeout: 300_000,

@@ -27,11 +27,13 @@ const COUNTS = { status: { not: 'failed' } } as const;
 export class PrismaDriverLedgerRepository implements DriverLedgerRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async recordDelivery(e: { driverId: string; orderId: string; feeCents: number; commissionCents: number; tipCents: number }): Promise<boolean> {
+  async recordDelivery(e: { driverId: string; orderId: string; feeCents: number; commissionCents: number; tipCents: number; cashCents?: number }): Promise<boolean> {
     const rows = [
       { kind: 'delivery_fee', amountCents: e.feeCents },
       { kind: 'commission', amountCents: -e.commissionCents },
       ...(e.tipCents > 0 ? [{ kind: 'tip', amountCents: e.tipCents }] : []),
+      // Lo cobrado en mano no es saldo de la app: se descuenta, y queda solo la comisión como deuda.
+      ...((e.cashCents ?? 0) > 0 ? [{ kind: 'cash_collected', amountCents: -(e.cashCents ?? 0) }] : []),
     ].map((r) => ({ ...r, driverId: e.driverId, orderId: e.orderId }));
     try {
       await this.prisma.$transaction(rows.map((data) => this.prisma.driverLedgerEntry.create({ data })));
@@ -41,6 +43,10 @@ export class PrismaDriverLedgerRepository implements DriverLedgerRepository {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return false;
       throw error;
     }
+  }
+
+  async recordCommissionPayment(driverId: string, amountCents: number): Promise<void> {
+    await this.prisma.driverLedgerEntry.create({ data: { driverId, kind: 'commission_payment', amountCents } });
   }
 
   async balance(driverId: string) {

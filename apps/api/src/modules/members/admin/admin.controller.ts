@@ -19,13 +19,17 @@ import type {
 import { Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsInt, IsISO8601, IsLatitude, IsLongitude, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../../../http/current-user.decorator';
-import { GetDriverDocumentUseCase, ListDriversForReviewUseCase, ReviewDriverUseCase } from '../../platform/services/use-cases/admin-drivers.use-cases';
+import { GetDriverDocumentUseCase, ListDriversForReviewUseCase, RecordCommissionPaymentUseCase, ReviewDriverUseCase } from '../../platform/services/use-cases/admin-drivers.use-cases';
 import { GetAdminClaimUseCase, ListAdminClaimsUseCase, RejectClaimUseCase } from '../../platform/services/use-cases/claims.use-cases';
 import { ReadPhotoUseCase } from '../../platform/services/use-cases/photos.use-cases';
 import { ADMIN_ORDER_VIEWS, GetAdminOrderUseCase, ListAdminOrdersUseCase, type AdminOrdersView } from '../../platform/services/use-cases/admin-orders.use-cases';
 import { CreateCouponUseCase, ListCouponsUseCase, SetCouponActiveUseCase } from '../../platform/services/use-cases/coupons.use-cases';
 import { GetTrafficUseCase, ListPeopleUseCase, SetPersonBlockedUseCase } from '../../platform/services/use-cases/admin-people.use-cases';
 import { GetDeliverySettingsUseCase, SimulateDeliveryQuoteUseCase, UpdateDeliverySettingsUseCase } from '../../platform/services/use-cases/logistics.use-cases';
+
+class CommissionPaymentDto {
+  @IsInt() @Min(1) @Max(1_000_000) amountCents: number;
+}
 
 class ReviewDriverDto {
   @IsIn(['approve', 'reject']) decision: 'approve' | 'reject';
@@ -110,6 +114,7 @@ export class AdminController {
   constructor(
     private readonly listDrivers: ListDriversForReviewUseCase,
     private readonly review: ReviewDriverUseCase,
+    private readonly commissionPayment: RecordCommissionPaymentUseCase,
     private readonly document: GetDriverDocumentUseCase,
     private readonly listClaims: ListAdminClaimsUseCase,
     private readonly getClaim: GetAdminClaimUseCase,
@@ -205,6 +210,13 @@ export class AdminController {
   @Post('drivers/:userId/review')
   reviewDriver(@CurrentUser() user: AuthUser, @Param('userId') userId: string, @Body() body: ReviewDriverDto): Promise<AdminDriver> {
     return this.review.execute(user.userId, userId, body.decision, body.note ?? '');
+  }
+
+  /** El repartidor pagó (a Parla) la comisión de los deliveries que cobró en mano: baja su deuda. */
+  @HttpCode(200)
+  @Post('drivers/:userId/commission-payments')
+  recordCommissionPayment(@CurrentUser() user: AuthUser, @Param('userId') userId: string, @Body() body: CommissionPaymentDto): Promise<{ debtCents: number }> {
+    return this.commissionPayment.execute(user.userId, userId, body.amountCents);
   }
 
   @Get('drivers/:userId/document')

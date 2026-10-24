@@ -8,10 +8,12 @@ export interface DriverPayConfig {
   minAutoPayoutCents: number;
   /** Mínimo para «Retirar ahora». */
   minManualPayoutCents: number;
+  /** Lo máximo que puede deber a Parla por comisiones de deliveries cobrados en mano antes de no poder tomar más pedidos. */
+  maxDebtCents: number;
 }
 
-/** Valores por defecto: 95 % para el repartidor, depósito automático desde S/ 5 y retiro desde S/ 1. */
-export const DEFAULT_DRIVER_PAY: DriverPayConfig = { sharePercent: 95, minAutoPayoutCents: 500, minManualPayoutCents: 100 };
+/** Valores por defecto: 90 % para el repartidor (Parla recibe el 10 % del delivery), depósito automático desde S/ 5, retiro desde S/ 1 y deuda máxima de S/ 30. */
+export const DEFAULT_DRIVER_PAY: DriverPayConfig = { sharePercent: 90, minAutoPayoutCents: 500, minManualPayoutCents: 100, maxDebtCents: 3000 };
 
 /** Hora del depósito automático (la corre el gateway con RAPIDITO_PAYOUT_AT); se muestra al repartidor. */
 export const AUTO_PAYOUT_AT = '23:00';
@@ -19,9 +21,10 @@ export const AUTO_PAYOUT_AT = '23:00';
 /**
  * Lee la configuración de las variables de entorno (en soles para que sea fácil de escribir) y la
  * valida al arrancar: un valor mal escrito no deja levantar el core, en vez de pagar mal.
- *   DRIVER_SHARE_PERCENT            95   (de 50 a 100; admite decimales, p. ej. 92.5)
+ *   DRIVER_SHARE_PERCENT            90   (de 50 a 100; admite decimales, p. ej. 92.5)
  *   DRIVER_MIN_AUTO_PAYOUT_SOLES    5
  *   DRIVER_MIN_MANUAL_PAYOUT_SOLES  1
+ *   DRIVER_MAX_DEBT_SOLES            30   (lo que puede deber a Parla por comisiones antes de no poder tomar pedidos)
  */
 export function parseDriverPay(env: Record<string, string | undefined>): DriverPayConfig {
   const read = (name: string, fallback: number) => {
@@ -40,7 +43,9 @@ export function parseDriverPay(env: Record<string, string | undefined>): DriverP
   };
   const minAutoPayoutCents = toCents(read('DRIVER_MIN_AUTO_PAYOUT_SOLES', DEFAULT_DRIVER_PAY.minAutoPayoutCents / 100), 'DRIVER_MIN_AUTO_PAYOUT_SOLES');
   const minManualPayoutCents = toCents(read('DRIVER_MIN_MANUAL_PAYOUT_SOLES', DEFAULT_DRIVER_PAY.minManualPayoutCents / 100), 'DRIVER_MIN_MANUAL_PAYOUT_SOLES');
-  return { sharePercent, minAutoPayoutCents, minManualPayoutCents };
+  const maxDebtCents = Math.round(read('DRIVER_MAX_DEBT_SOLES', DEFAULT_DRIVER_PAY.maxDebtCents / 100) * 100);
+  if (maxDebtCents < 0) throw new Error('DRIVER_MAX_DEBT_SOLES no puede ser negativo');
+  return { sharePercent, minAutoPayoutCents, minManualPayoutCents, maxDebtCents };
 }
 
 /**

@@ -918,3 +918,56 @@ func TestVolverAPedirTraeLosProductosDeAhora(t *testing.T) {
 		t.Fatalf("id raro: %v", err)
 	}
 }
+
+// ── Delivery contra entrega ───────────────────────────────────────────────────
+
+func TestConElDeliveryContraEntregaElQRCobraSoloLosProductos(t *testing.T) {
+	w := newWorld()
+	w.orch.DeliveryOnArrival = true
+	ctx := context.Background()
+	req := cart
+	req.TipCents = 300 // la propina se da en mano: el servidor la ignora
+
+	q, err := w.orch.Quote(ctx, "u", req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 2 × 4.50 + 1 × 4.80 = 13.80 por el QR; el delivery (6.50) se paga al repartidor al llegar.
+	if q.SubtotalCents != 1380 || q.TotalCents != 1380 || q.DeliveryFeeCents != 650 || q.DeliveryOnArrivalCents != 650 || q.TipCents != 0 {
+		t.Fatalf("cotización contra entrega inesperada: %+v", q)
+	}
+
+	order, err := w.orch.Create(ctx, "u", req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if order.TotalCents != 1380 || order.DeliveryFeeCents != 650 || order.TipCents != 0 {
+		t.Fatalf("pedido inesperado: %+v", order)
+	}
+	if w.payments.last.AmountCents != 1380 || strings.Contains(w.payments.last.Concept, "propina") || !strings.Contains(w.payments.last.Concept, "el delivery se paga al repartidor") {
+		t.Fatalf("el cobro debía ser solo de los productos: %+v", w.payments.last)
+	}
+	if saved := w.core.orders["ord_1"]; saved.TotalCents != 1380 || saved.DeliveryFeeCents != 650 || saved.TipCents != 0 {
+		t.Fatalf("el core debía recibir total de productos y el delivery aparte: %+v", saved)
+	}
+}
+
+func TestContraEntregaElCuponDescuentaProductosPeroNoElDelivery(t *testing.T) {
+	w := newWorld()
+	w.orch.DeliveryOnArrival = true
+	w.core.coupons = map[string]services.AppliedCoupon{
+		"MENOS2": {Code: "MENOS2", Kind: "amount", DiscountCents: 200},
+		"ENVIO0": {Code: "ENVIO0", Kind: "free_delivery"},
+	}
+	ctx := context.Background()
+	req := cart
+	req.CouponCode = "MENOS2"
+	q, err := w.orch.Quote(ctx, "u", req)
+	if err != nil || q.DiscountCents != 200 || q.TotalCents != 1180 || q.DeliveryOnArrivalCents != 650 {
+		t.Fatalf("el cupón debía rebajar los productos: %+v %v", q, err)
+	}
+	req.CouponCode = "ENVIO0"
+	if _, err := w.orch.Quote(ctx, "u", req); status(err) != http.StatusUnprocessableEntity {
+		t.Fatalf("un cupón de delivery gratis no aplica contra entrega; obtuve %v", err)
+	}
+}

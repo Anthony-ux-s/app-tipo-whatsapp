@@ -38,6 +38,9 @@ type Config struct {
 	MercayaAdminKey string
 	// PagayaAPIKey: clave de la API de transferencias de la billetera (retiros de los repartidores).
 	PagayaAPIKey string
+	// DeliveryOnArrival: el delivery y la propina se pagan al repartidor al llegar; por el QR solo van los productos
+	// (DELIVERY_PAY_ON_ARRIVAL, por defecto sí; "false" vuelve a cobrarlo todo junto).
+	DeliveryOnArrival bool
 	// PagayaSimulatorPublic: publica la página de pago de la billetera de prueba (PAGAYA_SIMULATOR_PUBLIC=true). Solo para pruebas.
 	PagayaSimulatorPublic bool
 	// PayoutAt: hora de Lima («HH:MM») del retiro automático diario a los repartidores; vacío = apagado.
@@ -87,6 +90,7 @@ func Load() (Config, error) {
 		RatePerMinute:         rate,
 		ProvidersURL:          strings.TrimRight(providers.String(), "/"),
 		PublicURL:             strings.TrimRight(public.String(), "/"),
+		DeliveryOnArrival:     !strings.EqualFold(env("DELIVERY_PAY_ON_ARRIVAL", "true"), "false"),
 		PagayaSimulatorPublic: strings.EqualFold(env("PAGAYA_SIMULATOR_PUBLIC", ""), "true"),
 		PagayaSecret:          env("PAGAYA_WEBHOOK_SECRET", devPagayaSecret),
 		MercayaAdminKey:       env("MERCAYA_ADMIN_KEY", devMercayaKey),

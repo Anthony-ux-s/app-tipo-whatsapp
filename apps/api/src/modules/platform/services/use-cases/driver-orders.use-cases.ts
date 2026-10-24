@@ -1,7 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { DeliverOrderRequest, DriverInfo, DriverOrder, DriverOrders } from '@parla/types';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
-import { MAX_DELIVERY_CODE_ATTEMPTS } from '../../../../kernel/order-rules';
+import { deliveryPaidOnArrival, formatSoles, MAX_DELIVERY_CODE_ATTEMPTS } from '../../../../kernel/order-rules';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { DispatchPolicy } from '../dispatch.policy';
 import { DRIVER_LEDGER_REPOSITORY, type DriverLedgerRepository } from '../driver-ledger.repository';
@@ -110,6 +110,8 @@ export class AcceptDeliveryUseCase {
     private readonly pay: DriverPayPolicy,
     private readonly dispatch: DispatchPolicy,
     @Inject(DELIVERY_SETTINGS_REPOSITORY) private readonly settings: DeliverySettingsRepository,
+    /** Para no dejar tomar pedidos a quien debe demasiado a Parla en comisiones (opcional en pruebas). */
+    @Optional() @Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger?: DriverLedgerRepository,
   ) {}
 
   async execute(userId: string, id: string): Promise<DriverOrder> {
@@ -117,6 +119,12 @@ export class AcceptDeliveryUseCase {
     let order = await findDriverOrder(this.orders, this.dispatch, driver, id);
     if (order.driverId !== userId) {
       if (!driver.online) throw new ConflictError('Conéctate para tomar pedidos');
+      if (this.ledger) {
+        const { availableCents } = await this.ledger.balance(userId);
+        if (availableCents < -this.pay.config.maxDebtCents) {
+          throw new ConflictError(`Debes ${formatSoles(-availableCents)} a Parla por las comisiones de tus deliveries. Págalos para seguir tomando pedidos.`);
+        }
+      }
       const max = (await this.settings.get()).pricing.maxActiveOrders;
       if ((await this.orders.countActiveForDriver(userId)) >= max) {
         throw new ConflictError(max === 1 ? 'Termina tu entrega en curso antes de tomar otra' : `Ya llevas ${max} pedidos: entrega alguno antes de tomar otro`);
@@ -229,9 +237,11 @@ export class DeliverOrderUseCase {
       order = updated;
     }
     // A su saldo: tarifa, menos la comisión de Rapidito (DRIVER_SHARE_PERCENT), más la propina. Se
-    // descuenta sola y, si la entrega se confirma dos veces, no se anota dos veces.
+    // descuenta sola y, si la entrega se confirma dos veces, no se anota dos veces. Si el cliente le pagó el delivery en mano
+    // (efectivo, Yape o Plin), ese dinero ya lo tiene: solo queda anotada la comisión que debe a Parla.
     const split = this.pay.split(order.deliveryFeeCents, order.tipCents);
-    await this.ledger.recordDelivery({ driverId: userId, orderId: order.id, feeCents: order.deliveryFeeCents, commissionCents: split.commissionCents, tipCents: order.tipCents });
+    const cashCents = deliveryPaidOnArrival(order) ? order.deliveryFeeCents + order.tipCents : 0;
+    await this.ledger.recordDelivery({ driverId: userId, orderId: order.id, feeCents: order.deliveryFeeCents, commissionCents: split.commissionCents, tipCents: order.tipCents, cashCents });
     await this.storeSales?.execute(order);
     return toDriverOrder(order, userId, await customersOf(this.users, [order]), this.pay, driver.location);
   }

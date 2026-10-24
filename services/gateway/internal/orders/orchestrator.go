@@ -98,14 +98,17 @@ type Orchestrator struct {
 	Payouts PayoutCore
 	// StorePayouts: lo mismo para las ventas de las tiendas (opcional: nil lo apaga).
 	StorePayouts PayoutCore
-	Wallet  Wallet
+	Wallet       Wallet
 	// Claims y Refunds: devoluciones parciales por reclamos que aprueba soporte.
 	Claims  ClaimsCore
 	Refunds PartialRefunds
 	// PublicURL es la dirección pública del gateway, para los avisos de los proveedores.
 	PublicURL string
-	Now       func() time.Time
-	NewID     func() string
+	// DeliveryOnArrival: el cliente paga por el QR solo los productos; el delivery (calculado por distancia) se lo paga
+	// al repartidor al llegar, en efectivo, Yape o Plin, y la propina también va directa a él.
+	DeliveryOnArrival bool
+	Now               func() time.Time
+	NewID             func() string
 }
 
 // Catalog: los servicios que ofrece Parla.
@@ -322,13 +325,17 @@ func (o *Orchestrator) quote(ctx context.Context, userID string, req services.Qu
 		return q, req, rapidito.Quote{}, unavailable("El delivery")
 	}
 	q.DeliveryFeeCents = delivery.FeeCents
-	// La propina va íntegra al repartidor: se suma aparte del delivery.
+	// La propina va íntegra al repartidor: se suma aparte del delivery. Con el delivery contra entrega, la propina también
+	// se la da el cliente en mano: no entra al cobro.
 	q.TipCents = req.TipCents
+	if o.DeliveryOnArrival {
+		q.TipCents = 0
+	}
 	q.ETAMinutes = delivery.ETAMinutes
 	q.DistanceKm = delivery.DistanceKm
 	// El cupón lo evalúa el core (usos, primer pedido, compra mínima); nunca descuenta la propina.
 	if code := strings.TrimSpace(req.CouponCode); code != "" {
-		coupon, err := o.Core.QuoteCoupon(ctx, services.CouponQuote{Code: code, UserID: userID, SubtotalCents: q.SubtotalCents, DeliveryFeeCents: q.DeliveryFeeCents})
+		coupon, err := o.Core.QuoteCoupon(ctx, services.CouponQuote{Code: code, UserID: userID, SubtotalCents: q.SubtotalCents, DeliveryFeeCents: o.couponDeliveryFee(q.DeliveryFeeCents)})
 		var conflict *ConflictError
 		switch {
 		case errors.Is(err, ErrNotFound):
@@ -339,14 +346,33 @@ func (o *Orchestrator) quote(ctx context.Context, userID string, req services.Qu
 			slog.Warn("no se pudo evaluar el cupón", "error", err)
 			return q, req, rapidito.Quote{}, unavailable("Parla")
 		}
+		// Con el delivery contra entrega no pasa por la app: un cupón de delivery gratis no tiene qué descontar.
+		if o.DeliveryOnArrival && coupon.Kind == "free_delivery" {
+			return q, req, rapidito.Quote{}, &Error{Status: http.StatusUnprocessableEntity, Code: "coupon", Message: "Este cupón es de delivery gratis, pero el delivery ahora se paga al repartidor al llegar. Usa uno que descuente productos."}
+		}
 		q.Coupon = &coupon
 		q.DiscountCents = coupon.DiscountCents
 	}
-	q.TotalCents = q.SubtotalCents + q.DeliveryFeeCents + q.TipCents - q.DiscountCents
+	if o.DeliveryOnArrival {
+		// Por el QR se pagan solo los productos (menos el cupón); el delivery se paga al llegar.
+		q.DeliveryOnArrivalCents = q.DeliveryFeeCents
+		q.TotalCents = q.SubtotalCents - q.DiscountCents
+	} else {
+		q.TotalCents = q.SubtotalCents + q.DeliveryFeeCents + q.TipCents - q.DiscountCents
+	}
 	return q, req, delivery, nil
 }
 
-// Quote: productos + delivery + propina − cupón = total, sin crear nada.
+// couponDeliveryFee: el delivery que ve el cupón. Contra entrega no hay delivery online que descontar.
+func (o *Orchestrator) couponDeliveryFee(fee int) int {
+	if o.DeliveryOnArrival {
+		return 0
+	}
+	return fee
+}
+
+// Quote: productos + delivery + propina − cupón = total (con el delivery contra entrega: productos − cupón, y el
+// delivery aparte), sin crear nada.
 func (o *Orchestrator) Quote(ctx context.Context, userID string, req services.QuoteRequest) (services.OrderQuote, error) {
 	q, _, _, err := o.quote(ctx, userID, req)
 	return q, err
@@ -384,6 +410,9 @@ func (o *Orchestrator) Create(ctx context.Context, userID string, req services.Q
 		units += line.Quantity
 	}
 	concept := fmt.Sprintf("Pedido Parla · %d productos + delivery", units)
+	if o.DeliveryOnArrival {
+		concept = fmt.Sprintf("Pedido Parla · %d productos (el delivery se paga al repartidor)", units)
+	}
 	if q.TipCents > 0 {
 		concept += " + propina"
 	}

@@ -37,6 +37,15 @@ export const MAX_TIP_CENTS = 10_000;
  * guardarlos (defensa en profundidad): cada línea cuadra, el subtotal es la suma y el total suma el
  * envío y la propina.
  */
+/**
+ * ¿El delivery se paga al repartidor al llegar? Entonces el total del pedido (lo que se cobra por el QR) es solo
+ * productos menos cupón, sin delivery ni propina. Se reconoce por los propios montos: en los pedidos anteriores el
+ * total incluía el delivery, así que nunca coinciden las dos fórmulas.
+ */
+export function deliveryPaidOnArrival(o: { subtotalCents: number; deliveryFeeCents: number; tipCents: number; discountCents: number; totalCents: number }): boolean {
+  return o.deliveryFeeCents > 0 && o.tipCents === 0 && o.totalCents === o.subtotalCents - o.discountCents;
+}
+
 export function assertOrderTotals(lines: OrderLine[], subtotalCents: number, deliveryFeeCents: number, totalCents: number, tipCents = 0, discountCents = 0): void {
   if (lines.length === 0) throw new ValidationError('El pedido no tiene productos');
   for (const line of lines) {
@@ -47,6 +56,11 @@ export function assertOrderTotals(lines: OrderLine[], subtotalCents: number, del
   const sum = lines.reduce((acc, l) => acc + l.totalCents, 0);
   if (sum !== subtotalCents) throw new ValidationError('El subtotal no coincide con los productos');
   if (tipCents < 0 || tipCents > MAX_TIP_CENTS) throw new ValidationError('La propina debe estar entre S/ 0 y S/ 100');
+  // Delivery contra entrega: por el QR solo se pagan los productos (menos el cupón, que descuenta solo productos).
+  if (deliveryFeeCents > 0 && tipCents === 0 && totalCents === subtotalCents - discountCents) {
+    if (discountCents < 0 || discountCents > subtotalCents) throw new ValidationError('El descuento no cuadra');
+    return;
+  }
   // El cupón descuenta de los productos o del delivery, nunca de la propina.
   if (discountCents < 0 || discountCents > subtotalCents + deliveryFeeCents) throw new ValidationError('El descuento no cuadra');
   if (deliveryFeeCents < 0 || totalCents !== subtotalCents + deliveryFeeCents + tipCents - discountCents) {

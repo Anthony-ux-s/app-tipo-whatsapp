@@ -24,10 +24,14 @@ export interface LedgerTotals {
 
 export interface DriverLedgerRepository {
   /**
-   * Anota una entrega (tarifa, comisión y propina). Idempotente: si ya estaba anotada, no hace nada.
+   * Anota una entrega (tarifa, comisión y propina). Con `cashCents` (delivery y propina cobrados en mano) se anota también
+   * ese cobro con signo negativo: así el saldo queda en lo que no pasó por la app, es decir, menos la comisión que debe.
+   * Idempotente: si ya estaba anotada, no hace nada.
    * Devuelve true si la anotó ahora.
    */
-  recordDelivery(entry: { driverId: string; orderId: string; feeCents: number; commissionCents: number; tipCents: number }): Promise<boolean>;
+  recordDelivery(entry: { driverId: string; orderId: string; feeCents: number; commissionCents: number; tipCents: number; cashCents?: number }): Promise<boolean>;
+  /** Soporte registra que el repartidor pagó (todo o parte) la comisión que debía a Parla. */
+  recordCommissionPayment(driverId: string, amountCents: number): Promise<void>;
   /** Saldo disponible (lo que no falló, menos lo reservado en depósitos en curso). */
   balance(driverId: string): Promise<{ availableCents: number; pendingPayoutCents: number }>;
   totals(driverId: string, since?: Date): Promise<LedgerTotals>;

@@ -69,6 +69,8 @@ func main() {
 		Claims:       core,
 		Refunds:      wallet,
 		PublicURL:    cfg.PublicURL,
+
+		DeliveryOnArrival: cfg.DeliveryOnArrival,
 	}
 	servicesAPI := &orders.HTTP{Orch: orch, PagayaSecret: cfg.PagayaSecret}
 	if err := orch.StartPayoutScheduler(ctx, cfg.PayoutAt); err != nil {

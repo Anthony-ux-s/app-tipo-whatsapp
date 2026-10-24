@@ -179,6 +179,17 @@ export function DriverOrderDetailView() {
       )}
       {delivered && order.hasDeliveryPhoto && <PrivatePhoto path={`/orders/${encodeURIComponent(order.id)}/delivery-photo`} alt="Foto de la entrega" />}
 
+      {order.collectOnArrivalCents > 0 && (
+        <section className="flex flex-col gap-1.5 rounded-2xl bg-amber-50 p-4 text-sm ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-800 md:p-5" aria-label="Cobra al cliente" data-testid="driver-collect">
+          <h2 className="text-sm font-bold text-ink">Cobra al cliente al entregar</h2>
+          <p className="font-display text-3xl font-extrabold text-ink" data-testid="driver-collect-amount">{formatSoles(order.collectOnArrivalCents)}</p>
+          <p className="text-ink-soft">El cliente ya pagó los productos en la app. Cóbrale el delivery en efectivo, Yape o Plin.</p>
+          <p className="flex justify-between text-ink-soft"><span>Del delivery, para Parla ({order.commissionPercent} %)</span><span className="font-semibold text-ink" data-testid="driver-commission-due">{formatSoles(order.commissionDueCents)}</span></p>
+          <p className="flex justify-between text-ink-soft"><span>Te quedas con</span><span className="font-semibold text-ink">{formatSoles(order.collectOnArrivalCents - order.commissionDueCents)}</span></p>
+          <p className="text-xs text-ink-faint">La comisión queda anotada en tu billetera como lo que debes a Parla; la pagas por Yape o transferencia.</p>
+        </section>
+      )}
+
       <section className="flex flex-col gap-1.5 rounded-2xl bg-surface p-4 text-sm shadow-float md:p-5" aria-label="Lo que ganas" data-testid="driver-split">
         <h2 className="mb-1 text-sm font-bold text-ink-soft">Lo que ganas</h2>
         <p className="flex justify-between text-ink-soft"><span>Tarifa de delivery</span><span className="font-semibold text-ink">{formatSoles(order.deliveryFeeCents)}</span></p>

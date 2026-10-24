@@ -210,6 +210,14 @@ export function CheckoutView() {
         </div>
       </section>
 
+      {c.quote && c.quote.deliveryOnArrivalCents > 0 ? (
+        <p className="flex items-start gap-2 rounded-2xl bg-teal-50 p-3 text-sm text-ink dark:bg-teal-950/50" data-testid="pay-on-arrival-note">
+          <HandCoins className="mt-0.5 size-5 shrink-0 text-brand dark:text-teal-300" />
+          <span>
+            El <strong>delivery se paga directo al repartidor</strong> cuando llegue, en efectivo, Yape o Plin. Si quieres darle propina, también es en mano.
+          </span>
+        </p>
+      ) : (
       <section
         className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5"
         aria-label="Propina"
@@ -253,6 +261,7 @@ export function CheckoutView() {
           </label>
         </div>
       </section>
+      )}
 
       <section
         className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5"
@@ -386,14 +395,16 @@ export function CheckoutView() {
               label="Productos"
               value={formatSoles(c.quote.subtotalCents)}
             />
-            <AmountRow
-              label={
-                c.quote.distanceKm
-                  ? `Delivery Rapidito · ${formatDistance(c.quote.distanceKm)}`
-                  : "Delivery Rapidito"
-              }
-              value={formatSoles(c.quote.deliveryFeeCents)}
-            />
+            {c.quote.deliveryOnArrivalCents === 0 && (
+              <AmountRow
+                label={
+                  c.quote.distanceKm
+                    ? `Delivery Rapidito · ${formatDistance(c.quote.distanceKm)}`
+                    : "Delivery Rapidito"
+                }
+                value={formatSoles(c.quote.deliveryFeeCents)}
+              />
+            )}
             {c.quote.tipCents > 0 && (
               <AmountRow
                 label="Propina para el repartidor"
@@ -408,10 +419,25 @@ export function CheckoutView() {
             )}
             <div className="my-1 border-t border-dashed border-line" />
             <AmountRow
-              label="Total a pagar"
+              label={c.quote.deliveryOnArrivalCents > 0 ? "Pagas ahora con QR" : "Total a pagar"}
               value={formatSoles(c.quote.totalCents)}
               strong
             />
+            {c.quote.deliveryOnArrivalCents > 0 && (
+              <>
+                <AmountRow
+                  label={
+                    c.quote.distanceKm
+                      ? `Al llegar, al repartidor · Delivery ${formatDistance(c.quote.distanceKm)}`
+                      : "Al llegar, al repartidor · Delivery"
+                  }
+                  value={formatSoles(c.quote.deliveryOnArrivalCents)}
+                />
+                <p className="text-xs text-ink-soft" data-testid="arrival-help">
+                  El delivery se calcula por la distancia entre la tienda y tu casa. Lo pagas en efectivo, Yape o Plin cuando el repartidor llegue.
+                </p>
+              </>
+            )}
             <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-soft">
               <Bike className="size-4" /> Llega en unos {c.quote.etaMinutes}{" "}
               minutos después de pagar.

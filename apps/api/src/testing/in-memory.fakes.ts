@@ -681,13 +681,17 @@ export class InMemoryDriverLedger implements DriverLedgerRepository {
   entries: LedgerEntryRecord[] = [];
   constructor(private readonly drivers?: InMemoryDriversRepository) {}
   private counts = (e: LedgerEntryRecord) => e.status !== 'failed';
-  async recordDelivery(e: { driverId: string; orderId: string; feeCents: number; commissionCents: number; tipCents: number }) {
+  async recordDelivery(e: { driverId: string; orderId: string; feeCents: number; commissionCents: number; tipCents: number; cashCents?: number }) {
     if (this.entries.some((x) => x.orderId === e.orderId && x.kind === 'delivery_fee')) return false;
     const base = { driverId: e.driverId, orderId: e.orderId, status: 'posted' as const, transferId: null, failureReason: null, reason: null, createdAt: new Date() };
     this.entries.push({ ...base, id: nextId('le'), kind: 'delivery_fee', amountCents: e.feeCents });
     this.entries.push({ ...base, id: nextId('le'), kind: 'commission', amountCents: -e.commissionCents });
     if (e.tipCents > 0) this.entries.push({ ...base, id: nextId('le'), kind: 'tip', amountCents: e.tipCents });
+    if ((e.cashCents ?? 0) > 0) this.entries.push({ ...base, id: nextId('le'), kind: 'cash_collected', amountCents: -(e.cashCents ?? 0) });
     return true;
+  }
+  async recordCommissionPayment(driverId: string, amountCents: number) {
+    this.entries.push({ driverId, orderId: null, status: 'posted', transferId: null, failureReason: null, reason: null, createdAt: new Date(), id: nextId('le'), kind: 'commission_payment', amountCents });
   }
   async balance(driverId: string) {
     const mine = this.entries.filter((e) => e.driverId === driverId);

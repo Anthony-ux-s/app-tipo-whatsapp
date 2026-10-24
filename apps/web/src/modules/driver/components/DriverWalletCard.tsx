@@ -14,6 +14,8 @@ const ENTRY_LABELS: Record<LedgerEntry['kind'], string> = {
   commission: 'Comisión Rapidito',
   tip: 'Propina',
   payout: 'Depósito a tu PagaYa',
+  cash_collected: 'Cobrado en mano al cliente',
+  commission_payment: 'Pago de comisión a Parla',
 };
 
 /**
@@ -65,13 +67,20 @@ export function DriverWalletCard() {
       <div className="flex items-end justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-ink-soft">Saldo para depositar</p>
-          <p className="text-3xl font-extrabold text-ink" data-testid="wallet-balance">{formatSoles(wallet.balanceCents)}</p>
+          <p className="text-3xl font-extrabold text-ink" data-testid="wallet-balance">{formatSoles(Math.max(0, wallet.balanceCents))}</p>
           {wallet.pendingPayoutCents > 0 && <p className="text-xs text-ink-soft">{formatSoles(wallet.pendingPayoutCents)} en camino a tu PagaYa</p>}
         </div>
         <Button icon={<ArrowDownToLine className="size-4" />} onClick={withdraw} loading={busy === 'withdraw'} disabled={!wallet.payoutPhone || wallet.balanceCents < 100} data-testid="withdraw">
           Retirar ahora
         </Button>
       </div>
+
+      {wallet.debtCents > 0 && (
+        <p className="rounded-xl bg-amber-50 p-3 text-sm text-ink ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-800" role="status" data-testid="wallet-debt">
+          Debes <strong>{formatSoles(wallet.debtCents)}</strong> a Parla por la comisión del delivery que cobraste en mano. Págalo por Yape o transferencia y avisa a soporte para que lo anote.
+          Si debes más de {formatSoles(wallet.maxDebtCents)}, no podrás tomar más pedidos hasta pagar.
+        </p>
+      )}
 
       <p className="flex items-start gap-2 rounded-xl bg-teal-50 p-3 text-xs text-ink dark:bg-teal-950/40">
         <CalendarClock className="mt-0.5 size-4 shrink-0 text-brand" />

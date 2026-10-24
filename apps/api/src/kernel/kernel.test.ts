@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { aggregateDeliveryStatus, isForwardTransition } from './delivery-status';
 import { ConflictError, ValidationError } from './domain-error';
 import { assertPasswordStrength, parseIdentifier } from './identifier';
-import { assertOrderTotals, assertOrderTransition, businessOrderPush, formatSoles, orderPush } from './order-rules';
+import { assertOrderTotals, assertOrderTransition, businessOrderPush, deliveryPaidOnArrival, formatSoles, orderPush } from './order-rules';
 
 const at = new Date('2026-10-01T10:00:00Z');
 
@@ -75,7 +75,14 @@ describe('pedidos de Servicios', () => {
     expect(() => assertOrderTotals([], 0, 650, 650)).toThrow(ValidationError);
     expect(() => assertOrderTotals([{ ...line(450, 2), totalCents: 100 }], 100, 0, 100)).toThrow('no cuadra');
     expect(() => assertOrderTotals([line(450, 2)], 800, 650, 1450)).toThrow('subtotal');
-    expect(() => assertOrderTotals([line(450, 2)], 900, 650, 900)).toThrow('total');
+    expect(() => assertOrderTotals([line(450, 2)], 900, 650, 1000)).toThrow('total');
+    // Delivery contra entrega: por el QR van solo los productos (menos el cupón); sin propina.
+    expect(() => assertOrderTotals([line(450, 2)], 900, 650, 900)).not.toThrow();
+    expect(() => assertOrderTotals([line(450, 2)], 900, 650, 700, 0, 200)).not.toThrow();
+    expect(() => assertOrderTotals([line(450, 2)], 900, 650, 900, 300)).toThrow('total');
+    expect(deliveryPaidOnArrival({ subtotalCents: 900, deliveryFeeCents: 650, tipCents: 0, discountCents: 0, totalCents: 900 })).toBe(true);
+    expect(deliveryPaidOnArrival({ subtotalCents: 900, deliveryFeeCents: 650, tipCents: 0, discountCents: 0, totalCents: 1550 })).toBe(false);
+    expect(deliveryPaidOnArrival({ subtotalCents: 900, deliveryFeeCents: 0, tipCents: 0, discountCents: 0, totalCents: 900 })).toBe(false);
   });
 
   it('los avisos al cliente hablan en soles y enlazan al pedido', () => {

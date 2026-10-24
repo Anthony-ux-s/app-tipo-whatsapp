@@ -235,10 +235,16 @@ export function OrderDetailView() {
         ))}
         <div className="my-1 border-t border-dashed border-line" />
         <AmountRow label="Productos" value={formatSoles(order.subtotalCents)} />
-        <AmountRow label="Delivery" value={formatSoles(order.deliveryFeeCents)} />
+        {order.deliveryOnArrivalCents === 0 && <AmountRow label="Delivery" value={formatSoles(order.deliveryFeeCents)} />}
         {order.tipCents > 0 && <AmountRow label="Propina para el repartidor" value={formatSoles(order.tipCents)} />}
         {order.discountCents > 0 && <AmountRow label={`Cupón ${order.couponCode ?? ''}`} value={`− ${formatSoles(order.discountCents)}`} />}
-        <AmountRow label="Total" value={formatSoles(order.totalCents)} strong />
+        <AmountRow label={order.deliveryOnArrivalCents > 0 ? "Pagado en la app" : "Total"} value={formatSoles(order.totalCents)} strong />
+        {order.deliveryOnArrivalCents > 0 && (
+          <>
+            <AmountRow label="Al llegar, al repartidor · Delivery" value={formatSoles(order.deliveryOnArrivalCents)} />
+            <p className="text-xs text-ink-soft" data-testid="arrival-help">Pagas el delivery directo al repartidor en efectivo, Yape o Plin. La propina, si quieres darla, también es en mano.</p>
+          </>
+        )}
         <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-soft">
           <MapPin className="mt-0.5 size-3.5 shrink-0" />
           {order.address.line}

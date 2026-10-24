@@ -75,6 +75,13 @@ export function useAdmin() {
         decision === 'approve' ? 'Repartidor aprobado: ya puede conectarse.' : 'Rechazado: le avisamos el motivo.',
         drivers.reload,
       ),
+    recordCommissionPayment: (userId: string, amountCents: number) =>
+      run(
+        `driver:${userId}`,
+        () => http.post<{ debtCents: number }>(`/admin/drivers/${encodeURIComponent(userId)}/commission-payments`, { amountCents }),
+        'Pago de comisión anotado.',
+        drivers.reload,
+      ),
     refundClaim: (claimId: string, amountCents: number) =>
       run(`claim:${claimId}`, () => http.post<AdminClaim>(`/admin/claims/${encodeURIComponent(claimId)}/refund`, { amountCents }), 'Devolución hecha en PagaYa.', claims.reload),
     rejectClaim: (claimId: string, note: string) =>

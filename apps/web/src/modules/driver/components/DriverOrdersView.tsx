@@ -130,6 +130,7 @@ function DriverOrderCard({ order, onOpen, onTake, taking }: { order: DriverOrder
           <span>
             <span className="block text-xs font-bold tracking-wide text-ink-faint uppercase">Ganas</span>
             <span className="block font-display text-3xl leading-none font-extrabold text-ink">{formatSoles(order.earningsCents)}</span>
+            {order.collectOnArrivalCents > 0 && <span className="mt-1 mr-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-ink dark:bg-amber-950 dark:text-amber-300">Cobras {formatSoles(order.collectOnArrivalCents)} en mano</span>}
             {order.tipCents > 0 && <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-ink dark:bg-emerald-950 dark:text-emerald-300">+ {formatSoles(order.tipCents)} de propina 🎉</span>}
           </span>
           {order.mine ? (

@@ -34,6 +34,8 @@ export class GetDriverWalletUseCase {
     const [{ availableCents, pendingPayoutCents }, entries] = await Promise.all([this.ledger.balance(userId), this.ledger.list(userId, WALLET_ENTRIES)]);
     return {
       balanceCents: availableCents,
+      debtCents: Math.max(0, -availableCents),
+      maxDebtCents: this.pay.config.maxDebtCents,
       pendingPayoutCents,
       payoutPhone: driver.payoutPhone,
       autoPayoutAt: AUTO_PAYOUT_AT,

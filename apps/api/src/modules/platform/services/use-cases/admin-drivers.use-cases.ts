@@ -1,17 +1,19 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { AdminDriver, DriverStatus, PushPayload } from '@parla/types';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
 import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../infra/realtime/realtime-publisher.port';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { NotificationDispatcher } from '../../messaging/push/use-cases/notification-dispatcher';
+import { DRIVER_LEDGER_REPOSITORY, type DriverLedgerRepository } from '../driver-ledger.repository';
 import { DRIVERS_REPOSITORY, type DriverRecord, type DriversRepository } from '../drivers.repository';
 import { requireAdmin } from './claims.use-cases';
 import { toDriverInfo } from './driver-orders.use-cases';
 
 const ADMIN_LIMIT = 100;
 
-async function toAdminDriver(d: DriverRecord, users: AuthRepository): Promise<AdminDriver> {
+async function toAdminDriver(d: DriverRecord, users: AuthRepository, ledger?: DriverLedgerRepository): Promise<AdminDriver> {
   const [user] = await users.findActiveByIds([d.userId]);
+  const debtCents = ledger ? Math.max(0, -(await ledger.balance(d.userId)).availableCents) : 0;
   return {
     userId: d.userId,
     displayName: user?.displayName ?? 'Cuenta eliminada',
@@ -23,8 +25,31 @@ async function toAdminDriver(d: DriverRecord, users: AuthRepository): Promise<Ad
     hasDocument: !!d.documentPhotoId,
     status: d.status,
     reviewNote: d.reviewNote,
+    debtCents,
     createdAt: d.createdAt.toISOString(),
   };
+}
+
+/**
+ * Soporte registra que un repartidor pagó (a Parla, por Yape o transferencia) la comisión del delivery que cobró en
+ * mano. Baja su deuda; si la deuda supera el máximo, no puede tomar pedidos hasta pagar.
+ */
+@Injectable()
+export class RecordCommissionPaymentUseCase {
+  constructor(
+    @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
+    @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
+    @Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger: DriverLedgerRepository,
+  ) {}
+
+  async execute(adminId: string, driverId: string, amountCents: number): Promise<{ debtCents: number }> {
+    await requireAdmin(this.users, adminId);
+    if (!Number.isInteger(amountCents) || amountCents < 1 || amountCents > 1_000_000) throw new ValidationError('El monto va de S/ 0.01 a S/ 10 000');
+    if (!(await this.drivers.findByUser(driverId))) throw new NotFoundError('Ese repartidor no existe');
+    await this.ledger.recordCommissionPayment(driverId, amountCents);
+    const { availableCents } = await this.ledger.balance(driverId);
+    return { debtCents: Math.max(0, -availableCents) };
+  }
 }
 
 /** Repartidores por revisar (o ya aprobados/rechazados), los más antiguos primero. */
@@ -33,12 +58,13 @@ export class ListDriversForReviewUseCase {
   constructor(
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
+    @Optional() @Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger?: DriverLedgerRepository,
   ) {}
 
   async execute(adminId: string, status: DriverStatus): Promise<AdminDriver[]> {
     await requireAdmin(this.users, adminId);
     const list = await this.drivers.listByStatus(status, ADMIN_LIMIT);
-    return Promise.all(list.map((d) => toAdminDriver(d, this.users)));
+    return Promise.all(list.map((d) => toAdminDriver(d, this.users, this.ledger)));
   }
 }
 

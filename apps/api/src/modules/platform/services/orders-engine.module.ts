@@ -42,7 +42,7 @@ import {
 import { PHOTOS_REPOSITORY } from './photos.repository';
 import { PrismaClaimsRepository } from './prisma-claims.repository';
 import { PrismaPhotosRepository } from './prisma-photos.repository';
-import { GetDriverDocumentUseCase, ListDriversForReviewUseCase, ReviewDriverUseCase } from './use-cases/admin-drivers.use-cases';
+import { GetDriverDocumentUseCase, ListDriversForReviewUseCase, RecordCommissionPaymentUseCase, ReviewDriverUseCase } from './use-cases/admin-drivers.use-cases';
 import {
   CreateClaimUseCase,
   GetAdminClaimUseCase,
@@ -158,6 +158,7 @@ const USE_CASES = [
   GetOrderPhotoUseCase,
   ListDriversForReviewUseCase,
   ReviewDriverUseCase,
+  RecordCommissionPaymentUseCase,
   GetDriverDocumentUseCase,
   CreateClaimUseCase,
   ListAdminClaimsUseCase,

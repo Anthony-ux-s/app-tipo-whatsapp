@@ -193,10 +193,11 @@ export function BusinessOrderDetailView() {
         ))}
         <div className="my-1 border-t border-dashed border-line" />
         <AmountRow label="Productos" value={formatSoles(order.subtotalCents)} />
-        <AmountRow label="Delivery Rapidito" value={formatSoles(order.deliveryFeeCents)} />
+        {order.deliveryOnArrivalCents === 0 && <AmountRow label="Delivery Rapidito" value={formatSoles(order.deliveryFeeCents)} />}
         {order.tipCents > 0 && <AmountRow label="Propina (para el repartidor)" value={formatSoles(order.tipCents)} />}
         {order.discountCents > 0 && <AmountRow label={`Cupón ${order.couponCode ?? ''} (lo asume Parla)`} value={`− ${formatSoles(order.discountCents)}`} />}
-        <AmountRow label="Cobrado al cliente" value={formatSoles(order.totalCents)} strong />
+        <AmountRow label={order.deliveryOnArrivalCents > 0 ? "Cobrado al cliente por la app (productos)" : "Cobrado al cliente"} value={formatSoles(order.totalCents)} strong />
+        {order.deliveryOnArrivalCents > 0 && <p className="text-xs text-ink-soft">El delivery ({formatSoles(order.deliveryOnArrivalCents)}) lo cobra el repartidor al cliente al llegar.</p>}
       </section>
 
       <OrderTimeline entries={order.timeline} />

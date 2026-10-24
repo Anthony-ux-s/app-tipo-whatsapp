@@ -18,6 +18,7 @@ import { StoreStatusSync } from './store-status-sync';
 import { distanceKm } from '../../../../kernel/geo';
 import {
   assertOrderTotals,
+  deliveryPaidOnArrival,
   assertOrderTransition,
   businessDeliveryPush,
   businessOrderPush,
@@ -65,6 +66,7 @@ export function toOrder(order: OrderRecord, forCustomer = false): Order {
     subtotalCents: order.subtotalCents,
     deliveryFeeCents: order.deliveryFeeCents,
     tipCents: order.tipCents,
+    deliveryOnArrivalCents: deliveryPaidOnArrival(order) ? order.deliveryFeeCents : 0,
     discountCents: order.discountCents,
     couponCode: order.couponCode,
     totalCents: order.totalCents,
@@ -151,6 +153,8 @@ export function toDriverOrder(
     lines: order.lines,
     deliveryFeeCents: order.deliveryFeeCents,
     tipCents: order.tipCents,
+    collectOnArrivalCents: deliveryPaidOnArrival(order) ? order.deliveryFeeCents + order.tipCents : 0,
+    commissionDueCents: deliveryPaidOnArrival(order) ? split.commissionCents : 0,
     commissionCents: split.commissionCents,
     commissionPercent: pay.commissionPercent,
     earningsCents: split.earningsCents,
