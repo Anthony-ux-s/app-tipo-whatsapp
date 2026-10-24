@@ -28,7 +28,10 @@ test('en el celular la lista ocupa la pantalla y el chat se abre a pantalla comp
   await expect(page.getByRole('heading', { name: 'Ajustes' })).toBeVisible();
   await page.getByRole('link', { name: 'Servicios' }).click();
   await expect(page.getByRole('heading', { name: 'Servicios' })).toBeVisible();
+  // Las categorías están en el menú ☰ junto al buscador.
+  await page.getByTestId('category-menu').click();
   await expect(page.getByTestId('service-mercado')).toBeVisible();
+  await page.keyboard.press('Escape');
 
   const nav = page.getByRole('navigation', { name: 'Navegación principal' });
   await nav.getByRole('link', { name: 'Ofertas' }).click();

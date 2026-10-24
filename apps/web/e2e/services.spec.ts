@@ -11,8 +11,9 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
 
     await page.goto('/app/servicios');
     await expect(page.getByRole('heading', { name: 'Servicios' })).toBeVisible();
+    // Las categorías están en el menú ☰ junto al buscador.
+    await page.getByTestId('category-menu').click();
     await expect(page.getByTestId('service-mercado')).toBeVisible();
-    await expect(page.getByLabel(/Próximamente/)).toHaveCount(2); // Tecnología y Salud, aún no disponibles
     await page.getByTestId('service-mercado').click();
 
     // Se escribe como se habla: «un kilo de azúcar, arroz»

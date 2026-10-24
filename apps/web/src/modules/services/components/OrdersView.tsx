@@ -15,7 +15,7 @@ export function OrdersView() {
   const o = useOrders();
   return (
     <ServicePage>
-      <PageHeader title="Delivery" subtitle="Tus pedidos con Rapidito y su seguimiento en vivo." action={<ProfileButton />} />
+      <PageHeader title="Delivery" subtitle="Mis pedidos y su seguimiento en vivo." action={<ProfileButton />} />
 
       {o.business && (
         <Link
@@ -33,23 +33,6 @@ export function OrdersView() {
             </span>
           </span>
           <ChevronRight className="size-5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" />
-        </Link>
-      )}
-
-      {o.canBecomeDriver && (
-        <Link
-          to="/app/rapidito/registro"
-          data-testid="become-driver"
-          className="group flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float transition-colors duration-200 hover:bg-surface-2 md:px-5"
-        >
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-brand dark:bg-teal-950/60 dark:text-teal-300">
-            <Bike className="size-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[15px] font-semibold text-ink">Trabaja con Rapidito</span>
-            <span className="block truncate text-sm text-ink-soft">Reparte pedidos en tu zona y gana por cada entrega</span>
-          </span>
-          <ChevronRight className="size-5 shrink-0 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5" />
         </Link>
       )}
 

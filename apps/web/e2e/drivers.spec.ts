@@ -23,8 +23,8 @@ test.describe('Repartidores de Rapidito', () => {
     await registerNewUser(page, name);
     const photo = await testJpeg(page);
 
-    await page.goto('/app/pedidos');
-    await page.getByTestId('become-driver').click();
+    // «Trabaja con Rapidito» vive en el menú ☰ general (/app/rapidito/registro).
+    await page.goto('/app/rapidito/registro');
     await expect(page.getByRole('heading', { name: 'Trabaja con Rapidito' })).toBeVisible();
     await page.getByRole('radio', { name: 'Moto' }).click();
     await page.getByLabel('Placa').fill('x');
@@ -89,7 +89,6 @@ test.describe('Repartidores de Rapidito', () => {
     await page.getByTestId('leave-driver').click();
     await page.getByTestId('confirm-leave').click();
     await expect(page).toHaveURL(/\/app\/pedidos$/);
-    await expect(page.getByTestId('become-driver')).toBeVisible();
 
     await soporte.context.close();
     await rider.close();

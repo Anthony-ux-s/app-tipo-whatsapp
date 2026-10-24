@@ -112,6 +112,7 @@ export function AppMenu({ open, onClose, onNewGroup }: AppMenuProps) {
           {driver && <Tile to="/app/rapidito/rutas" icon={Route} label="Mis rutas" tone="violet" onClose={onClose} />}
           {business && <Tile to="/app/negocio" icon={Store} label="Mi negocio" tone="amber" onClose={onClose} />}
           {business === null && <Tile to="/app/negocio/nueva" icon={Store} label="Crear tienda" tone="green" onClose={onClose} />}
+          {driver === null && <Tile to="/app/rapidito/registro" icon={Bike} label="Trabaja con Rapidito" tone="rose" onClose={onClose} />}
           <button
             type="button"
             onClick={() => {
