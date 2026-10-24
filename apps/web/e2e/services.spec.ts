@@ -70,7 +70,7 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     // Elena, dueña de la tienda, lo ve en «Mi negocio» y lo acepta
     const elena = await openSession(browser, 'tienda');
     await elena.page.goto('/app/pedidos');
-    await elena.page.getByTestId('my-business').click();
+    await elena.page.goto('/app/negocio'); // «Mi negocio» está en el menú ☰ general
     await expect(elena.page.getByRole('heading', { name: 'Mi negocio' })).toBeVisible();
     await elena.page.getByTestId('business-order-item').filter({ hasText: 'Laura Méndez' }).first().click();
     await expect(elena.page.getByRole('region', { name: 'Productos' }).getByText(`2× ${sugarName}`)).toBeVisible();

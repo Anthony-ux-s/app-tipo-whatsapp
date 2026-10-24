@@ -1,8 +1,8 @@
 import { Bike, ChevronRight, Download, Package, Route, Settings, ShieldCheck, Store, Users, X, type LucideIcon } from 'lucide-react';
 import { useEffect } from 'react';
 import { Link } from 'react-router';
-import { useBusinessStore } from '@shared/stores/business.store';
-import { useDriverStore } from '@shared/stores/driver.store';
+import { countNewOrders, useBusinessStore } from '@shared/stores/business.store';
+import { availableOrders, useDriverStore } from '@shared/stores/driver.store';
 import { useSessionStore } from '@shared/stores/session.store';
 import { Avatar } from '@shared/ui/Avatar';
 import { useInstallApp } from '../hooks/use-install-app.hook';
@@ -46,10 +46,15 @@ function TileContent({ icon: Icon, label }: { icon: LucideIcon; label: string })
 }
 
 /** Botón grande del menú (lo principal: pedidos, reparto, negocio…). */
-function Tile({ to, icon, label, tone, onClose, className = '' }: { to: string; icon: LucideIcon; label: string; tone: Tone; onClose: () => void; className?: string }) {
+function Tile({ to, icon, label, tone, onClose, className = '', badge = 0 }: { to: string; icon: LucideIcon; label: string; tone: Tone; onClose: () => void; className?: string; badge?: number }) {
   return (
     <Link to={to} onClick={onClose} className={`${tileClass(tone)} ${className}`}>
       <TileContent icon={icon} label={label} />
+      {badge > 0 && (
+        <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-extrabold text-white" aria-label={`${badge} por atender`}>
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -77,6 +82,9 @@ export function AppMenu({ open, onClose, onNewGroup }: AppMenuProps) {
   // Tienda y reparto son de los clientes: soporte (que solo administra) no los ve.
   const business = useBusinessStore((s) => (user?.isAdmin ? undefined : s.business));
   const driver = useDriverStore((s) => (user?.isAdmin ? undefined : s.driver));
+  // Pendientes que antes se veían en Delivery: pedidos nuevos por aceptar y pedidos listos para recoger.
+  const newBusinessOrders = useBusinessStore((s) => countNewOrders(s.orders));
+  const driverOffers = useDriverStore((s) => availableOrders(s.orders).length);
   const installApp = useInstallApp();
 
   useEffect(() => {
@@ -108,9 +116,9 @@ export function AppMenu({ open, onClose, onNewGroup }: AppMenuProps) {
 
         <div className="flex flex-col gap-1.5 p-3" data-testid="menu-tiles">
           <Tile to="/app/pedidos" icon={Package} label="Mis pedidos" tone="orange" onClose={onClose} />
-          {driver && <Tile to="/app/rapidito" icon={Bike} label="Rapidito" tone="rose" onClose={onClose} />}
+          {driver && <Tile to="/app/rapidito" icon={Bike} label="Rapidito" tone="rose" onClose={onClose} badge={driverOffers} />}
           {driver && <Tile to="/app/rapidito/rutas" icon={Route} label="Mis rutas" tone="violet" onClose={onClose} />}
-          {business && <Tile to="/app/negocio" icon={Store} label="Mi negocio" tone="amber" onClose={onClose} />}
+          {business && <Tile to="/app/negocio" icon={Store} label="Mi negocio" tone="amber" onClose={onClose} badge={newBusinessOrders} />}
           {business === null && <Tile to="/app/negocio/nueva" icon={Store} label="Crear tienda" tone="green" onClose={onClose} />}
           {driver === null && <Tile to="/app/rapidito/registro" icon={Bike} label="Trabaja con Rapidito" tone="rose" onClose={onClose} />}
           <button
