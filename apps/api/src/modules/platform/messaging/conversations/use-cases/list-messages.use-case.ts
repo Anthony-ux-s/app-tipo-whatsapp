@@ -15,8 +15,11 @@ export class ListMessagesUseCase {
 
   /** Página de mensajes, del más nuevo al más viejo, por cursor (nunca OFFSET). */
   async execute(userId: string, conversationId: string, before: string | null): Promise<MessagePage> {
-    await this.getConversation.require(conversationId, userId);
-    const rows = await this.conversations.listMessages(conversationId, before, MESSAGE_PAGE_SIZE);
+    // El permiso y la página no dependen entre sí: se piden a la vez (un viaje menos). Si no participa, la página se descarta sin devolverse.
+    const [, rows] = await Promise.all([
+      this.getConversation.require(conversationId, userId),
+      this.conversations.listMessages(conversationId, before, MESSAGE_PAGE_SIZE),
+    ]);
     return {
       messages: rows.map((m) => toMessage(m, userId)).reverse(),
       nextCursor: rows.length === MESSAGE_PAGE_SIZE ? rows[rows.length - 1].id : null,

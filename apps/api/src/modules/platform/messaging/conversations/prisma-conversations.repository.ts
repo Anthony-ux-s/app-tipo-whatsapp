@@ -101,18 +101,19 @@ export class PrismaConversationsRepository implements ConversationsRepository {
   }
 
 /** No leídos y menciones sin leer por conversación, en dos consultas agrupadas. */
-  private async counters(userId: string, conversationIds: string[]): Promise<(id: string) => Counters> {
-    if (conversationIds.length === 0) return () => ({ unread: 0, mentions: 0 });
-    const inIds = { in: conversationIds };
+  private async counters(userId: string, conversationIds: string[] | 'all'): Promise<(id: string) => Counters> {
+    if (conversationIds !== 'all' && conversationIds.length === 0) return () => ({ unread: 0, mentions: 0 });
+    // 'all': no depende de la lista de chats, así que corre a la vez que ella (un viaje a la base menos).
+    const inIds = conversationIds === 'all' ? {} : { conversationId: { in: conversationIds } };
     const [unread, mentions] = await Promise.all([
       this.prisma.messageReceipt.groupBy({
         by: ['conversationId'],
-        where: { userId, readAt: null, conversationId: inIds },
+        where: { userId, readAt: null, ...inIds },
         _count: { _all: true },
       }),
       this.prisma.messageReceipt.groupBy({
         by: ['conversationId'],
-        where: { userId, readAt: null, conversationId: inIds, message: { mentions: { some: { userId } } } },
+        where: { userId, readAt: null, ...inIds, message: { mentions: { some: { userId } } } },
         _count: { _all: true },
       }),
     ]);
@@ -123,14 +124,17 @@ export class PrismaConversationsRepository implements ConversationsRepository {
   }
 
   async listForUser(userId: string): Promise<ConversationRecord[]> {
-    const rows = await this.prisma.conversation.findMany({
-      relationLoadStrategy: 'join',
-      where: { participants: { some: { userId } } },
-      orderBy: { updatedAt: 'desc' },
-      take: 200,
-      include: conversationInclude,
-    });
-    const countersOf = await this.counters(userId, rows.map((r) => r.id));
+    // La lista y los contadores no dependen entre sí: van en paralelo (una sola espera a la base).
+    const [rows, countersOf] = await Promise.all([
+      this.prisma.conversation.findMany({
+        relationLoadStrategy: 'join',
+        where: { participants: { some: { userId } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 200,
+        include: conversationInclude,
+      }),
+      this.counters(userId, 'all'),
+    ]);
     return rows.map((row) => toConversationRecord(row, countersOf(row.id)));
   }
 

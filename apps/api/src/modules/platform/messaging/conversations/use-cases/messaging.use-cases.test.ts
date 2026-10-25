@@ -13,6 +13,7 @@ import { NotificationDispatcher } from '../../push/use-cases/notification-dispat
 import { ConversationEvents } from '../conversation-events';
 import { assertKeysCover, directKeyFor } from '../domain/conversation-rules';
 import { GetConversationUseCase } from './get-conversation.use-case';
+import { ListMessagesUseCase } from './list-messages.use-case';
 import { MarkDeliveredUseCase, MarkReadUseCase } from './receipts.use-case';
 import { SendMessageUseCase } from './send-message.use-case';
 
@@ -55,6 +56,13 @@ describe('mensajería', () => {
     const b = await send.execute(laura.id, 'c1', { clientId: 'dup', kind: 'text', body, media: null });
     expect(b.id).toBe(a.id);
     expect(repo.messages).toHaveLength(1);
+  });
+
+  it('la página de mensajes se pide a la vez que el permiso, pero quien no participa no recibe nada (404)', async () => {
+    await send.execute(laura.id, 'c1', { clientId: 'h1', kind: 'text', body, media: null });
+    const list = new ListMessagesUseCase(repo, new GetConversationUseCase(repo, new PresenceRegistry()));
+    expect((await list.execute(laura.id, 'c1', null)).messages).toHaveLength(1);
+    await expect(list.execute(intruso.id, 'c1', null)).rejects.toThrow(NotFoundError);
   });
 
   it('quien no participa no puede escribir ni enterarse de que el chat existe (404)', async () => {
