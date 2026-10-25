@@ -64,3 +64,27 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
   }
   return found.slice(0, 6);
 }
+
+interface ReverseRow {
+  display_name?: string;
+  address?: Record<string, string | undefined>;
+}
+
+/** «Jirón Leoncio Prado 263, Centro, Cajamarca»: calle y número, barrio y ciudad (o el nombre completo si faltan). */
+export function reverseLabel(row: ReverseRow): string | null {
+  const a = row.address ?? {};
+  const street = [a.road ?? a.pedestrian ?? a.path, a.house_number].filter(Boolean).join(' ');
+  const area = a.suburb ?? a.neighbourhood ?? a.quarter ?? a.city_district;
+  const city = a.city ?? a.town ?? a.village ?? a.municipality ?? a.county;
+  const label = [street, area, city].filter(Boolean).join(', ') || row.display_name || '';
+  const clean = label.trim().slice(0, 200);
+  return clean.length >= 5 ? clean : null;
+}
+
+/** La dirección escrita de un punto del mapa (OpenStreetMap). Null si no se pudo saber. */
+export async function reversePlace(point: GeoPoint, signal?: AbortSignal): Promise<string | null> {
+  const params = new URLSearchParams({ format: 'jsonv2', lat: String(point.lat), lon: String(point.lng), zoom: '18', addressdetails: '1', 'accept-language': 'es' });
+  const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, { signal });
+  if (!response.ok) return null;
+  return reverseLabel((await response.json()) as ReverseRow);
+}

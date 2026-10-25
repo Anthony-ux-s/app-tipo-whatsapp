@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router';
 import { cartCount, cartEstimateCents, useCartStore } from '@shared/stores/cart.store';
 import { useOrdersStore } from '@shared/stores/orders.store';
 import { toast } from '@shared/stores/toast.store';
-import { searchPlaces, type PlaceResult } from '@shared/utils/geocode';
+import { reversePlace, searchPlaces, type PlaceResult } from '@shared/utils/geocode';
 import { ApiError, errorMessage, http } from '@shared/utils/http';
 
 const QUOTE_DEBOUNCE_MS = 400;
@@ -47,6 +47,25 @@ export function useCheckout() {
   // persona tecleó: lo que marcó a mano en el mapa o eligió de sus direcciones guardadas no se pisa.
   // Una búsqueda por pausa (Nominatim no admite pedir letra por letra).
   const typedAddress = useRef(false);
+  /** La dirección que la propia app puso a partir del pin (se puede reemplazar al mover el pin; la que escribió la persona no). */
+  const autoLine = useRef<string | null>(null);
+  const applyPoint = async (point: GeoPoint, provisional: string) => {
+    typedAddress.current = false;
+    const current = useCartStore.getState().address;
+    if (current.line.trim() !== '' && current.line !== autoLine.current) {
+      setAddress({ ...current, location: point });
+      return;
+    }
+    // Enseguida hay dirección (y se cotiza el delivery); luego se cambia por la calle real cuando llega.
+    autoLine.current = provisional;
+    setAddress({ ...current, location: point, line: provisional });
+    const name = await reversePlace(point).catch(() => null);
+    const latest = useCartStore.getState().address;
+    if (name && latest.line === provisional) {
+      autoLine.current = name;
+      setAddress({ ...latest, line: name });
+    }
+  };
   const addressLine = address.line;
   const [locatingAddress, setLocatingAddress] = useState(false);
   /** Los lugares que coinciden con lo escrito (para elegir el correcto) y si no hubo ninguno. */
@@ -207,10 +226,7 @@ export function useCheckout() {
       setTip(Math.round(Number(clean || '0') * 100));
     },
     /** El punto de entrega en el mapa (para que el repartidor llegue y el cliente lo siga). */
-    onPickLocation: (location: GeoPoint) => {
-      typedAddress.current = false;
-      setAddress({ ...address, location });
-    },
+    onPickLocation: (location: GeoPoint) => void applyPoint(location, 'Punto marcado en el mapa'),
     /** Eligió un lugar en el buscador: el pin va ahí y, si aún no escribió la dirección, se completa. */
     locating,
     useMyLocation: () => {
@@ -218,7 +234,7 @@ export function useCheckout() {
       setLocating(true);
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setAddress({ ...address, location: { lat: pos.coords.latitude, lng: pos.coords.longitude } });
+          void applyPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude }, 'Mi ubicación actual');
           setLocating(false);
         },
         () => {
