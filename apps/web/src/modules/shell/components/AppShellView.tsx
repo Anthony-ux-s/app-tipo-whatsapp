@@ -11,6 +11,7 @@ import { useMenuStore } from '@shared/stores/menu.store';
 import { AppMenu } from './AppMenu';
 import { ConnectionBanner } from './ConnectionBanner';
 import { MobileNav } from './MobileNav';
+import { NotificationPrompt } from './NotificationPrompt';
 
 /**
  * Armazón de la app: lista de chats y el panel abierto; todo lo demás está en el menú de las tres
@@ -27,6 +28,7 @@ export function AppShellView() {
     <div className="flex h-[var(--vvh,100dvh)] overflow-hidden bg-canvas">
       <div className="flex min-w-0 flex-1 flex-col">
         <ConnectionBanner connection={shell.connection} />
+        <NotificationPrompt />
         <div className="flex min-h-0 min-w-0 flex-1">
           <aside
             className={`${layout.showListOnMobile ? 'flex' : 'hidden'} w-full shrink-0 flex-col border-r border-line md:flex md:w-[340px] lg:w-[380px]`}

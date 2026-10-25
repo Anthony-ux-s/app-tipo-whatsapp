@@ -5,8 +5,9 @@ import { PresenceRegistry } from '../../../../../infra/realtime/presence.registr
 import { PUSH_SUBSCRIPTIONS_REPOSITORY, type PushSubscriptionsRepository } from '../push-subscriptions.repository';
 
 /**
- * Envía push solo a quien no tiene Parla abierta: con la app abierta, el navegador ya recibe el
- * mensaje por el socket y muestra su propia notificación (con el texto descifrado).
+ * Envía push a todos los dispositivos suscritos, como WhatsApp. No se filtra por «conectado»: una app en segundo
+ * plano en el celular sigue figurando conectada un rato aunque el sistema ya la congeló y no mostraría nada.
+ * Quien tiene Parla a la vista no ve el aviso: el service worker lo omite si hay una ventana visible.
  */
 @Injectable()
 export class NotificationDispatcher {
@@ -21,8 +22,7 @@ export class NotificationDispatcher {
   /** Devuelve a cuántos navegadores se envió. Nunca lanza: una notificación fallida no rompe el envío. */
   async notify(userIds: string[], payloadFor: (userId: string) => PushPayload): Promise<number> {
     try {
-      const offline = [...new Set(userIds)].filter((id) => this.presence.statusOf(id) === 'offline');
-      const targets = await this.subscriptions.listForUsers(offline);
+      const targets = await this.subscriptions.listForUsers([...new Set(userIds)]);
       const results = await Promise.all(
         targets.map(async (target) => {
           const result = await this.sender.send(target, payloadFor(target.userId));

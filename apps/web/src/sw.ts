@@ -29,13 +29,24 @@ self.addEventListener('push', (event) => {
     // Carga no válida: se muestra el aviso genérico.
   }
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      tag: payload.tag,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
-      data: { url: payload.url },
-    }),
+    (async () => {
+      // Con Parla a la vista el mensaje ya se ve en pantalla: no se repite como aviso del sistema.
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      if (windows.some((w) => w.visibilityState === 'visible' && w.focused)) return;
+      // Sonido: el que el celular tenga para las notificaciones de Parla (Android lo reproduce solo si no está en silencio).
+      const options: NotificationOptions & { vibrate: number[]; renotify: boolean } = {
+        body: payload.body,
+        tag: payload.tag,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        data: { url: payload.url },
+        lang: 'es',
+        silent: false,
+        renotify: true,
+        vibrate: [200, 100, 200],
+      };
+      await self.registration.showNotification(payload.title, options);
+    })(),
   );
 });
 

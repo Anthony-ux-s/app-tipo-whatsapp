@@ -44,7 +44,9 @@ export class WebPushSender implements PushSender {
       await webpush.sendNotification(
         { endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },
         JSON.stringify(payload),
-        { TTL: 60 * 60 * 24 },
+        // Con el celular apagado o sin datos, el aviso espera en el servicio push hasta 3 días y llega al reconectarse, como WhatsApp.
+        // Urgencia alta: se entrega aunque el celular esté en modo de ahorro (Doze).
+        { TTL: 60 * 60 * 24 * 3, urgency: 'high' },
       );
       return 'sent';
     } catch (error) {

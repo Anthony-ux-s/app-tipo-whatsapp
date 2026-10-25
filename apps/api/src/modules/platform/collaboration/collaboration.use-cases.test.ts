@@ -92,12 +92,13 @@ describe('Fase 3: hilos, menciones y notificaciones push', () => {
   });
 
   describe('notificaciones push', () => {
-    it('solo reciben push quienes no tienen la app abierta, y la mención se nota en el aviso', async () => {
-      presence.set(sofia.id, 'online'); // Sofía está en línea: el socket ya le entrega el mensaje
+    it('el push va a todos los dispositivos suscritos (el service worker lo omite si la app está a la vista), y la mención se nota en el aviso', async () => {
+      presence.set(sofia.id, 'online'); // Aunque figure en línea, su celular puede tener la app congelada: igual se le envía
       await send.execute(laura.id, 'c1', { clientId: 'p', kind: 'text', body, media: null, mentions: [andres.id] });
       await flush();
-      expect(sender.sent.map((s) => s.target.endpoint)).toEqual([`https://push.example/${andres.id}`]);
-      expect(sender.sent[0].payload).toEqual({
+      const byUser = (id: string) => sender.sent.find((s) => s.target.endpoint === `https://push.example/${id}`);
+      expect(sender.sent.map((s) => s.target.endpoint).sort()).toEqual([`https://push.example/${andres.id}`, `https://push.example/${sofia.id}`].sort());
+      expect(byUser(andres.id)!.payload).toEqual({
         title: 'Equipo',
         body: 'Laura Méndez te mencionó',
         url: '/app/c/c1',
