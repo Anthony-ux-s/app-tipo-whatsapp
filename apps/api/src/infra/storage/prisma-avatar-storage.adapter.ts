@@ -14,7 +14,8 @@ export class PrismaAvatarStorage implements FileStorage {
 
   async read(fileId: string): Promise<Readable> {
     const row = await this.prisma.avatarImage.findUniqueOrThrow({ where: { id: fileId }, select: { data: true } });
-    return Readable.from(row.data);
+    // Prisma entrega los bytes como Uint8Array: Readable.from() la recorre número por número y corta la respuesta. Se envía como un solo Buffer.
+    return Readable.from([Buffer.from(row.data)]);
   }
 
   async exists(fileId: string): Promise<boolean> {
