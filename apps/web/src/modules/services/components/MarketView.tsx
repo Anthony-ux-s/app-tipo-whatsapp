@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Clock, MapPin, Search, X } from 'lucide-react';
+import { Clock, MapPin, MessageCircle, Phone, Search, X } from 'lucide-react';
 import { Navigate, useParams } from 'react-router';
 import { EmptyState, ErrorState } from '@shared/ui/States';
 import { NoResultsIllustration } from '@shared/ui/illustrations';
@@ -44,6 +44,17 @@ function StoreView({ storeId }: { storeId: string }) {
             <Clock className="size-3.5 shrink-0" /> {store.opensAt === store.closesAt ? 'Atiende las 24 horas' : `${store.opensAt} a ${store.closesAt}`} · {store.open ? 'Abierta ahora' : 'Cerrada'}
           </span>
         </p>
+      )}
+      {store?.phone && (
+        <div className="-mt-1 flex flex-wrap gap-2" data-testid="store-contact">
+          <a href={`tel:${store.phone}`} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-2">
+            <Phone className="size-4" /> Llamar
+          </a>
+          <a href={`https://wa.me/${store.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line px-3 text-sm font-bold text-ink transition-colors hover:bg-surface-2">
+            <MessageCircle className="size-4" /> WhatsApp
+          </a>
+          <span className="self-center text-xs text-ink-soft">{store.phone}</span>
+        </div>
       )}
       <StoreClosedBanner status={status.status} />
 

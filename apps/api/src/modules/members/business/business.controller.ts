@@ -30,6 +30,7 @@ class UpdateBusinessDto implements UpdateBusinessRequest {
   @IsOptional() @IsString() @MaxLength(80) name?: string;
   @IsOptional() @IsString() @MaxLength(400) description?: string;
   @IsOptional() @IsString() @MaxLength(250) address?: string;
+  @IsOptional() @IsString() @MaxLength(30) phone?: string;
   @IsOptional() @ValidateNested() @Type(() => PointDto) location?: GeoPoint | null;
 }
 

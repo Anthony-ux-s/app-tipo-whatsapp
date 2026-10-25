@@ -1,3 +1,4 @@
+import { parsePhone } from './phone';
 import type { GeoPoint, RegisterStoreRequest, ServiceId, StoreProduct } from '@parla/types';
 import { assertHour } from './business-hours';
 import { ValidationError } from './domain-error';
@@ -27,6 +28,7 @@ export function assertStoreRegistration(input: RegisterStoreRequest): void {
   const address = input.address?.trim() ?? '';
   if (address.length < 6 || address.length > 200) throw new ValidationError('Escribe la dirección de la tienda (donde el repartidor recoge los pedidos)');
   assertLocation(input.location);
+  parsePhone(input.phone ?? '');
   if (input.opensAt !== undefined) assertHour(input.opensAt, 'Abre');
   if (input.closesAt !== undefined) assertHour(input.closesAt, 'Cierra');
 }

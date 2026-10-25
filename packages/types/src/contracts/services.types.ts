@@ -144,6 +144,8 @@ export interface BusinessInfo {
   service: ServiceId;
   description: string;
   address: string;
+  /** Teléfono de contacto de la tienda (E.164); vacío si todavía no lo puso. */
+  phone: string;
   location: GeoPoint | null;
   /** Mientras está en revisión o suspendida no recibe pedidos. */
   status: StoreStatus;
@@ -180,6 +182,7 @@ export interface UpdateBusinessRequest {
   name?: string;
   description?: string;
   address?: string;
+  phone?: string;
   location?: GeoPoint | null;
 }
 

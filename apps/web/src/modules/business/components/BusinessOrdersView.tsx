@@ -12,6 +12,7 @@ import { BigOrderTag } from './BigOrderTag';
 import { FerrohubCard } from './FerrohubCard';
 import { StoreLinks } from './StoreLinks';
 import { StoreWalletCard } from './StoreWalletCard';
+import { StorePhoneCard } from './StorePhoneCard';
 import { StoreSettingsCard } from './StoreSettingsCard';
 import { StoreStatusNotice } from './StoreStatusNotice';
 
@@ -38,6 +39,7 @@ export function BusinessOrdersView() {
       <PageHeader title="Mi negocio" subtitle={b.business ? `${b.business.name} · pedidos con delivery Rapidito` : 'Pedidos con delivery Rapidito'} onBack={b.back} />
 
       {b.business && <FerrohubCard business={b.business} />}
+      <StorePhoneCard />
       <StoreSettingsCard />
       <StoreWalletCard />
 

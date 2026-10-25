@@ -17,6 +17,7 @@ class RegisterStoreDto {
   @IsIn(SERVICES) service: ServiceId;
   @IsOptional() @IsString() @MaxLength(400) description?: string;
   @IsString() @MaxLength(250) address: string;
+  @IsString() @MaxLength(30) phone: string;
   @IsOptional() @ValidateNested() @Type(() => PointDto) location?: PointDto | null;
   @IsOptional() @IsString() opensAt?: string;
   @IsOptional() @IsString() closesAt?: string;

@@ -19,6 +19,8 @@ export interface StoreSummary {
   service: ServiceId;
   description: string;
   address: string;
+  /** Teléfono de la tienda para llamarla o escribirle (vacío si no lo puso). */
+  phone: string;
   location: GeoPoint | null;
   /** ¿Recibe pedidos ahora? (aprobada, sin pausa y en horario). */
   open: boolean;
@@ -45,6 +47,8 @@ export interface RegisterStoreRequest {
   service: ServiceId;
   description?: string;
   address: string;
+  /** Teléfono de contacto de la tienda, con indicativo. */
+  phone: string;
   location?: GeoPoint | null;
   opensAt?: string;
   closesAt?: string;

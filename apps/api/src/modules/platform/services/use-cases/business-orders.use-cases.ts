@@ -4,6 +4,7 @@ import type { BusinessInfo, BusinessOrder, BusinessStatus, GeoPoint, OrderContac
 import { PresenceRegistry } from '../../../../infra/realtime/presence.registry';
 import { assertHour, businessStatus } from '../../../../kernel/business-hours';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
+import { parsePhone } from '../../../../kernel/phone';
 import { assertLocation } from '../../../../kernel/store-rules';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { toPublicUser } from '../../identity/user.mapper';
@@ -62,6 +63,8 @@ export class UpdateMyBusinessUseCase {
       if (address.length < 6 || address.length > 200) throw new ValidationError('Escribe la dirección de la tienda (donde el repartidor recoge los pedidos)');
       patch.address = address;
     }
+    // El teléfono de contacto es de Parla (también en tiendas de FerroHub): siempre se puede cambiar, nunca vaciar.
+    if (changes.phone !== undefined) patch.phone = parsePhone(changes.phone);
     if (changes.location !== undefined) {
       assertLocation(changes.location);
       patch.location = changes.location;

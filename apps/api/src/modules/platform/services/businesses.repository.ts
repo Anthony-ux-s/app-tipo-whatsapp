@@ -41,6 +41,7 @@ export interface NewBusiness {
   description: string;
   ownerId: string;
   address: string;
+  phone: string;
   location: GeoPoint | null;
   opensAt: string;
   closesAt: string;

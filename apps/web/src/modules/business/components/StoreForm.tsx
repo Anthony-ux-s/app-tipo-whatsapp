@@ -59,6 +59,18 @@ export function StoreForm({ draft, onChange, onPickLocation, onUseMyLocation, lo
 
       <Field label="Dirección" placeholder="ej. Av. Larco 123, Miraflores" maxLength={200} value={draft.address} onChange={(e) => onChange({ address: e.target.value })} required />
 
+      <Field
+        label="Teléfono de la tienda"
+        type="tel"
+        autoComplete="tel"
+        placeholder="ej. +51 999 111 222"
+        maxLength={30}
+        value={draft.phone}
+        onChange={(e) => onChange({ phone: e.target.value })}
+        hint="Tus clientes lo ven para llamarte o escribirte por WhatsApp. Con indicativo del país."
+        required
+      />
+
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-ink-soft">

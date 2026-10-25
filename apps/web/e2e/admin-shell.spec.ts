@@ -90,7 +90,7 @@ test.describe('Administración: menú lateral y reglas de la cuenta de soporte',
 
     const store = await request.post(`${API}/api/stores`, {
       headers,
-      data: { name: 'Tienda de soporte', service: 'mercado', description: 'x', address: 'Av. Benavides 1180, Miraflores' },
+      data: { name: 'Tienda de soporte', service: 'mercado', description: 'x', address: 'Av. Benavides 1180, Miraflores', phone: '+51999111222' },
     });
     expect(store.status()).toBe(403);
     expect(((await store.json()) as { message: string }).message).toContain('no pueden abrir una tienda');

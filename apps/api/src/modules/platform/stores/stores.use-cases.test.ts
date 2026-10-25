@@ -18,7 +18,7 @@ import {
 const env = { internalToken: 'token-interno', coreInternalUrl: 'http://core:4101' } as AppEnv;
 
 const arroz = (over: Partial<StoreProduct> = {}): StoreProduct => ({ sku: 'ARR-1', name: 'Arroz extra', unit: '5 kg', priceCents: 2290, listPriceCents: null, stock: 10, category: 'abarrotes', imageUrl: null, active: true, ...over });
-const registro = { name: 'Bodega Don Lucho', service: 'mercado' as const, description: 'Abarrotes', address: 'Av. Benavides 1180, Miraflores', opensAt: '08:00', closesAt: '22:00' };
+const registro = { name: 'Bodega Don Lucho', service: 'mercado' as const, description: 'Abarrotes', address: 'Av. Benavides 1180, Miraflores', phone: '+51 999 111 222', opensAt: '08:00', closesAt: '22:00' };
 
 describe('tiendas (marketplace)', () => {
   const soporte = makeUser({ displayName: 'Soporte', isAdmin: true });
@@ -52,7 +52,7 @@ describe('tiendas (marketplace)', () => {
   describe('abrir una tienda', () => {
     it('queda en revisión y no vende hasta que soporte la apruebe', async () => {
       const mine = await register.execute(rosa.id, registro);
-      expect(mine).toMatchObject({ status: 'pending', service: 'mercado', source: 'native', name: 'Bodega Don Lucho' });
+      expect(mine).toMatchObject({ status: 'pending', service: 'mercado', source: 'native', name: 'Bodega Don Lucho', phone: '+51999111222' });
       expect(await list.execute('mercado')).toEqual([]);
       const store = (await businesses.list({}))[0];
       expect((await new GetInternalIntegrationUseCase(businesses, env).execute(store.id)).enabled).toBe(false);
@@ -66,6 +66,8 @@ describe('tiendas (marketplace)', () => {
     it('pide datos razonables y una sola tienda por cuenta', async () => {
       await expect(register.execute(rosa.id, { ...registro, name: 'ab' })).rejects.toThrow(ValidationError);
       await expect(register.execute(rosa.id, { ...registro, address: 'x' })).rejects.toThrow(/dirección/);
+      await expect(register.execute(rosa.id, { ...registro, phone: '' })).rejects.toThrow(/número/);
+      await expect(register.execute(rosa.id, { ...registro, phone: '12' })).rejects.toThrow(/indicativo/);
       await expect(register.execute(rosa.id, { ...registro, service: 'viajes' as never })).rejects.toThrow(/categoría/);
       await expect(register.execute(rosa.id, { ...registro, opensAt: '8am' })).rejects.toThrow(/HH:MM/);
       await register.execute(rosa.id, registro);

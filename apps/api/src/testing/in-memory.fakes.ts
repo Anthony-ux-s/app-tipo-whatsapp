@@ -301,6 +301,7 @@ export function makeBusiness(over: Partial<BusinessRecord> = {}): BusinessRecord
     description: '',
     ownerId: 'owner_1',
     address: 'Av. Benavides 1180',
+    phone: '',
     location: null,
     status: 'approved',
     reviewNote: '',

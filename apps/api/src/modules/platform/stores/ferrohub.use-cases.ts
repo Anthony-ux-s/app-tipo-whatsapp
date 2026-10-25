@@ -3,6 +3,7 @@ import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../infra/realt
 import type { FerrohubConnectResult, FerrohubProvisionRequest, FerrohubProvisionResult, FerrohubSsoResult } from '@parla/types';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { APP_ENV, type AppEnv } from '../../../config/env.validation';
+import { parsePhone } from '../../../kernel/phone';
 import { ConflictError, NotFoundError, TooManyRequestsError, UnauthorizedError, ValidationError } from '../../../kernel/domain-error';
 import { AUTH_REPOSITORY, type AuthRepository } from '../identity/auth/auth.repository';
 import { BUSINESSES_REPOSITORY, NO_API, type BusinessesRepository, type BusinessRecord } from '../services/businesses.repository';
@@ -67,6 +68,7 @@ async function ownOrProvisional(businesses: BusinessesRepository, userId: string
     description: '',
     ownerId: userId,
     address: 'Por confirmar',
+    phone: '',
     location: null,
     opensAt: '08:00',
     closesAt: '22:00',
@@ -159,6 +161,13 @@ export class ProvisionFerrohubUseCase {
     const phone = input.phone.replace(/\D/g, '');
     if (phone.length < 8) throw new ValidationError('Escribe un celular válido.');
 
+    const contactPhone = (() => {
+      try {
+        return parsePhone(input.phone);
+      } catch {
+        return '';
+      }
+    })();
     const { business, created } = await ownOrProvisional(this.businesses, userId);
     const webhookSecret = randomBytes(32).toString('hex');
     let tenantId: string | null = null;
@@ -170,7 +179,7 @@ export class ProvisionFerrohubUseCase {
       });
       tenantId = made.tenantId;
       // La ciudad solo va a FerroHub (segmentación): la dirección exacta la configura la dueña allá y Parla la lee.
-      let updated = await this.businesses.update(business.id, { name, description: '' });
+      let updated = await this.businesses.update(business.id, { name, description: '', ...(contactPhone ? { phone: contactPhone } : {}) });
       updated = await this.businesses.setSource(updated.id, 'api', { format: 'redwiiil', baseUrl: made.apiBaseUrl, prefix: '', apiKey: made.apiKey, adminKey: '' });
       updated = await this.businesses.setConnector(updated.id, { kind: 'ferrohub', origin: 'provision', tenantId: made.tenantId, webhookSecret, connectedAt: new Date(), verifiedAt: null });
       return { business: toBusinessInfo(updated), ssoUrl: made.ssoUrl };

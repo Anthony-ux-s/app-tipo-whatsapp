@@ -13,6 +13,7 @@ export function toBusinessRecord(row: BusinessRow): BusinessRecord {
     description: row.description,
     ownerId: row.ownerId,
     address: row.address,
+    phone: row.phone,
     location: row.lat !== null && row.lng !== null ? { lat: row.lat, lng: row.lng } : null,
     status: row.status as StoreStatus,
     reviewNote: row.reviewNote,

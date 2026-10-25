@@ -17,6 +17,7 @@ import type {
 import { APP_ENV, type AppEnv } from '../../../config/env.validation';
 import { bigOrderRulesOf } from '../../../kernel/big-order';
 import { businessStatus } from '../../../kernel/business-hours';
+import { parsePhone } from '../../../kernel/phone';
 import { ConflictError, NotFoundError, ValidationError } from '../../../kernel/domain-error';
 import { assertStoreRegistration, cleanProduct, MAX_IMPORT_ROWS, SERVICE_IDS } from '../../../kernel/store-rules';
 import { AUTH_REPOSITORY, type AuthRepository } from '../identity/auth/auth.repository';
@@ -36,6 +37,7 @@ export function toBusinessInfo(b: BusinessRecord): BusinessInfo {
     service: b.service,
     description: b.description,
     address: b.address,
+    phone: b.phone,
     location: b.location,
     status: b.status,
     reviewNote: b.reviewNote,
@@ -78,6 +80,7 @@ export class RegisterStoreUseCase {
       description: (input.description ?? '').trim(),
       ownerId: userId,
       address: input.address.trim(),
+      phone: parsePhone(input.phone),
       location: input.location ?? null,
       opensAt: input.opensAt ?? '08:00',
       closesAt: input.closesAt ?? '22:00',
@@ -113,6 +116,7 @@ export class ListStoresUseCase {
       service: b.service,
       description: b.description,
       address: b.address,
+      phone: b.phone,
       location: b.location,
       open: st.open,
       closedMessage: st.closedMessage,

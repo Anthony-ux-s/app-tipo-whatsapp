@@ -315,6 +315,8 @@ model Business {
   adminWhatsapp   String   @default("")
   /// Número de PagaYa donde se le depositan sus ventas (vacío = todavía no lo puso).
   payoutPhone     String   @default("")
+  /// Teléfono de contacto de la tienda (E.164): los clientes lo ven para llamarla o escribirle.
+  phone           String   @default("")
   /// Horario de atención (hora de Lima, «HH:MM»); si cierra antes de abrir, cruza la medianoche.
   opensAt         String   @default("08:00")
   closesAt        String   @default("22:00")
