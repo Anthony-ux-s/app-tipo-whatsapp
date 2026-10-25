@@ -341,6 +341,8 @@ export interface AdminDriver {
   reviewNote: string | null;
   /** Lo que debe a Parla por la comisión de los deliveries que cobró en mano (0 si no debe). */
   debtCents: number;
+  /** Cómo lo califican los clientes (estrellas de 1 a 5). */
+  rating: RatingSummary;
   createdAt: string;
 }
 

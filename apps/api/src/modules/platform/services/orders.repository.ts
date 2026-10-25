@@ -138,6 +138,8 @@ export interface OrdersRepository {
   ratingSummary(of: { driverId: string } | { businessId: string }): Promise<RatingSummary>;
   /** La calificación de varias tiendas en una sola consulta (la lista de tiendas no pregunta una por una). */
   ratingSummaries(businessIds: string[]): Promise<Map<string, RatingSummary>>;
+  /** La calificación de varios repartidores en una sola consulta (el ranking de soporte). */
+  driverRatingSummaries(driverIds: string[]): Promise<Map<string, RatingSummary>>;
 }
 
 export const ORDERS_REPOSITORY = Symbol('ORDERS_REPOSITORY');

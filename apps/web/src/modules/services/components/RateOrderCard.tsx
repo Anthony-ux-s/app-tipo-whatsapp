@@ -52,7 +52,8 @@ export function RateOrderCard({ order }: { order: Order }) {
 
   return (
     <section className="flex flex-col gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Califica tu pedido" data-testid="rate-order">
-      <p className="font-bold text-ink">¿Cómo te fue?</p>
+      <p className="font-bold text-ink">{order.delivery?.driverName ? `¿Cómo te fue con ${order.delivery.driverName}?` : '¿Cómo te fue?'}</p>
+      <p className="-mt-3 text-xs text-ink-soft">Tus estrellas ayudan a saber quién es el mejor repartidor.</p>
       {order.delivery?.driverName && (
         <div className="flex flex-col gap-1">
           <span className="text-sm text-ink-soft">{order.delivery.driverName} (repartidor)</span>

@@ -1003,6 +1003,22 @@ describe('pedidos de Servicios (core)', () => {
     });
   });
 
+  it('soporte ve a los repartidores aprobados del mejor al peor calificado', async () => {
+    const summaries = new Map([
+      [carlos.id, { average: 4.2, count: 5 }],
+      [lucia.id, { average: 4.9, count: 3 }],
+    ]);
+    const ranking = new ListDriversForReviewUseCase(users, drivers, undefined, { driverRatingSummaries: async () => summaries } as never);
+    const list = await ranking.execute(soporte.id, 'approved');
+    expect(list.map((d) => [d.userId, d.rating.average])).toEqual([
+      [lucia.id, 4.9],
+      [carlos.id, 4.2],
+    ]);
+    // Sin calificaciones va al final, sin romperse
+    const none = await new ListDriversForReviewUseCase(users, drivers).execute(soporte.id, 'approved');
+    expect(none.every((d) => d.rating.average === null && d.rating.count === 0)).toBe(true);
+  });
+
   it('si la clienta no responde, el repartidor lo deja con una foto que ven ella, la tienda y soporte', async () => {
     await readyForDrivers();
     await take.execute(carlos.id, ID);

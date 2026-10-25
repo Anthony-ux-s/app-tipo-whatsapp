@@ -1,17 +1,21 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import type { AdminDriver, DriverStatus, PushPayload } from '@parla/types';
+import type { AdminDriver, DriverStatus, PushPayload, RatingSummary } from '@parla/types';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../kernel/domain-error';
 import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../infra/realtime/realtime-publisher.port';
 import { AUTH_REPOSITORY, type AuthRepository } from '../../identity/auth/auth.repository';
 import { NotificationDispatcher } from '../../messaging/push/use-cases/notification-dispatcher';
 import { DRIVER_LEDGER_REPOSITORY, type DriverLedgerRepository } from '../driver-ledger.repository';
 import { DRIVERS_REPOSITORY, type DriverRecord, type DriversRepository } from '../drivers.repository';
+import { ORDERS_REPOSITORY, type OrdersRepository } from '../orders.repository';
 import { requireAdmin } from './claims.use-cases';
 import { toDriverInfo } from './driver-orders.use-cases';
 
 const ADMIN_LIMIT = 100;
+const ADMIN_LIST_LIMIT = ADMIN_LIMIT;
 
-async function toAdminDriver(d: DriverRecord, users: AuthRepository, ledger?: DriverLedgerRepository): Promise<AdminDriver> {
+const NO_RATING: RatingSummary = { average: null, count: 0 };
+
+async function toAdminDriver(d: DriverRecord, users: AuthRepository, ledger?: DriverLedgerRepository, rating: RatingSummary = NO_RATING): Promise<AdminDriver> {
   const [user] = await users.findActiveByIds([d.userId]);
   const debtCents = ledger ? Math.max(0, -(await ledger.balance(d.userId)).availableCents) : 0;
   return {
@@ -26,6 +30,7 @@ async function toAdminDriver(d: DriverRecord, users: AuthRepository, ledger?: Dr
     status: d.status,
     reviewNote: d.reviewNote,
     debtCents,
+    rating,
     createdAt: d.createdAt.toISOString(),
   };
 }
@@ -59,12 +64,17 @@ export class ListDriversForReviewUseCase {
     @Inject(AUTH_REPOSITORY) private readonly users: AuthRepository,
     @Inject(DRIVERS_REPOSITORY) private readonly drivers: DriversRepository,
     @Optional() @Inject(DRIVER_LEDGER_REPOSITORY) private readonly ledger?: DriverLedgerRepository,
+    @Optional() @Inject(ORDERS_REPOSITORY) private readonly orders?: OrdersRepository,
   ) {}
 
   async execute(adminId: string, status: DriverStatus): Promise<AdminDriver[]> {
     await requireAdmin(this.users, adminId);
-    const list = await this.drivers.listByStatus(status, ADMIN_LIMIT);
-    return Promise.all(list.map((d) => toAdminDriver(d, this.users, this.ledger)));
+    const list = await this.drivers.listByStatus(status, ADMIN_LIST_LIMIT);
+    const ratings = (await this.orders?.driverRatingSummaries(list.map((d) => d.userId))) ?? new Map<string, RatingSummary>();
+    const drivers = await Promise.all(list.map((d) => toAdminDriver(d, this.users, this.ledger, ratings.get(d.userId) ?? NO_RATING)));
+    // Los aprobados van del mejor al peor calificado (a igual promedio, el que más entregas calificadas tiene); los demás, como llegaron.
+    if (status === 'approved') drivers.sort((a, b) => (b.rating.average ?? -1) - (a.rating.average ?? -1) || b.rating.count - a.rating.count);
+    return drivers;
   }
 }
 

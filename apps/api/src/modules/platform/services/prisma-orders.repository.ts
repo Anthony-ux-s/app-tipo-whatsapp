@@ -209,6 +209,19 @@ export class PrismaOrdersRepository implements OrdersRepository {
     );
   }
 
+  async driverRatingSummaries(driverIds: string[]): Promise<Map<string, RatingSummary>> {
+    if (driverIds.length === 0) return new Map();
+    const rows = await this.prisma.order.groupBy({
+      by: ['driverId'],
+      where: { driverId: { in: driverIds }, driverStars: { not: null } },
+      _avg: { driverStars: true },
+      _count: { driverStars: true },
+    });
+    return new Map(
+      rows.flatMap((r) => (r.driverId ? [[r.driverId, { average: r._avg.driverStars === null ? null : Math.round(r._avg.driverStars * 10) / 10, count: r._count.driverStars }] as const] : [])),
+    );
+  }
+
   async updateIfStatus(id: string, expected: OrderStatus, changes: OrderChanges): Promise<OrderRecord | null> {
     const current = await this.prisma.order.findUnique({ where: { id }, select: { status: true, timeline: true } });
     if (!current || current.status !== expected) return null;

@@ -566,6 +566,9 @@ export class InMemoryOrdersRepository implements OrdersRepository {
   async ratingSummaries(businessIds: string[]) {
     return new Map(await Promise.all(businessIds.map(async (id) => [id, await this.ratingSummary({ businessId: id })] as const)));
   }
+  async driverRatingSummaries(driverIds: string[]) {
+    return new Map(await Promise.all(driverIds.map(async (id) => [id, await this.ratingSummary({ driverId: id })] as const)));
+  }
   async ratingSummary(of: { driverId: string } | { businessId: string }) {
     const stars = this.orders
       .filter((o) => ('driverId' in of ? o.driverId === of.driverId : o.business?.id === of.businessId))

@@ -53,6 +53,8 @@ export function OrderDetailView() {
         <OrderProgress steps={CUSTOMER_STEPS} current={d.step} finished={order.status === 'delivered'} {...customerNow(order.status, businessName, order.delivery?.driverName ?? null)} />
       )}
 
+      <RateOrderCard order={order} />
+
       {order.big && order.business && (order.status === 'pending_payment' || order.status === 'paid') && (
         <BigOrderNotice
           rules={order.business.bigOrder}
@@ -242,7 +244,6 @@ export function OrderDetailView() {
 
       {(order.status === 'delivered' || d.canCancel) && <SectionTitle>¿Algo más?</SectionTitle>}
 
-      <RateOrderCard order={order} />
       <ClaimCard order={order} />
       {order.status === 'delivered' && (
         <Button variant="secondary" className="self-center" icon={<RotateCcw className="size-4" />} onClick={() => void again.reorder(order)} loading={again.loading} data-testid="reorder">

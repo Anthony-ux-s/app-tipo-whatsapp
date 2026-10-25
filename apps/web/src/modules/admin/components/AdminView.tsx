@@ -3,6 +3,7 @@ import { Check, FileImage, HandCoins, RefreshCw, ShieldCheck, X } from 'lucide-r
 import { useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router';
 import { Button, IconButton } from '@shared/ui/Button';
+import { Stars } from '@shared/ui/Stars';
 import { Field, TextAreaField } from '@shared/ui/Field';
 import { Modal } from '@shared/ui/Modal';
 import { PrivatePhoto } from '@shared/ui/PrivatePhoto';
@@ -152,10 +153,11 @@ export function AdminView() {
         <EmptyState compact illustration={<EmptyChatsIllustration />} title="Nada por aquí" description={a.tab === 'repartidores' ? 'No hay repartidores en esta lista.' : 'No hay reclamos en esta lista.'} />
       ) : a.tab === 'repartidores' ? (
         <ul className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2" data-testid="admin-drivers">
-          {a.drivers.items!.map((d) => (
+          {a.drivers.items!.map((d, index) => (
             <li key={d.userId}>
               <DriverItem
                 driver={d}
+                rank={a.tab === 'repartidores' && d.status === 'approved' && d.rating.count > 0 ? index + 1 : null}
                 busy={a.busy === `driver:${d.userId}`}
                 onApprove={() => void a.reviewDriver(d.userId, 'approve')}
                 onCommissionPaid={(cents) => void a.recordCommissionPayment(d.userId, cents)}
@@ -209,7 +211,7 @@ function Chip({ on, onClick, children, small = false, role, testId }: { on: bool
   );
 }
 
-function DriverItem({ driver, busy, onApprove, onReject, onCommissionPaid }: { driver: AdminDriver; busy: boolean; onApprove: () => void; onReject: () => void; onCommissionPaid: (cents: number) => void }) {
+function DriverItem({ driver, rank, busy, onApprove, onReject, onCommissionPaid }: { driver: AdminDriver; rank: number | null; busy: boolean; onApprove: () => void; onReject: () => void; onCommissionPaid: (cents: number) => void }) {
   const [paid, setPaid] = useState((driver.debtCents / 100).toFixed(2));
   const paidCents = Math.round(Number(paid.replace(',', '.')) * 100);
   const validPaid = Number.isFinite(paidCents) && paidCents >= 1 && paidCents <= 1_000_000;
@@ -227,6 +229,18 @@ function DriverItem({ driver, busy, onApprove, onReject, onCommissionPaid }: { d
         </div>
         <span className="shrink-0 text-xs text-ink-faint">{formatLongDate(driver.createdAt)}</span>
       </div>
+      {driver.status === 'approved' && (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-soft" data-testid="driver-rating">
+          {rank !== null && <span className={`rounded-full px-2 py-0.5 text-xs font-extrabold ${rank === 1 ? 'bg-amber-100 text-ink dark:bg-amber-900/50' : 'bg-surface-3 text-ink'}`}>{rank === 1 ? '🏆 El mejor' : `#${rank}`}</span>}
+          {driver.rating.average !== null ? (
+            <>
+              <Stars value={driver.rating.average} /> <span className="font-semibold text-ink">{driver.rating.average.toFixed(1)}</span> ({driver.rating.count} {driver.rating.count === 1 ? 'calificación' : 'calificaciones'})
+            </>
+          ) : (
+            'Sin calificaciones todavía'
+          )}
+        </p>
+      )}
       <dl className="grid grid-cols-2 gap-2 text-sm">
         <div className="rounded-xl bg-surface-3 px-3 py-2">
           <dt className="text-xs text-ink-faint">DNI</dt>
