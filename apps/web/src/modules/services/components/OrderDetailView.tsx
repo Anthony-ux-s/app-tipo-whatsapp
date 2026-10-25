@@ -1,4 +1,4 @@
-import { Check, ChefHat, Clock, ExternalLink, KeyRound, MapPin, MessageCircle, RefreshCw, RotateCcw, Smartphone, Store, X } from 'lucide-react';
+import { ChefHat, Clock, ExternalLink, KeyRound, MapPin, MessageCircle, RefreshCw, RotateCcw, Smartphone, Store, X } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
 import { PrivatePhoto } from '@shared/ui/PrivatePhoto';
@@ -6,7 +6,8 @@ import { QrCode } from '@shared/ui/QrCode';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatTime } from '@shared/utils/date';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
-import { ORDER_STEPS } from '../const/services.const';
+import { CUSTOMER_STEPS, customerNow } from '../const/services.const';
+import { OrderProgress } from './OrderProgress';
 import { useOrderChat } from '../hooks/use-order-chat.hook';
 import { BigOrderNotice } from './BigOrderNotice';
 import { useOrderDetail } from '../hooks/use-orders.hook';
@@ -49,22 +50,7 @@ export function OrderDetailView() {
       />
 
       {!stopped && (
-        <ol className="grid grid-cols-5 gap-1 rounded-2xl bg-surface p-4 shadow-float" aria-label="Seguimiento del pedido">
-          {ORDER_STEPS.map((step, index) => {
-            const done = index < d.step || order.status === 'delivered';
-            const current = index === d.step && order.status !== 'delivered';
-            return (
-              <li key={step.status} className="flex flex-col items-center gap-1.5 text-center">
-                <span
-                  className={`flex size-9 items-center justify-center rounded-full text-sm font-bold transition-colors duration-300 ${done ? 'bg-brand text-white' : current ? 'bg-teal-100 text-ink ring-2 ring-teal-500 dark:bg-teal-900/60 dark:text-ink' : 'bg-surface-3 text-ink-faint'}`}
-                >
-                  {done ? <Check className="size-4" /> : index + 1}
-                </span>
-                <span className={`text-[11px] font-semibold ${done || current ? 'text-ink' : 'text-ink-faint'}`}>{step.label}</span>
-              </li>
-            );
-          })}
-        </ol>
+        <OrderProgress steps={CUSTOMER_STEPS} current={d.step} finished={order.status === 'delivered'} {...customerNow(order.status, businessName, order.delivery?.driverName ?? null)} />
       )}
 
       {order.big && order.business && (order.status === 'pending_payment' || order.status === 'paid') && (
@@ -133,7 +119,7 @@ export function OrderDetailView() {
       <LiveTracking order={order} audience="customer" />
 
       {(order.status === 'searching_driver' || order.delivery) && (
-        <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Delivery" data-testid="delivery-card">
+        <section className="flex items-center gap-4 rounded-2xl bg-surface p-3 shadow-float md:p-5" aria-label="Delivery" data-testid="delivery-card">
           <ServiceIcon name={order.status === 'delivered' ? 'pedidos' : 'rapidito'} className="size-12 shrink-0 drop-shadow-[0_4px_8px_rgba(15,23,42,0.18)]" />
           <div className="min-w-0 flex-1">
             <p className="font-bold text-ink">
@@ -164,7 +150,7 @@ export function OrderDetailView() {
       )}
 
       {order.deliveryCode && order.status !== 'delivered' && (
-        <section className="flex items-center gap-4 rounded-2xl border-2 border-dashed border-teal-300 bg-teal-50 p-4 md:p-5 dark:border-teal-800 dark:bg-teal-950/40" aria-label="Código de entrega">
+        <section className="flex items-center gap-4 rounded-2xl border-2 border-dashed border-teal-300 bg-teal-50 p-3 md:p-5 dark:border-teal-800 dark:bg-teal-950/40" aria-label="Código de entrega">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand text-white">
             <KeyRound className="size-6" />
           </span>
@@ -186,7 +172,7 @@ export function OrderDetailView() {
       )}
 
       {order.status === 'delivered' && order.hasDeliveryPhoto && (
-        <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Foto de la entrega" data-testid="delivery-photo">
+        <section className="flex flex-col gap-2 rounded-2xl bg-surface p-3 shadow-float md:p-5" aria-label="Foto de la entrega" data-testid="delivery-photo">
           <p className="text-sm font-bold text-ink">
             {order.deliveredWithoutCode ? 'No pudimos ubicarte: el repartidor dejó tu pedido y tomó esta foto' : 'Foto de la entrega'}
           </p>
@@ -197,7 +183,7 @@ export function OrderDetailView() {
       {order.business && order.status !== 'pending_payment' && order.status !== 'payment_expired' && <SectionTitle>Tienda</SectionTitle>}
 
       {order.business && order.status !== 'pending_payment' && order.status !== 'payment_expired' && (
-        <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Negocio" data-testid="business-card">
+        <section className="flex items-center gap-4 rounded-2xl bg-surface p-3 shadow-float md:p-5" aria-label="Negocio" data-testid="business-card">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
             {order.status === 'preparing' ? <ChefHat className="size-6" /> : <Store className="size-6" />}
           </span>
@@ -223,7 +209,7 @@ export function OrderDetailView() {
 
       <SectionTitle>Tu pedido</SectionTitle>
 
-      <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Productos y pago">
+      <section className="flex flex-col gap-2 rounded-2xl bg-surface p-3 shadow-float md:p-5" aria-label="Productos y pago">
         {order.lines.map((line) => (
           <div key={line.productId} className="flex items-center justify-between gap-4 text-sm">
             <LineThumb src={line.imageUrl} name={line.name} />

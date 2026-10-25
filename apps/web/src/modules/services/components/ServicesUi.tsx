@@ -33,8 +33,8 @@ export function PageHeader({ title, subtitle, onBack, action }: { title: string;
         </button>
       )}
       <div className="min-w-0 flex-1 pt-1">
-        <h1 className="text-xl font-extrabold text-ink md:text-2xl">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-sm text-ink-soft">{subtitle}</p>}
+        <h1 className="text-lg font-extrabold text-ink md:text-2xl">{title}</h1>
+        {subtitle && <p className="mt-0.5 text-xs text-ink-soft md:text-sm">{subtitle}</p>}
       </div>
       {action}
     </header>

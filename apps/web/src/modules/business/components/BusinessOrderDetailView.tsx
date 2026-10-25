@@ -13,7 +13,8 @@ import { BigOrderTag } from './BigOrderTag';
 import { LiveTracking } from '../../services/components/LiveTracking';
 import { useOrderChat } from '../../services/hooks/use-order-chat.hook';
 import { CLAIM_REASON_LABEL, CLAIM_STATUS_LABEL } from '../../services/const/services.const';
-import { BUSINESS_STATUS_HINTS } from '../const/business.const';
+import { BUSINESS_STEPS, businessNow, businessStep } from '../const/business.const';
+import { OrderProgress } from '../../services/components/OrderProgress';
 import { useBusinessOrderDetail } from '../hooks/use-business.hook';
 
 /**
@@ -46,7 +47,7 @@ export function BusinessOrderDetailView() {
       />
 
       {order.big && order.status === 'paid' && (
-        <section className="flex flex-col gap-2 rounded-2xl bg-rose-50 p-4 ring-1 ring-rose-200 md:p-5 dark:bg-rose-950/40 dark:ring-rose-900" aria-label="Pedido grande" data-testid="big-order-alert">
+        <section className="flex flex-col gap-2 rounded-2xl bg-rose-50 p-3 ring-1 ring-rose-200 md:p-5 dark:bg-rose-950/40 dark:ring-rose-900" aria-label="Pedido grande" data-testid="big-order-alert">
           <p className="flex items-center gap-2 font-bold text-ink">
             <BigOrderTag /> Confírmalo con el cliente antes de prepararlo
           </p>
@@ -55,7 +56,7 @@ export function BusinessOrderDetailView() {
       )}
 
       {delivered && (
-        <section className="flex items-center gap-4 rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200 md:p-5 dark:bg-emerald-950/40 dark:ring-emerald-900" aria-label="Entrega confirmada" data-testid="delivery-proof">
+        <section className="flex items-center gap-4 rounded-2xl bg-emerald-50 p-3 ring-1 ring-emerald-200 md:p-5 dark:bg-emerald-950/40 dark:ring-emerald-900" aria-label="Entrega confirmada" data-testid="delivery-proof">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white">
             <ShieldCheck className="size-6" />
           </span>
@@ -69,7 +70,7 @@ export function BusinessOrderDetailView() {
       {delivered && order.hasDeliveryPhoto && <PrivatePhoto path={`/orders/${encodeURIComponent(order.id)}/delivery-photo`} alt="Foto de la entrega" />}
 
       {(order.claims ?? []).map((claim) => (
-        <section key={claim.id} className="flex flex-col gap-1.5 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200 md:p-5 dark:bg-amber-950/40 dark:ring-amber-900" aria-label="Reclamo del cliente" data-testid="business-claim">
+        <section key={claim.id} className="flex flex-col gap-1.5 rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200 md:p-5 dark:bg-amber-950/40 dark:ring-amber-900" aria-label="Reclamo del cliente" data-testid="business-claim">
           <p className="flex items-center justify-between gap-3 font-bold text-ink">
             Reclamo · {CLAIM_REASON_LABEL[claim.reason]}
             <span className="shrink-0 text-xs font-bold text-ink-soft">{CLAIM_STATUS_LABEL[claim.status]}</span>
@@ -82,7 +83,7 @@ export function BusinessOrderDetailView() {
       ))}
 
       {order.rating?.storeStars && (
-        <section className="flex flex-col gap-1 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Calificación del cliente" data-testid="business-rating">
+        <section className="flex flex-col gap-1 rounded-2xl bg-surface p-3 shadow-float md:p-5" aria-label="Calificación del cliente" data-testid="business-rating">
           <p className="flex items-center justify-between gap-3 font-bold text-ink">
             {order.customer.displayName} calificó a tu tienda <Stars value={order.rating.storeStars} />
           </p>
@@ -90,7 +91,7 @@ export function BusinessOrderDetailView() {
         </section>
       )}
 
-      <section className="flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Cliente">
+      <section className="flex items-center gap-4 rounded-2xl bg-surface p-3 shadow-float md:p-5" aria-label="Cliente">
         <Avatar name={order.customer.displayName} color={order.customer.avatarColor} photo={order.customer.avatarUrl} size="md" />
         <div className="min-w-0 flex-1">
           <p className="truncate font-bold text-ink">{order.customer.displayName}</p>
@@ -121,7 +122,7 @@ export function BusinessOrderDetailView() {
       </section>
 
       {(order.status === 'cancelled' || order.status === 'rejected') && (
-        <section className="rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Pedido cerrado" data-testid="order-stopped">
+        <section className="rounded-2xl bg-surface p-3 shadow-float md:p-5" aria-label="Pedido cerrado" data-testid="order-stopped">
           <p className="font-bold text-ink">{order.status === 'rejected' ? 'Rechazaste este pedido' : 'Pedido cancelado'}</p>
           <p className="text-sm text-ink-soft" data-testid="refund">
             {order.payment.refundedAt
@@ -131,28 +132,27 @@ export function BusinessOrderDetailView() {
         </section>
       )}
 
-      {!delivered && order.status !== 'cancelled' && order.status !== 'rejected' && (
-        <section className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Qué toca ahora">
-          <p className="text-sm text-ink-soft">{BUSINESS_STATUS_HINTS[order.status]}</p>
+      {order.status !== 'cancelled' && order.status !== 'rejected' && (
+        <OrderProgress steps={BUSINESS_STEPS} current={businessStep(order.status)} finished={!!delivered} {...businessNow(order.status, driverName)}>
           {order.status === 'paid' && (
-            <div className="flex flex-wrap gap-2">
+            <>
               <Button size="lg" icon={<Check className="size-5" />} onClick={d.accept} loading={d.busy === 'accept'} disabled={!!d.busy} data-testid="accept-order">
                 Aceptar pedido
               </Button>
               <Button variant="ghost" icon={<X className="size-4" />} onClick={d.askReject} disabled={!!d.busy}>
                 Rechazar
               </Button>
-            </div>
+            </>
           )}
           {order.status === 'preparing' && (
             <Button size="lg" icon={<PackageCheck className="size-5" />} onClick={d.ready} loading={d.busy === 'ready'} data-testid="ready-order">
-              Listo · llamar a Rapidito
+              Ya está arreglado · avisar a los repartidores
             </Button>
           )}
           {order.delivery && (
-            <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-3" data-testid="business-delivery">
+            <div className="flex items-center gap-3 rounded-xl bg-surface p-3" data-testid="business-delivery">
               <Bike className="size-5 shrink-0 text-brand" />
-              <span className="min-w-0 flex-1 text-sm">
+              <span className="min-w-0 flex-1 text-[13px]">
                 <span className="block font-semibold text-ink">{order.delivery.driverName}</span>
                 <span className="block text-ink-soft">{order.delivery.vehicle}</span>
               </span>
@@ -162,26 +162,26 @@ export function BusinessOrderDetailView() {
             </div>
           )}
           {order.status === 'driver_assigned' && (
-            <div className="flex flex-wrap gap-2">
+            <>
               <Button size="lg" icon={<PackageCheck className="size-5" />} onClick={d.handoff} loading={d.busy === 'handoff'} disabled={!!d.busy} data-testid="handoff-order">
                 Le entregué el pedido a {driverName}
               </Button>
               <Button variant="ghost" icon={<RefreshCw className="size-4" />} onClick={d.reassign} loading={d.busy === 'reassign'} disabled={!!d.busy} data-testid="reassign-order">
                 No llega · buscar otro
               </Button>
-            </div>
+            </>
           )}
           {d.canCancel && (
             <Button variant="ghost" size="sm" icon={<X className="size-4" />} onClick={d.askCancel} disabled={!!d.busy} className="self-start" data-testid="business-cancel">
               Cancelar pedido
             </Button>
           )}
-        </section>
+        </OrderProgress>
       )}
 
       <LiveTracking order={order} audience="business" />
 
-      <section className="flex flex-col gap-2 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Productos">
+      <section className="flex flex-col gap-2 rounded-2xl bg-surface p-3 shadow-float md:p-5" aria-label="Productos">
         {order.lines.map((line) => (
           <div key={line.productId} className="flex items-center justify-between gap-4 text-sm">
             <LineThumb src={line.imageUrl} name={line.name} />

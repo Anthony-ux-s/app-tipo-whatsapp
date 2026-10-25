@@ -27,6 +27,31 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   cancelled: 'Cancelado',
 };
 
+/** Los pasos del pedido para el cliente. */
+export const CUSTOMER_STEPS = ['Pago', 'Preparando', 'Repartidor', 'En camino', 'Entregado'] as const;
+
+/** Qué está pasando con el pedido y qué sigue, dicho para el cliente. */
+export function customerNow(status: OrderStatus, businessName: string, driverName: string | null): { title: string; description: string } {
+  switch (status) {
+    case 'pending_payment':
+      return { title: 'Paga tu pedido con el QR', description: 'Escanéalo con tu billetera. Apenas pagues, la tienda recibe tu pedido.' };
+    case 'paid':
+      return { title: `${businessName} está revisando tu pedido`, description: 'Ya pagaste. Te avisamos apenas lo acepte.' };
+    case 'preparing':
+      return { title: `${businessName} está arreglando tu pedido`, description: 'Cuando esté listo, avisamos a los repartidores cercanos para que lo recojan.' };
+    case 'searching_driver':
+      return { title: 'Buscando un repartidor', description: 'Tu pedido ya está listo. El primer repartidor que lo tome irá a recogerlo.' };
+    case 'driver_assigned':
+      return { title: `${driverName ?? 'Tu repartidor'} va a recoger tu pedido`, description: 'Ten a mano tu código de entrega: se lo das cuando recibas tu pedido.' };
+    case 'on_the_way':
+      return { title: `${driverName ?? 'Tu repartidor'} lleva tu pedido`, description: 'Pronto llega. Dale tu código y paga el delivery al recibirlo.' };
+    case 'delivered':
+      return { title: '¡Pedido entregado!', description: 'Gracias por comprar con Parla. Cuéntanos cómo te fue.' };
+    default:
+      return { title: 'Pedido detenido', description: '' };
+  }
+}
+
 /** Pasos que ve el cliente, en orden. */
 export const ORDER_STEPS: { status: OrderStatus; label: string }[] = [
   { status: 'pending_payment', label: 'Pago' },
