@@ -65,6 +65,10 @@ describe('mensajería', () => {
     await expect(list.execute(intruso.id, 'c1', null)).rejects.toThrow(NotFoundError);
   });
 
+  it('quien no participa no puede marcar como leído (404) aunque el permiso y la escritura corran a la vez', async () => {
+    await expect(markRead.execute(intruso.id, 'c1')).rejects.toThrow(NotFoundError);
+  });
+
   it('quien no participa no puede escribir ni enterarse de que el chat existe (404)', async () => {
     await expect(send.execute(intruso.id, 'c1', { clientId: 'x', kind: 'text', body, media: null })).rejects.toThrow(NotFoundError);
   });

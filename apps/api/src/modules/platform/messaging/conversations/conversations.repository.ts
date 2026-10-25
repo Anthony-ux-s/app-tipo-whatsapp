@@ -89,7 +89,8 @@ export interface ReceiptChange {
 export interface ConversationsRepository {
   listForUser(userId: string): Promise<ConversationRecord[]>;
   /** null si no existe o si el usuario no participa. */
-  findForUser(conversationId: string, userId: string): Promise<ConversationRecord | null>;
+  /** `counters: false` omite los no leídos (dos consultas menos) cuando solo se necesita saber quién participa. */
+  findForUser(conversationId: string, userId: string, options?: { counters?: boolean }): Promise<ConversationRecord | null>;
   findIdByDirectKey(directKey: string): Promise<string | null>;
   participantIds(conversationId: string): Promise<string[]>;
   create(input: NewConversation): Promise<string>;

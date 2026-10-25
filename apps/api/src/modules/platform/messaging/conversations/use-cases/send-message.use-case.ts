@@ -42,7 +42,7 @@ export class SendMessageUseCase {
   ) {}
 
   async execute(userId: string, conversationId: string, input: SendMessageRequest): Promise<Message> {
-    const conversation = await this.getConversation.require(conversationId, userId);
+    const conversation = await this.getConversation.require(conversationId, userId, { counters: false });
     await this.validate(userId, conversationId, input);
 
     const participantIds = conversation.participants.map((p) => p.user.id);

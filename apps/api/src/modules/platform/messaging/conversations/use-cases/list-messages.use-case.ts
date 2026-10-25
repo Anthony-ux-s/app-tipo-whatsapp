@@ -17,7 +17,7 @@ export class ListMessagesUseCase {
   async execute(userId: string, conversationId: string, before: string | null): Promise<MessagePage> {
     // El permiso y la página no dependen entre sí: se piden a la vez (un viaje menos). Si no participa, la página se descarta sin devolverse.
     const [, rows] = await Promise.all([
-      this.getConversation.require(conversationId, userId),
+      this.getConversation.require(conversationId, userId, { counters: false }),
       this.conversations.listMessages(conversationId, before, MESSAGE_PAGE_SIZE),
     ]);
     return {

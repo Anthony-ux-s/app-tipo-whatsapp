@@ -13,8 +13,8 @@ export class GetConversationUseCase {
   ) {}
 
   /** La conversación cruda, exigiendo que el usuario participe (404 si no). */
-  async require(conversationId: string, userId: string): Promise<ConversationRecord> {
-    const conversation = await this.conversations.findForUser(conversationId, userId);
+  async require(conversationId: string, userId: string, options?: { counters?: boolean }): Promise<ConversationRecord> {
+    const conversation = await this.conversations.findForUser(conversationId, userId, options);
     if (!conversation) throw new NotFoundError('Conversación no encontrada');
     return conversation;
   }

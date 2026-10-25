@@ -13,7 +13,7 @@ export class MarkDeliveredUseCase {
   ) {}
 
   async execute(userId: string, conversationId: string, messageIds: string[]): Promise<{ updated: number }> {
-    await this.getConversation.require(conversationId, userId);
+    await this.getConversation.require(conversationId, userId, { counters: false });
     const changes = await this.conversations.markDelivered(userId, { conversationId, messageIds });
     await this.events.receiptsChanged(changes);
     return { updated: changes.length };
@@ -36,8 +36,11 @@ export class MarkReadUseCase {
   ) {}
 
   async execute(userId: string, conversationId: string): Promise<{ updated: number }> {
-    await this.getConversation.require(conversationId, userId);
-    const changes = await this.conversations.markRead(userId, conversationId);
+    // El permiso y la escritura de recibos (solo los del propio usuario) van a la vez; quien no participa recibe 404.
+    const [, changes] = await Promise.all([
+      this.getConversation.require(conversationId, userId, { counters: false }),
+      this.conversations.markRead(userId, conversationId),
+    ]);
     await this.events.receiptsChanged(changes);
     return { updated: changes.length };
   }

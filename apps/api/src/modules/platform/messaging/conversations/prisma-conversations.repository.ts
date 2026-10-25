@@ -138,7 +138,7 @@ export class PrismaConversationsRepository implements ConversationsRepository {
     return rows.map((row) => toConversationRecord(row, countersOf(row.id)));
   }
 
-  async findForUser(conversationId: string, userId: string): Promise<ConversationRecord | null> {
+  async findForUser(conversationId: string, userId: string, options: { counters?: boolean } = {}): Promise<ConversationRecord | null> {
     // La conversación y sus contadores no dependen entre sí: van en paralelo (una sola espera).
     const [row, countersOf] = await Promise.all([
       this.prisma.conversation.findFirst({
@@ -146,7 +146,7 @@ export class PrismaConversationsRepository implements ConversationsRepository {
         where: { id: conversationId, participants: { some: { userId } } },
         include: conversationInclude,
       }),
-      this.counters(userId, [conversationId]),
+      options.counters === false ? Promise.resolve(() => ({ unread: 0, mentions: 0 })) : this.counters(userId, [conversationId]),
     ]);
     if (!row) return null;
     return toConversationRecord(row, countersOf(conversationId));
@@ -301,12 +301,14 @@ export class PrismaConversationsRepository implements ConversationsRepository {
 
   async markRead(userId: string, conversationId: string): Promise<ReceiptChange[]> {
     const now = new Date();
-    const changes = await this.touchReceipts({ userId, conversationId, readAt: null }, { readAt: now });
-    // Lo leído también cuenta como entregado.
-    await this.prisma.messageReceipt.updateMany({
-      where: { userId, conversationId, deliveredAt: null },
-      data: { deliveredAt: now },
-    });
+    // Lo leído también cuenta como entregado: las dos escrituras no dependen entre sí y van a la vez.
+    const [changes] = await Promise.all([
+      this.touchReceipts({ userId, conversationId, readAt: null }, { readAt: now }),
+      this.prisma.messageReceipt.updateMany({
+        where: { userId, conversationId, deliveredAt: null },
+        data: { deliveredAt: now },
+      }),
+    ]);
     return changes;
   }
 
