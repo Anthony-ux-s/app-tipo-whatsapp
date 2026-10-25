@@ -125,6 +125,8 @@ export interface OrderDelivery {
   driverName: string | null;
   vehicle: string | null;
   etaMinutes: number | null;
+  /** Cómo califican los clientes a este repartidor cuando tomó el pedido (el cliente ve su promedio). */
+  driverRating?: RatingSummary | null;
   updatedAt: string;
 }
 

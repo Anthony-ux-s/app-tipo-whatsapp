@@ -208,6 +208,8 @@ describe('pedidos de Servicios (core)', () => {
     expect(taken).toMatchObject({ status: 'driver_assigned', mine: true });
     // Hora estimada: el tiempo de Rapidito desde que lo toma, y el tramo final al recogerlo.
     expect((await orders.findById(ID))!.delivery?.etaMinutes).toBe(30);
+    // El cliente ve el promedio del repartidor al tomarlo (sin calificaciones todavía: promedio vacío)
+    expect((await orders.findById(ID))!.delivery?.driverRating).toEqual({ average: null, count: 0 });
     await decide.execute(rosa.id, ID, 'handoff');
     expect((await orders.findById(ID))!.delivery?.etaMinutes).toBe(18);
     const done = await deliver.execute(carlos.id, ID, { code: await codeOf() });

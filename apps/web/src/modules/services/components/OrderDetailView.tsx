@@ -3,6 +3,7 @@ import { Button } from '@shared/ui/Button';
 import { Modal } from '@shared/ui/Modal';
 import { PrivatePhoto } from '@shared/ui/PrivatePhoto';
 import { QrCode } from '@shared/ui/QrCode';
+import { Stars } from '@shared/ui/Stars';
 import { ErrorState, ListSkeleton } from '@shared/ui/States';
 import { formatTime } from '@shared/utils/date';
 import { formatLongDate, formatSoles } from '@shared/utils/money';
@@ -137,6 +138,13 @@ export function OrderDetailView() {
               Rapidito
               {order.delivery?.vehicle ? ` · ${order.delivery.vehicle}` : ''}
             </p>
+            {order.delivery?.driverRating && order.delivery.driverRating.average !== null && (
+              <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-ink-soft" data-testid="driver-average">
+                <Stars value={order.delivery.driverRating.average} />
+                <span className="font-semibold text-ink">{order.delivery.driverRating.average.toFixed(1)}</span>
+                <span>({order.delivery.driverRating.count} {order.delivery.driverRating.count === 1 ? 'calificación' : 'calificaciones'})</span>
+              </p>
+            )}
             {d.eta && !order.driverLocation && (
               <p className="mt-0.5 flex items-center gap-1 text-sm font-semibold text-brand dark:text-teal-300" data-testid="eta">
                 <Clock className="size-3.5" /> Llega aprox. a las {formatTime(d.eta)}

@@ -129,13 +129,13 @@ export class AcceptDeliveryUseCase {
       if ((await this.orders.countActiveForDriver(userId)) >= max) {
         throw new ConflictError(max === 1 ? 'Termina tu entrega en curso antes de tomar otra' : `Ya llevas ${max} pedidos: entrega alguno antes de tomar otro`);
       }
-      const [me] = await this.users.findActiveByIds([userId]);
+      const [[me], driverRating] = await Promise.all([this.users.findActiveByIds([userId]), this.orders.ratingSummary({ driverId: userId })]);
       const name = me?.displayName ?? 'Repartidor';
       const updated = await this.orders.updateIfStatus(id, 'searching_driver', {
         status: 'driver_assigned',
         driverId: userId,
         reservation: null,
-        delivery: { provider: 'Rapidito', driverName: name, vehicle: driver.plate ? `${driver.vehicle} · ${driver.plate}` : driver.vehicle, etaMinutes: order.etaMinutes, updatedAt: new Date().toISOString() },
+        delivery: { provider: 'Rapidito', driverName: name, vehicle: driver.plate ? `${driver.vehicle} · ${driver.plate}` : driver.vehicle, etaMinutes: order.etaMinutes, driverRating, updatedAt: new Date().toISOString() },
         note: `${name} · ${driver.vehicle}${driver.plate ? ` ${driver.plate}` : ''}`,
       });
       if (!updated) throw new ConflictError('Otro repartidor tomó este pedido');
