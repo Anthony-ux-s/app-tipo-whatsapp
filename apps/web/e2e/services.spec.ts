@@ -32,10 +32,15 @@ test.describe('Servicios: mercado, pago con QR, el negocio y delivery Rapidito',
     await expect(page.getByTestId('cart-bar')).toContainText('3');
     await page.getByTestId('cart-bar').click();
 
-    // Carrito: la dirección dispara la cotización del gateway (tienda + delivery)
+    // Paso 1, Carrito: los productos; luego la entrega
     await expect(page.getByTestId('cart-line')).toHaveCount(2);
+    await page.getByTestId('step-next').click();
+    // Paso 2, Entrega: la dirección dispara la cotización del gateway (tienda + delivery)
     await page.getByLabel('Dirección', { exact: true }).fill('Av. Larco 123, Miraflores');
     await page.getByLabel('Referencia').fill('Puerta verde');
+    await expect(page.getByTestId('delivery-step-quote')).toContainText('Delivery Rapidito', { timeout: 15_000 });
+    await page.getByTestId('step-next').click();
+    // Paso 3, Pago
     // Propina de S/ 2 para el repartidor (va en el mismo cobro)
     await page.getByRole('radio', { name: 'S/ 2.00' }).click();
     const quote = page.getByTestId('quote');

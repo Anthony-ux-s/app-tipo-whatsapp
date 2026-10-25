@@ -36,7 +36,11 @@ test.describe('Cupones, volver a pedir y soporte de pedidos', () => {
     await laura.page.getByTestId('reorder').click();
     await expect(laura.page).toHaveURL(/\/carrito$/);
     await expect(laura.page.getByTestId('cart-line').first()).toBeVisible();
+    await laura.page.getByTestId('step-next').click();
     await expect(laura.page.getByLabel('Dirección', { exact: true })).toHaveValue(delivered.address.line);
+
+    await expect(laura.page.getByTestId('delivery-step-quote')).toContainText('Delivery Rapidito', { timeout: 15_000 });
+    await laura.page.getByTestId('step-next').click();
 
     // Un código que no existe no frena la compra; el bueno descuenta S/ 2.00
     const quote = laura.page.getByTestId('quote');
