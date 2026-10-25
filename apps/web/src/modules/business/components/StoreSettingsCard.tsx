@@ -1,7 +1,8 @@
-import { Clock } from 'lucide-react';
+import { Clock, ExternalLink } from 'lucide-react';
 import { Button } from '@shared/ui/Button';
 import { Stars } from '@shared/ui/Stars';
 import { Toggle } from '@shared/ui/Toggle';
+import { useFerrohubLink } from '../hooks/use-ferrohub.hook';
 import { useStoreSettings } from '../hooks/use-store-settings.hook';
 import { StoreLinks } from './StoreLinks';
 
@@ -12,6 +13,12 @@ const timeInput =
 export function StoreSettingsCard() {
   const s = useStoreSettings();
   if (!s.business) return null;
+  return <StoreSettings s={s} />;
+}
+
+function StoreSettings({ s }: { s: ReturnType<typeof useStoreSettings> }) {
+  const business = s.business!;
+  const f = useFerrohubLink(business);
   const open = s.status?.open ?? true;
   return (
     <section className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-float md:p-5" aria-label="Mi tienda" data-testid="store-settings">
@@ -33,7 +40,7 @@ export function StoreSettingsCard() {
       )}
 
       <Toggle
-        checked={s.business.acceptingOrders}
+        checked={business.acceptingOrders}
         onChange={s.toggleAccepting}
         disabled={s.saving}
         label="Recibir pedidos"
@@ -44,24 +51,38 @@ export function StoreSettingsCard() {
         <span className="flex w-full items-center gap-1.5 text-sm font-semibold text-ink">
           <Clock className="size-4 text-brand" /> Horario (hora de Lima)
         </span>
-        <label className="flex flex-col gap-1 text-xs text-ink-soft">
-          Abre
-          <input type="time" value={s.opensAt} onChange={(e) => s.onOpensAt(e.target.value)} aria-label="Abre" className={timeInput} />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-ink-soft">
-          Cierra
-          <input type="time" value={s.closesAt} onChange={(e) => s.onClosesAt(e.target.value)} aria-label="Cierra" className={timeInput} />
-        </label>
-        {s.hoursChanged && (
-          <Button size="sm" onClick={s.saveHours} loading={s.saving} data-testid="save-hours">
-            Guardar horario
-          </Button>
+        {f.connected ? (
+          <>
+            <p className="flex w-full items-center gap-2 text-[15px] font-semibold text-ink" data-testid="ferrohub-hours">
+              {s.allDay ? 'Atiende las 24 horas' : `Abre ${business.opensAt} · Cierra ${business.closesAt}`}
+            </p>
+            <p className="w-full text-xs text-ink-faint">El horario de tu ferretería se cambia en FerroHub; Parla lo toma solo y se actualiza al instante.</p>
+            <Button variant="secondary" size="sm" icon={<ExternalLink className="size-4" />} onClick={f.openPanel} loading={f.openingPanel} data-testid="hours-open-ferrohub">
+              Cambiar en FerroHub
+            </Button>
+          </>
+        ) : (
+          <>
+            <label className="flex flex-col gap-1 text-xs text-ink-soft">
+              Abre
+              <input type="time" value={s.opensAt} onChange={(e) => s.onOpensAt(e.target.value)} aria-label="Abre" className={timeInput} />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-ink-soft">
+              Cierra
+              <input type="time" value={s.closesAt} onChange={(e) => s.onClosesAt(e.target.value)} aria-label="Cierra" className={timeInput} />
+            </label>
+            {s.hoursChanged && (
+              <Button size="sm" onClick={s.saveHours} loading={s.saving} data-testid="save-hours">
+                Guardar horario
+              </Button>
+            )}
+            <span className="w-full text-xs text-ink-faint">{s.allDay ? 'Misma hora de apertura y cierre: atiendes las 24 horas.' : 'Si cierra antes de abrir, el horario cruza la medianoche.'}</span>
+          </>
         )}
-        <span className="w-full text-xs text-ink-faint">{s.allDay ? 'Misma hora de apertura y cierre: atiendes las 24 horas.' : 'Si cierra antes de abrir, el horario cruza la medianoche.'}</span>
       </div>
 
       <div className="border-t border-line pt-2">
-        <StoreLinks business={s.business} />
+        <StoreLinks business={business} />
       </div>
     </section>
   );

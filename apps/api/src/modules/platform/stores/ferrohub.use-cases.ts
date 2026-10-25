@@ -1,4 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../infra/realtime/realtime-publisher.port';
 import type { FerrohubConnectResult, FerrohubProvisionRequest, FerrohubProvisionResult, FerrohubSsoResult } from '@parla/types';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { APP_ENV, type AppEnv } from '../../../config/env.validation';
@@ -206,12 +207,15 @@ export class SyncFerrohubStoreUseCase {
   constructor(
     @Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository,
     @Inject(FERROHUB_CLIENT) private readonly client: FerrohubClient,
+    @Optional() @Inject(REALTIME_PUBLISHER) private readonly realtime?: RealtimePublisher,
   ) {}
 
   async execute(userId: string): Promise<ReturnType<typeof toBusinessInfo>> {
     const business = await this.businesses.findByOwner(userId);
     if (!business?.connector) throw new NotFoundError('Tu tienda no está conectada a FerroHub.');
-    return toBusinessInfo(await this.syncBusiness(business));
+    const info = toBusinessInfo(await this.syncBusiness(business));
+    this.realtime?.toUsers([userId], 'business:updated', info);
+    return info;
   }
 
   async syncBusiness(business: BusinessRecord): Promise<BusinessRecord> {
@@ -263,6 +267,7 @@ export class FerrohubWebhookUseCase {
   constructor(
     @Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository,
     @Inject(FERROHUB_CLIENT) private readonly client: FerrohubClient,
+    @Optional() @Inject(REALTIME_PUBLISHER) private readonly realtime?: RealtimePublisher,
   ) {}
 
   async execute(storeId: string, raw: string, signature: string | undefined, timestamp: string | undefined, now = Date.now()): Promise<{ ok: true; duplicate?: boolean }> {
@@ -294,16 +299,20 @@ export class FerrohubWebhookUseCase {
         await this.businesses.setSource(business.id, 'native', NO_API);
         await this.businesses.setConnector(business.id, null);
         await this.businesses.update(business.id, { acceptingOrders: false });
+        await this.notifyOwner(business.id);
         break;
       case 'tienda.actualizada':
         // Cambió algo de la tienda en FerroHub (nombre, dirección, horario…): se vuelve a leer su ficha.
         await new SyncFerrohubStoreUseCase(this.businesses, this.client).syncBusiness(business);
+        await this.notifyOwner(business.id);
         break;
       case 'tienda.cerrada':
         await this.businesses.update(business.id, { acceptingOrders: false });
+        await this.notifyOwner(business.id);
         break;
       case 'tienda.abierta':
         await this.businesses.update(business.id, { acceptingOrders: true });
+        await this.notifyOwner(business.id);
         break;
       case 'producto.actualizado':
       case 'producto.agotado':
@@ -317,5 +326,11 @@ export class FerrohubWebhookUseCase {
         break;
     }
     return { ok: true };
+  }
+
+  /** El dueño ve el cambio al instante, sin recargar. */
+  private async notifyOwner(businessId: string): Promise<void> {
+    const fresh = await this.businesses.findById(businessId);
+    if (fresh) this.realtime?.toUsers([fresh.ownerId], 'business:updated', toBusinessInfo(fresh));
   }
 }

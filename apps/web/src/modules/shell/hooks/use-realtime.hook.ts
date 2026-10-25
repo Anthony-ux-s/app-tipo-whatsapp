@@ -98,6 +98,12 @@ export function useRealtime(userId: string | undefined) {
     // Servicios: cada cambio de un pedido (pagado, en camino, entregado) llega al instante.
     socket.on('order:updated', (order) => useOrdersStore.getState().upsert(order));
     socket.on('business-order:updated', (order) => useBusinessStore.getState().upsert(order));
+    // Horario, pausa de pedidos o datos de FerroHub: cambian al instante, sin recargar.
+    socket.on('business:updated', (business) => {
+      useBusinessStore.getState().setBusiness(business);
+      void useBusinessStore.getState().loadStoreStatus().catch(() => undefined);
+      void queryClient.invalidateQueries({ queryKey: ['business-status'] });
+    });
     socket.on('driver-order:updated', (order) => useDriverStore.getState().upsert(order));
     socket.on('driver:updated', (driver) => useDriverStore.setState({ driver }));
     socket.on('delivery:location', (location) => {

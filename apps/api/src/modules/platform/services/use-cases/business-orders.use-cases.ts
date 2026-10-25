@@ -1,4 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { REALTIME_PUBLISHER, type RealtimePublisher } from '../../../../infra/realtime/realtime-publisher.port';
 import type { BusinessInfo, BusinessOrder, BusinessStatus, GeoPoint, OrderContactRole, OrderStatus, PublicUser, ServiceId, UpdateBusinessRequest } from '@parla/types';
 import { PresenceRegistry } from '../../../../infra/realtime/presence.registry';
 import { assertHour, businessStatus } from '../../../../kernel/business-hours';
@@ -28,7 +29,11 @@ export class GetMyBusinessUseCase {
 /** El dueño pausa o reanuda los pedidos («Recibir pedidos») y cambia el horario. */
 @Injectable()
 export class UpdateMyBusinessUseCase {
-  constructor(@Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository) {}
+  constructor(
+    @Inject(BUSINESSES_REPOSITORY) private readonly businesses: BusinessesRepository,
+    /** Para avisar al instante al resto de dispositivos del dueño (opcional en pruebas). */
+    @Optional() @Inject(REALTIME_PUBLISHER) private readonly realtime?: RealtimePublisher,
+  ) {}
 
   async execute(userId: string, changes: UpdateBusinessRequest): Promise<BusinessInfo> {
     const business = await this.businesses.findByOwner(userId);
@@ -65,8 +70,9 @@ export class UpdateMyBusinessUseCase {
     const updated = await this.businesses.update(business.id, patch);
     // Una tienda rechazada que corrige sus datos vuelve a revisión (soporte la ve de nuevo).
     const profileChanged = patch.name !== undefined || patch.description !== undefined || patch.address !== undefined || patch.location !== undefined;
-    if (business.status === 'rejected' && profileChanged) return toBusinessInfo(await this.businesses.setReview(business.id, { status: 'pending', reviewNote: '', reviewedById: userId }));
-    return toBusinessInfo(updated);
+    const result = business.status === 'rejected' && profileChanged ? toBusinessInfo(await this.businesses.setReview(business.id, { status: 'pending', reviewNote: '', reviewedById: userId })) : toBusinessInfo(updated);
+    this.realtime?.toUsers([userId], 'business:updated', result);
+    return result;
   }
 }
 

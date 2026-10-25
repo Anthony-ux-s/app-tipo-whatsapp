@@ -4,7 +4,7 @@ import type { AppEnv } from '../../../config/env.validation';
 import { ConflictError, ForbiddenError, NotFoundError, TooManyRequestsError, UnauthorizedError, ValidationError } from '../../../kernel/domain-error';
 import { open, seal } from '../../../kernel/secret-box';
 import { UpdateMyBusinessUseCase } from '../services/use-cases/business-orders.use-cases';
-import { InMemoryAuthRepository, InMemoryBusinessesRepository, makeBusiness, makeUser } from '../../../testing/in-memory.fakes';
+import { InMemoryAuthRepository, InMemoryBusinessesRepository, makeBusiness, makeUser, RecordingRealtime } from '../../../testing/in-memory.fakes';
 import { normalizeStoreInfo } from './ferrohub.client';
 import type { FerrohubClient, FerrohubProvisionInput, FerrohubProvisionResult, FerrohubRedeemInput, FerrohubRedeemResult, FerrohubStoreInfo } from './ferrohub.client';
 import {
@@ -403,5 +403,43 @@ describe('la ficha de la tienda de FerroHub', () => {
   it('con una API anterior (solo sucursales) usa la primera sucursal', () => {
     const info = normalizeStoreInfo({ nombre: 'Vieja', sucursales: [{ nombre: 'Centro', direccion: 'Jr. Pizarro 745', lat: -8.11, lng: -79.03 }] });
     expect(info.sucursales[0]).toEqual({ nombre: 'Centro', direccion: 'Jr. Pizarro 745', lat: -8.11, lng: -79.03 });
+  });
+});
+
+describe('el dueño ve los cambios de su tienda al instante', () => {
+  const SECRET = 'b'.repeat(64);
+  const NOW = Date.UTC(2026, 9, 25, 12, 0, 0);
+
+  it('un aviso de FerroHub (tienda cerrada o actualizada) le llega por tiempo real, sin recargar', async () => {
+    const businesses = new InMemoryBusinessesRepository();
+    businesses.businesses.push(
+      makeBusiness({ id: 'biz_rt', ownerId: 'u_rt', service: 'ferreteria', status: 'approved', source: 'api', connector: { kind: 'ferrohub', origin: 'code', tenantId: 't_1', webhookSecret: SECRET, connectedAt: new Date(NOW), verifiedAt: null } }),
+    );
+    await businesses.setSource('biz_rt', 'api', { format: 'redwiiil', baseUrl: 'https://api.ferrohub.pe', prefix: '', apiKey: 'k', adminKey: '' });
+    const realtime = new RecordingRealtime();
+    const webhook = new FerrohubWebhookUseCase(businesses, new FakeFerrohub(), realtime);
+    const send = (body: object) => {
+      const raw = JSON.stringify(body);
+      return webhook.execute('biz_rt', raw, createHmac('sha256', SECRET).update(raw).digest('hex'), String(Math.floor(NOW / 1000)), NOW);
+    };
+
+    await send({ eventId: 'r1', tipo: 'tienda.cerrada' });
+    let last = realtime.events('business:updated').at(-1)!;
+    expect(last.userIds).toEqual(['u_rt']);
+    expect(last.payload).toMatchObject({ id: 'biz_rt', acceptingOrders: false });
+
+    await send({ eventId: 'r2', tipo: 'tienda.actualizada' });
+    last = realtime.events('business:updated').at(-1)!;
+    expect(last.payload).toMatchObject({ id: 'biz_rt', name: 'Ferretería El Maestro', opensAt: '08:00', closesAt: '19:00' });
+  });
+
+  it('cambiar el horario o pausar los pedidos en Parla se refleja en los demás dispositivos del dueño', async () => {
+    const businesses = new InMemoryBusinessesRepository();
+    businesses.businesses.push(makeBusiness({ id: 'biz_rt2', ownerId: 'u_rt2', status: 'approved' }));
+    const realtime = new RecordingRealtime();
+    const info = await new UpdateMyBusinessUseCase(businesses, realtime).execute('u_rt2', { opensAt: '09:30', closesAt: '21:00' });
+    expect(info).toMatchObject({ opensAt: '09:30', closesAt: '21:00' });
+    expect(realtime.events('business:updated').at(-1)).toMatchObject({ userIds: ['u_rt2'], payload: { opensAt: '09:30', closesAt: '21:00' } });
+    expect((await businesses.findById('biz_rt2'))!.opensAt).toBe('09:30');
   });
 });
