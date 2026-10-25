@@ -12,6 +12,19 @@ import './index.css';
 
 void useSessionStore.getState().boot();
 
+// Teclado del celular: solo sube el teclado, la app se encoge hasta quedar encima de él (el encabezado no se mueve).
+// El meta «interactive-widget=resizes-content» lo hace en Chrome; esto lo cubre en los navegadores que lo ignoran.
+const viewport = window.visualViewport;
+if (viewport) {
+  const fit = () => {
+    document.documentElement.style.setProperty('--vvh', `${Math.round(viewport.height)}px`);
+    if (viewport.offsetTop > 0) window.scrollTo(0, 0);
+  };
+  viewport.addEventListener('resize', fit);
+  viewport.addEventListener('scroll', fit);
+  fit();
+}
+
 // Actualización automática de la app instalada: al haber una versión nueva se recarga sola, y se busca una
 // al abrir la app y cada vez que se vuelve a ella (en el celular, al sacarla de las apps recientes).
 registerSW({

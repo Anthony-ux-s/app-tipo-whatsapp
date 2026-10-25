@@ -24,7 +24,7 @@ export function AppShellView() {
   if (!shell.user) return null;
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-canvas">
+    <div className="flex h-[var(--vvh,100dvh)] overflow-hidden bg-canvas">
       <div className="flex min-w-0 flex-1 flex-col">
         <ConnectionBanner connection={shell.connection} />
         <div className="flex min-h-0 min-w-0 flex-1">

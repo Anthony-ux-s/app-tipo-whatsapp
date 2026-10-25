@@ -18,7 +18,7 @@ export function AdminShellView() {
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-canvas" data-testid="admin-shell">
+    <div className="flex h-[var(--vvh,100dvh)] overflow-hidden bg-canvas" data-testid="admin-shell">
       <div className="relative z-10 shrink-0">
         <AdminSidebar />
       </div>

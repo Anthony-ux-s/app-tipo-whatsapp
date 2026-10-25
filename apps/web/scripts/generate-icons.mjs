@@ -25,8 +25,8 @@ const page = await browser.newPage();
 const icons = [
   { file: 'icon-192.png', size: 192, padding: 18, background: 'transparent' },
   { file: 'icon-512.png', size: 512, padding: 48, background: 'transparent' },
-  // iOS no admite transparencia en el ícono de inicio: lleva fondo blanco.
-  { file: 'apple-touch-icon.png', size: 180, padding: 22, background: '#ffffff' },
+  // Ícono de inicio de iOS: también sin fondo, como se pidió.
+  { file: 'apple-touch-icon.png', size: 180, padding: 22, background: 'transparent' },
   { file: 'icon-maskable-512.png', size: 512, padding: 110, background: '#ecfdf5' },
 ];
 for (const icon of icons) {
