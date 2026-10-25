@@ -14,7 +14,7 @@ export function WelcomeView() {
     <div className="flex min-h-dvh items-start justify-center overflow-y-auto bg-canvas px-4 py-8 sm:items-center sm:px-6">
       <div className="w-full max-w-md animate-rise">
         <div className="mb-6 flex justify-center">
-          <Logo />
+          <Logo animated />
         </div>
         <div className="rounded-2xl bg-surface p-5 shadow-float ring-1 ring-line sm:p-7">
           <div className="mb-5 flex items-center gap-1.5" aria-label={w.step === 'perfil' ? 'Paso 1 de 2' : 'Paso 2 de 2'}>

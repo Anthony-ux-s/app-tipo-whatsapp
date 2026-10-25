@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react';
+import { LogoMark } from './Logo';
 import type { ReactNode } from 'react';
 import { ErrorIllustration } from './illustrations';
 import { Button } from './Button';
@@ -68,14 +69,7 @@ export function ListSkeleton({ rows = 7 }: { rows?: number }) {
 export function FullScreenLoader({ label = 'Cargando Parla…' }: { label?: string }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-5 bg-canvas">
-      <div className="relative">
-        <div className="absolute inset-0 animate-ping rounded-full bg-teal-400/20" />
-        <svg viewBox="0 0 48 48" className="relative size-16" aria-hidden="true">
-          <path d="M20 5h17a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8h-1v6l-7-6h-9a8 8 0 0 1-8-8V13a8 8 0 0 1 8-8z" fill="#34d399" />
-          <path d="M11 15h16a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8H17l-8 6v-6.4A8 8 0 0 1 3 33V23a8 8 0 0 1 8-8z" fill="#009d71" />
-          <path d="M12.5 28.5l4.5 4.5 8.5-9" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
+      <LogoMark className="size-20" animated />
       <p className="text-sm font-medium text-ink-soft">{label}</p>
     </div>
   );

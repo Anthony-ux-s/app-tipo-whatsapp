@@ -305,3 +305,41 @@ svg .stk-bob, svg .stk-shake, svg .stk-bow, svg .stk-sway, .stk-wave, .stk-spin 
 @media (prefers-reduced-motion: reduce) {
   .roulette-motion { animation: none !important; transition-duration: 0.01ms !important; }
 }
+
+/* Logo animado: las burbujas entran una tras otra, la marca se dibuja y el conjunto flota. */
+@keyframes logo-bubble {
+  0% { opacity: 0; transform: scale(0.4); }
+  70% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes logo-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes logo-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes logo-word-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.logo-back, .logo-front {
+  transform-box: fill-box;
+  opacity: 0;
+  animation: logo-bubble 0.55s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+.logo-back { transform-origin: 20% 80%; animation-delay: 0.05s; }
+.logo-front { transform-origin: 80% 20%; animation-delay: 0.25s; }
+.logo-tick {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: logo-draw 0.45s ease-out 0.7s forwards;
+}
+.logo-float { animation: logo-bob 3.2s ease-in-out 1.4s infinite; }
+.logo-word { opacity: 0; animation: logo-word-in 0.5s ease-out 0.5s forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .logo-back, .logo-front, .logo-word { opacity: 1; animation: none; }
+  .logo-tick { stroke-dashoffset: 0; animation: none; }
+  .logo-float { animation: none; }
+}

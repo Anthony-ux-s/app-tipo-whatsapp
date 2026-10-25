@@ -17,7 +17,7 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
       <aside className="relative hidden overflow-hidden bg-gradient-to-br from-teal-700 via-teal-800 to-cyan-900 p-10 text-white lg:flex lg:w-[46%] lg:flex-col xl:p-14">
         <div className="absolute -top-24 -right-24 size-80 rounded-full bg-emerald-400/20 blur-3xl" />
         <div className="absolute -bottom-32 -left-20 size-96 rounded-full bg-cyan-400/20 blur-3xl" />
-        <Logo tone="light" className="relative" />
+        <Logo tone="light" className="relative" animated />
         <div className="relative mx-auto my-auto w-full max-w-md py-10">
           <WelcomeIllustration />
           <h2 className="mt-8 text-3xl leading-tight font-extrabold xl:text-4xl">Tu gente y tus compras, en una sola app.</h2>
@@ -43,7 +43,7 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
       <main className="flex flex-1 flex-col items-center justify-center bg-canvas px-4 py-8 sm:px-8 md:py-12">
         <div className="w-full max-w-[420px] animate-rise">
           <div className="mb-8 flex justify-center lg:hidden">
-            <Logo />
+            <Logo animated />
           </div>
           <div className="rounded-2xl bg-surface p-6 shadow-float ring-1 ring-line sm:p-8">
             <h1 className="text-2xl font-extrabold text-ink md:text-[28px]">{title}</h1>
