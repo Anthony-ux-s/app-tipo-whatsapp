@@ -52,7 +52,8 @@ export class WebPushSender implements PushSender {
     } catch (error) {
       const status = (error as { statusCode?: number }).statusCode;
       if (status === 404 || status === 410) return 'gone';
-      this.logger.warn(`No se pudo enviar una notificación push (${status ?? 'sin respuesta'})`);
+      const detail = String((error as { body?: string }).body ?? (error as Error).message ?? '').slice(0, 160);
+      this.logger.warn(`No se pudo enviar una notificación push (${status ?? 'sin respuesta'}): ${detail}`);
       return 'failed';
     }
   }

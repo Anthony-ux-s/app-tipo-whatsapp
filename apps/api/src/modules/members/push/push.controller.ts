@@ -34,6 +34,12 @@ export class PushController {
     return this.subscriptions.status(user.userId);
   }
 
+  @HttpCode(200)
+  @Post('test')
+  test(@CurrentUser() user: AuthUser) {
+    return this.subscriptions.test(user.userId);
+  }
+
   @Post('subscriptions')
   subscribe(@CurrentUser() user: AuthUser, @Body() body: SubscribeDto) {
     return this.subscriptions.subscribe(user.userId, body);

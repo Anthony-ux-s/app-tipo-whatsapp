@@ -30,7 +30,9 @@ export class NotificationDispatcher {
           return result;
         }),
       );
-      return results.filter((r) => r === 'sent').length;
+      const sent = results.filter((r) => r === 'sent').length;
+      if (targets.length > 0 || userIds.length > 0) this.logger.log(`push: ${new Set(userIds).size} destinatarios, ${targets.length} dispositivos, ${sent} enviados`);
+      return sent;
     } catch (error) {
       this.logger.error(error);
       return 0;

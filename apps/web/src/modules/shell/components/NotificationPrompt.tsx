@@ -1,7 +1,7 @@
 import { Bell, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from '@shared/stores/toast.store';
-import { enablePush, isPushSupported } from '@shared/utils/push';
+import { enablePush, isPushSupported, pushOptedOut } from '@shared/utils/push';
 
 const DISMISSED_KEY = 'parla.push.dismissedAt';
 const ASK_AGAIN_MS = 7 * 24 * 60 * 60 * 1000;
@@ -24,12 +24,23 @@ export function NotificationPrompt() {
 
   useEffect(() => {
     if (!isPushSupported()) return;
+    // Quien las desactivó a propósito en Ajustes no vuelve a recibir la oferta ni se reactivan solas.
+    if (pushOptedOut()) return;
     if (Notification.permission === 'granted') {
       // Idempotente: reutiliza la suscripción del navegador y la deja registrada en el servidor.
       void enablePush().catch(() => undefined);
-    } else if (Notification.permission === 'default' && !recentlyDismissed()) {
-      setAsk(true);
+      return;
     }
+    if (Notification.permission !== 'default' || recentlyDismissed()) return;
+    setAsk(true);
+    // Activadas por defecto: el primer toque en la app pide el permiso (los navegadores lo exigen tras un gesto).
+    const onFirstTap = () => {
+      void enablePush()
+        .then(() => setAsk(false))
+        .catch(() => undefined);
+    };
+    window.addEventListener('pointerdown', onFirstTap, { once: true });
+    return () => window.removeEventListener('pointerdown', onFirstTap);
   }, []);
 
   if (!ask) return null;

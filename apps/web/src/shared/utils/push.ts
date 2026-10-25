@@ -10,6 +10,26 @@ function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+const OPT_OUT_KEY = 'parla.push.optout';
+
+/** La persona las desactivó a propósito en Ajustes: Parla no las vuelve a activar sola. */
+export function pushOptedOut(): boolean {
+  try {
+    return localStorage.getItem(OPT_OUT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setOptOut(value: boolean): void {
+  try {
+    if (value) localStorage.setItem(OPT_OUT_KEY, '1');
+    else localStorage.removeItem(OPT_OUT_KEY);
+  } catch {
+    // Sin almacenamiento: no se puede recordar.
+  }
+}
+
 export function isPushSupported(): boolean {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
@@ -32,6 +52,7 @@ export async function pushState(): Promise<PushState> {
 /** Pide permiso, suscribe el navegador al servicio push y lo registra en la API. */
 export async function enablePush(): Promise<PushState> {
   if (!isPushSupported()) return 'unsupported';
+  setOptOut(false);
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return permission === 'denied' ? 'denied' : 'disabled';
   const reg = await registration();
@@ -46,6 +67,7 @@ export async function enablePush(): Promise<PushState> {
 }
 
 export async function disablePush(): Promise<PushState> {
+  setOptOut(true);
   const reg = await registration();
   const subscription = await reg?.pushManager.getSubscription();
   if (subscription) {

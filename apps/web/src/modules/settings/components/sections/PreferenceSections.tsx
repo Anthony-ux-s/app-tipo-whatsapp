@@ -1,5 +1,6 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { CHAT_FONT_FAMILIES, CHAT_FONT_OPTIONS, CHAT_FONT_SIZE_OPTIONS, CHAT_FONT_SIZES } from '@shared/const/chat-text.const';
+import { Button } from '@shared/ui/Button';
 import { Toggle } from '@shared/ui/Toggle';
 import { THEME_OPTIONS } from '../../const/settings.const';
 import { useNotificationSettings } from '../../hooks/use-notification-settings.hook';
@@ -127,6 +128,13 @@ export function NotificationsSection() {
           label="Notificaciones push en este dispositivo"
           description={n.description}
         />
+        {n.enabled && (
+          <div className="mt-3">
+            <Button variant="secondary" size="sm" loading={n.busy} onClick={() => void n.test()} data-testid="push-test">
+              Enviar notificación de prueba
+            </Button>
+          </div>
+        )}
       </SettingsBlock>
     </SettingsGroup>
   );
